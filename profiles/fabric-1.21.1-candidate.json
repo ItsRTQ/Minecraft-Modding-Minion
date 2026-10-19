@@ -1,0 +1,14 @@
+{
+  "id": "fabric-1.21.1-candidate",
+  "status": "UNVERIFIED_BUILD",
+  "loader": "fabric",
+  "minecraft": "1.21.1",
+  "java_major": 21,
+  "loom": "1.10.5",
+  "yarn": "1.21.1+build.3",
+  "fabric_loader": "0.16.14",
+  "fabric_api": "0.116.16+1.21.1",
+  "gradle": "8.14.3",
+  "runtime_tested": false,
+  "full_gradle_build_tested": false
+}

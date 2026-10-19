@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark"><title>Minecraft Mod Orchestra</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div class="logo">▦</div><div><strong>Mod Orchestra</strong><small>Fabric · Developer Preview</small></div></div>
+    <p class="section-label">WORKSPACE</p>
+    <button id="nav-create" class="nav active">✦ &nbsp; New mod</button>
+    <button id="nav-projects" class="nav">▧ &nbsp; Projects</button>
+    <button id="nav-setup" class="nav">⚙ &nbsp; Environment</button>
+    <div class="side-bottom"><span class="status-dot"></span> Local-only controller<br><small>0.1.0 · Pre-alpha</small></div>
+  </aside>
+  <main class="main">
+    <header class="topbar"><span class="crumb">WORKSPACE <span>/</span> <b id="crumb">New mod</b></span><span class="pill">SOURCE GENERATOR · PRE-ALPHA</span></header>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <section id="view-create" class="view">
+      <div class="eyebrow">CREATE SOMETHING NEW</div>
+      <h1>Your idea. A new Minecraft mod.</h1>
+      <p class="lead">Start with a description. The current prototype safely generates basic Fabric item and block starters. Advanced mechanics are preserved as requirements, not falsely marked completed.</p>
+      <div class="two-col">
+        <div class="panel">
+          <form id="create-form">
+            <label for="name">Mod name</label><input id="name" maxlength="80" required value="Crystal Frontier" autocomplete="off">
+            <div class="fields"><div><label for="modid">Mod ID</label><input id="modid" maxlength="40" required value="crystal_frontier" autocomplete="off"></div><div><label for="package">Java package</label><input id="package" required value="com.example.crystalfrontier" autocomplete="off"></div></div>
+            <label for="idea">Describe your mod</label><textarea id="idea" required rows="6" placeholder="Describe your idea here...">Create a small crystal collection mod. items: amethyst coin, sky crystal; blocks: glowing crystal, ancient stone</textarea>
+            <div class="hint">For automatic source generation, declare content using <code>items: ...; blocks: ...</code>. Separate lists with semicolons.</div>
+            <button class="primary" type="submit">Create project &amp; interpret idea →</button>
+          </form>
+        </div>
+        <div class="panel info-panel"><h3>What happens next?</h3><div class="step"><span>01</span><div><b>Interpret</b><small>Extract supported content and flag questions</small></div></div><div class="step"><span>02</span><div><b>Plan</b><small>Create a trackable task graph</small></div></div><div class="step"><span>03</span><div><b>You approve</b><small>Nothing generated into a workspace until you accept</small></div></div><div class="step"><span>04</span><div><b>Generate &amp; verify</b><small>Produce Fabric source, textures, metadata, and static checks</small></div></div><p class="muted note">Building the JAR requires a trusted local Gradle setup and another explicit approval. The generator does not claim to produce verified gameplay automatically.</p></div>
+      </div>
+    </section>
+    <section id="view-projects" class="view hidden"><div class="eyebrow">YOUR WORK</div><h1>Projects</h1><p class="lead">Projects are stored locally. Source generation never overwrites existing nonempty folders.</p><div id="project-list" class="cards"></div></section>
+    <section id="view-setup" class="view hidden"><div class="eyebrow">FIRST-RUN CHECK</div><h1>Environment</h1><p class="lead">Read-only system diagnostics. No software is installed or downloaded.</p><div class="panel" id="doctor-data">Checking…</div><div class="panel"><h3>How to finish setup</h3><p>Install the Java JDK matching your selected Minecraft profile, and a trusted Gradle distribution. Blockbench is optional for simple items/blocks. See <code>docs/SETUP.md</code> for more details.</p></div></section>
+    <section id="view-detail" class="view hidden"><div class="eyebrow">PROJECT DASHBOARD</div><h1 id="detail-name">Project</h1><div class="detail-meta" id="detail-meta"></div><div class="grid-detail"><div><div class="panel"><h3>Interpreted specification</h3><div id="spec-details"></div></div><div class="panel"><h3>Operations</h3><div id="detail-actions" class="action-row"></div><div id="approvals-list"></div></div><div class="panel"><h3>Recent activity</h3><div id="events-list"></div></div></div><div class="panel"><h3>Task board</h3><div id="task-list"></div></div></div></section>
+    <footer>Mod Orchestra · Local-first · Fabric initial loader · Approval-controlled actions</footer>
+  </main>
+</div>
+<script src="/app.js"></script>
+</body></html>

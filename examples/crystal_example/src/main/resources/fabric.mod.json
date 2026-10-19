@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "crystal_example",
+  "version": "${version}",
+  "name": "Crystal Example",
+  "description": "Generated Fabric starter from a user idea",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.example.crystalexample.ModMain"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.16.14",
+    "minecraft": "~1.21.1",
+    "java": ">=21",
+    "fabric-api": "*"
+  },
+  "license": "ARR"
+}
