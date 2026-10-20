@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "minecraft-orchestra": {
+      "command": "craftctl",
+      "args": ["mcp"],
+      "env": {}
+    }
+  }
+}

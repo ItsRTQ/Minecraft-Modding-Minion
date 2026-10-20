@@ -39,6 +39,30 @@ Status legend: OPEN · FIXED(branch) · WONTFIX
 - UI: 403 without token, with wrong token, with non-localhost `Host`; POST requires matching `Origin`; bound to 127.0.0.1 only; path traversal and unknown endpoints rejected; malformed JSON returns 400.
 - UI and CLI share the same core: identical results for create → plan → approve → generate → request-build.
 
+## Round 2 — 2026-10-19 · MCP server (stdio) · base `dev` @ fcf723c
+
+Driven with a hand-written JSON-RPC client over `craftctl mcp`: handshake, `tools/list`,
+every tool, forbidden names, malformed frames, schema violations, path traversal.
+
+| ID | Sev | Area | Finding | Status |
+|---|---|---|---|---|
+| M1 | Low | protocol | `initialize` always answered `2025-03-26` regardless of the client's requested version. Now echoes a supported requested version, else the newest supported. | FIXED (`claude-feature/pilot-testing-r2`) |
+| M2 | Low | tools | `orchestra_validate_source` before generation leaked a raw `FileNotFoundError` with the absolute workspace path. Now a clean `StateError`. | FIXED (`claude-feature/pilot-testing-r2`) |
+| M3 | Low | tools | Argument types were not checked against `inputSchema` (`project: 123` was looked up as `"123"`). Now enforced for string properties. | FIXED (`claude-feature/pilot-testing-r2`) |
+| M4 | **High** | repo | README, CLAUDE.md and ROADMAP claim `.mcp.json` and `.claude/agents/*.md` (11 roles) ship in the repo. **Neither was ever committed.** Without `.mcp.json` Claude Code cannot register the server at all. `.mcp.json` added; agent definitions still missing. | PARTIAL — `.mcp.json` added; agents OPEN |
+| M5 | Low | tools | `orchestra_knowledge_search` returned absolute install paths. Now `repo:<relative>` / `home:<relative>`. | FIXED (`claude-feature/pilot-testing-r2`) |
+| M6 | Low | design | `resources/list` and `prompts/list` return Method not found. Fine for now; skills/knowledge could be exposed as Resources later. | OPEN (design) |
+| M7 | Low | design | Server is a hand-rolled JSON-RPC loop. Works, but any spec drift is on us. Evaluate the official Python SDK once a real Claude Code session confirms the current server connects. | OPEN (design) |
+| M8 | Med | agent clarity | `initialize` carried no `instructions`; a cold agent had no way to learn that approve/build are USER-ONLY and would hunt for missing tools. Added `instructions` naming the exact `craftctl` commands to ask the user for. | FIXED (`claude-feature/pilot-testing-r2`) |
+
+### Verified OK
+
+- Only the 12 `orchestra_*` tools are listed; approve/decide/build/new_project are rejected by name.
+- `orchestra_generate_source` refuses before user approval; `orchestra_project_plan` is one-shot.
+- Malformed frames (non-JSON, JSON array, missing method, missing params, non-dict args, extra/missing args) all produce JSON-RPC errors; the loop never crashes and stderr stays empty.
+- Project ids are looked up, never used as paths: `../../etc` → `Project not found`.
+- Notifications get no reply (correct per spec).
+
 ## Not yet tested
 
 - `craftctl build` against a real Gradle (needs host machine).
