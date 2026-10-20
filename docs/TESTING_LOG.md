@@ -25,7 +25,7 @@ Status legend: OPEN · FIXED(branch) · WONTFIX
 | U3 | Low | validation | Single-char identifiers rejected (regex `{1,39}` → min 2) but the message says "starting with a letter". Fix message (or allow 1 char). | FIXED (`claude-feature/round1-fixes`) |
 | U4 | Low | validation | Invalid-identifier error echoes the full offending string (tested 300 chars). Truncate to ~40. | FIXED (`claude-feature/round1-fixes`) |
 | U5 | Low | diagnose | `diagnose` with no build log returns `lines_reviewed: 1, classifications: []` instead of saying there is no log. | FIXED (`claude-feature/round1-fixes`) |
-| U6 | Low | planner | `:BUILD` task is assigned role `debugger`. Arguably `coder`/`release`; debugger should own the failure path. Design question. | OPEN |
+| U6 | Low | planner | `:BUILD` task is assigned role `debugger`. Arguably `coder`/`release`; debugger should own the failure path. Design question. | FIXED (`claude-feature/r2-dispatch`: BUILD → coder; debugger owns BUILD_FAILED) |
 | U7 | Med | UI clarity | UI exposes plan/approve/generate/request-build/grant/deny/build but **no validate, logs or diagnose views**. After a failed build the user cannot see why from the UI. | OPEN |
 | U8 | Low | UI/CLI clarity | Blocking-question message says "Update the idea in a new project" — there is no edit path, so the user must pick a new mod id. Either allow re-interpreting the idea on an unapproved project or explain the constraint. | OPEN |
 

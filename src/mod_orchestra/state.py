@@ -48,6 +48,16 @@ CREATE TABLE IF NOT EXISTS evidence (
 );
 CREATE INDEX IF NOT EXISTS idx_evidence_project ON evidence(project_id, id);
 """),
+    (3, "agent runs (R2 dispatch)", """
+CREATE TABLE IF NOT EXISTS runs (
+  id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id), task_id TEXT NOT NULL,
+  role TEXT NOT NULL, provider TEXT NOT NULL, state TEXT NOT NULL, created_at REAL NOT NULL,
+  finished_at REAL, exit_code INTEGER, duration_s REAL, log_path TEXT, session_id TEXT,
+  cost_usd REAL, turns INTEGER, handoff_json TEXT, error TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id, created_at);
+ALTER TABLE tasks ADD COLUMN last_error TEXT;
+"""),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 
@@ -245,6 +255,76 @@ class Store:
                 pid = con.execute("SELECT project_id FROM tasks WHERE id=?", (task_id,)).fetchone()["project_id"]
                 self.event(con, pid, worker, "TASK_RELEASED", {"task": task_id, "reason": reason[:300]})
             return cur.rowcount == 1
+
+    def set_task_state(self, task_id: str, worker: str, version: int, state: str, *, error: str | None = None) -> bool:
+        """Move a leased task to a terminal/waiting state (WAITING_USER, BLOCKED, FAILED, CANCELLED)."""
+        with self.tx() as con:
+            row = con.execute("SELECT project_id FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if row is None:
+                raise StateError("Unknown task")
+            cur = con.execute("UPDATE tasks SET state=?,version=version+1,lease_owner=NULL,lease_expiry=NULL,last_error=? "
+                              "WHERE id=? AND version=? AND lease_owner=?", (state, error, task_id, version, worker))
+            if cur.rowcount:
+                self.event(con, row["project_id"], worker, "TASK_STATE", {"task": task_id, "state": state, "error": error})
+            return bool(cur.rowcount)
+
+    def requeue(self, task_id: str, reason: str) -> dict:
+        """USER-ONLY: return a FAILED / WAITING_USER / BLOCKED task to READY (dependencies permitting)."""
+        with self.tx() as con:
+            row = con.execute("SELECT project_id,state FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if row is None:
+                raise StateError(f"Task not found: {task_id}")
+            if row["state"] not in ("FAILED", "WAITING_USER", "BLOCKED", "CANCELLED"):
+                raise StateError(f"Task {task_id} is {row['state']}; only FAILED/WAITING_USER/BLOCKED/CANCELLED can be requeued")
+            con.execute("UPDATE tasks SET state='READY',version=version+1,lease_owner=NULL,lease_expiry=NULL,last_error=NULL,attempt=attempt+1 WHERE id=?", (task_id,))
+            self.event(con, row["project_id"], "user", "TASK_REQUEUED", {"task": task_id, "from": row["state"], "reason": reason[:300]})
+        return {"task": task_id, "state": "READY", "from": row["state"]}
+
+    def add_task(self, pid: str, task_id: str, role: str, title: str, *, after: list[str] | None = None) -> dict:
+        """USER-ONLY: add an ad-hoc task (e.g. 'add sapphire item') to an existing project board."""
+        with self.tx() as con:
+            if con.execute("SELECT 1 FROM projects WHERE id=?", (pid,)).fetchone() is None:
+                raise StateError(f"Project not found: {pid}")
+            if con.execute("SELECT 1 FROM tasks WHERE id=?", (task_id,)).fetchone():
+                raise StateError(f"Task already exists: {task_id}")
+            state = "BACKLOG" if after else "READY"
+            con.execute("INSERT INTO tasks(id,project_id,role,title,state) VALUES(?,?,?,?,?)", (task_id, pid, role, title, state))
+            for pred in after or []:
+                if con.execute("SELECT 1 FROM tasks WHERE id=? AND project_id=?", (pred, pid)).fetchone() is None:
+                    raise StateError(f"Dependency not found in project: {pred}")
+                con.execute("INSERT INTO task_edges(predecessor,successor) VALUES(?,?)", (pred, task_id))
+            self.event(con, pid, "user", "TASK_ADDED", {"task": task_id, "role": role, "title": title, "after": after or []})
+        self.refresh_ready(pid)
+        current = next(t["state"] for t in self.tasks(pid) if t["id"] == task_id)
+        return {"task": task_id, "role": role, "state": current}
+
+    def create_run(self, pid: str, task_id: str, role: str, provider: str) -> dict:
+        run = {"id": secrets.token_urlsafe(9), "project_id": pid, "task_id": task_id, "role": role,
+               "provider": provider, "state": "RUNNING", "created_at": time.time()}
+        with self.tx() as con:
+            con.execute("INSERT INTO runs(id,project_id,task_id,role,provider,state,created_at) VALUES(?,?,?,?,?,?,?)",
+                        (run["id"], pid, task_id, role, provider, "RUNNING", run["created_at"]))
+            self.event(con, pid, "controller", "RUN_STARTED", {"run": run["id"], "task": task_id, "role": role, "provider": provider})
+        return run
+
+    def finish_run(self, run_id: str, *, state: str, exit_code: int | None, duration_s: float | None, log_path: str | None,
+                   session_id: str | None = None, cost_usd: float | None = None, turns: int | None = None,
+                   handoff: dict | None = None, error: str | None = None) -> None:
+        with self.tx() as con:
+            pid = con.execute("SELECT project_id FROM runs WHERE id=?", (run_id,)).fetchone()["project_id"]
+            con.execute("UPDATE runs SET state=?,finished_at=?,exit_code=?,duration_s=?,log_path=?,session_id=?,cost_usd=?,turns=?,handoff_json=?,error=? WHERE id=?",
+                        (state, time.time(), exit_code, duration_s, log_path, session_id, cost_usd, turns,
+                         json.dumps(handoff, sort_keys=True) if handoff is not None else None, error, run_id))
+            self.event(con, pid, "controller", "RUN_FINISHED", {"run": run_id, "state": state, "exit_code": exit_code,
+                                                                "duration_s": duration_s, "cost_usd": cost_usd, "turns": turns, "error": error})
+
+    def runs(self, pid: str) -> list[dict]:
+        with self.tx() as con:
+            rows = con.execute("SELECT * FROM runs WHERE project_id=? ORDER BY created_at", (pid,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r); d["handoff"] = json.loads(d.pop("handoff_json") or "null"); out.append(d)
+        return out
 
     def heartbeat(self, task_id: str, worker: str, version: int, ttl: int = 300) -> bool:
         with self.tx() as con:

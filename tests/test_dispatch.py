@@ -1,0 +1,175 @@
+"""R2 dispatch: envelope, handoff validation, outcome mapping, provider failure, Claude Code command."""
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from mod_orchestra import dispatch as dmod, provider as pmod, workflow
+from mod_orchestra.dispatch import dispatch
+from mod_orchestra.provider import (ClaudeCodeProvider, FakeProvider, TaskEnvelope, extract_handoff, validate_handoff,
+                                    _load_agent_definitions, RESOURCES)
+from mod_orchestra.state import Store, StateError
+
+GOOD = {"task": "t", "status": "DONE", "scope": "s", "changed_files": ["a"], "checks_run": [{"command": "./gradlew build", "exit_code": 0}],
+        "evidence": {"level": "BUILD_PASS", "pointer": "build/libs/x.jar"}, "risks": [], "unknowns": [], "needs_user": [], "next_agent": "qa"}
+
+
+def reply(obj):
+    return "work done\n```handoff\n" + json.dumps(obj) + "\n```\n"
+
+
+class HandoffSchema(unittest.TestCase):
+    def test_good_handoff_passes(self):
+        self.assertEqual(validate_handoff(GOOD), [])
+
+    def test_missing_fields_and_bad_status(self):
+        self.assertTrue(any("missing field" in e for e in validate_handoff({"task": "t"})))
+        self.assertTrue(any("status must be" in e for e in validate_handoff(GOOD | {"status": "SHIPPED"})))
+
+    def test_worker_cannot_claim_game_evidence(self):
+        for level in ("CLIENT_BOOT_PASS", "SERVER_BOOT_PASS", "CONTENT_VERIFIED", "VERIFIED"):
+            errs = validate_handoff(GOOD | {"evidence": {"level": level}})
+            self.assertTrue(any("not something a worker can claim" in e for e in errs), level)
+
+    def test_build_pass_requires_gradle_exit_zero(self):
+        errs = validate_handoff(GOOD | {"checks_run": [{"command": "./gradlew build", "exit_code": 1}]})
+        self.assertTrue(any("BUILD_PASS requires" in e for e in errs))
+        errs = validate_handoff(GOOD | {"checks_run": []})
+        self.assertTrue(any("BUILD_PASS requires" in e for e in errs))
+
+    def test_done_with_needs_user_is_contradictory(self):
+        self.assertTrue(any("cannot have needs_user" in e for e in validate_handoff(GOOD | {"needs_user": ["craftctl build x"]})))
+
+    def test_extract_takes_last_block_and_reports_bad_json(self):
+        text = "```handoff\n{bad\n```\n" + reply(GOOD)
+        obj, errs = extract_handoff(text)
+        self.assertEqual(errs, []); self.assertEqual(obj["status"], "DONE")
+        self.assertEqual(extract_handoff("```handoff\n{bad\n```")[1][0][:26], "handoff block is not valid")
+        self.assertIn("no ```handoff block", extract_handoff("nothing")[1][0])
+
+
+class Dispatch(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        base = Path(self.tmp.name); self.store = Store(base / "state.sqlite")
+        p = patch.object(workflow, "PROJECTS", base / "projects"); p.start(); self.addCleanup(p.stop)
+        (base / "projects").mkdir()
+        workflow.new_project(self.store, name="D", mod_id="d_mod", package="com.x.d", idea="items: gem")
+        workflow.plan_project(self.store, "d_mod")
+
+    def state(self, tid):
+        return next(t for t in self.store.tasks("d_mod") if t["id"] == tid)
+
+    def test_requires_approved_spec(self):
+        with self.assertRaisesRegex(StateError, "user-approved spec"):
+            dispatch(self.store, "d_mod", provider=FakeProvider(reply(GOOD)))
+
+    def test_done_handoff_completes_task_and_records_run(self):
+        workflow.approve_spec(self.store, "d_mod")
+        out = dispatch(self.store, "d_mod", provider=FakeProvider(reply(GOOD | {"task": "d_mod:SCAFFOLD"})))
+        self.assertEqual(out["task"], "d_mod:SCAFFOLD"); self.assertEqual(out["task_state"], "DONE")
+        self.assertEqual(self.state("d_mod:SCAFFOLD")["state"], "DONE")
+        run = self.store.runs("d_mod")[0]
+        self.assertEqual((run["state"], run["provider"], run["handoff"]["status"]), ("DONE", "fake", "DONE"))
+        self.assertTrue(Path(out["log"]).is_file())
+        kinds = [e["kind"] for e in self.store.events("d_mod")]
+        self.assertIn("RUN_STARTED", kinds); self.assertIn("RUN_FINISHED", kinds); self.assertIn("TASK_COMPLETED", kinds)
+
+    def test_waiting_user_and_blocked_and_failed_map_to_task_states(self):
+        workflow.approve_spec(self.store, "d_mod")
+        cases = [("WAITING_USER", GOOD | {"status": "WAITING_USER", "needs_user": ["craftctl request-build d_mod"]}),
+                 ("BLOCKED", GOOD | {"status": "BLOCKED", "unknowns": ["API unclear"]}),
+                 ("FAILED", GOOD | {"status": "FAILED", "risks": ["could not compile"]})]
+        for expected, h in cases:
+            self.store.requeue("d_mod:SCAFFOLD", "test") if self.state("d_mod:SCAFFOLD")["state"] != "READY" else None
+            out = dispatch(self.store, "d_mod", task_id="d_mod:SCAFFOLD", provider=FakeProvider(reply(h)))
+            self.assertEqual(out["task_state"], expected, expected)
+
+    def test_invalid_handoff_fails_task_with_reason(self):
+        workflow.approve_spec(self.store, "d_mod")
+        out = dispatch(self.store, "d_mod", provider=FakeProvider(reply(GOOD | {"evidence": {"level": "CONTENT_VERIFIED"}})))
+        self.assertEqual(out["task_state"], "FAILED"); self.assertIn("not something a worker can claim", out["error"])
+        self.assertIn("not something a worker can claim", self.state("d_mod:SCAFFOLD")["last_error"])
+        self.assertEqual(self.store.requeue("d_mod:SCAFFOLD", "retry")["state"], "READY")
+
+    def test_provider_crash_releases_lease_and_records_failed_run(self):
+        workflow.approve_spec(self.store, "d_mod")
+        class Boom(FakeProvider):
+            def run(self, envelope, log_path):
+                raise RuntimeError("claude exploded")
+        with self.assertRaisesRegex(RuntimeError, "exploded"):
+            dispatch(self.store, "d_mod", provider=Boom(""))
+        self.assertEqual(self.state("d_mod:SCAFFOLD")["state"], "READY")
+        self.assertEqual(self.store.runs("d_mod")[0]["state"], "FAILED")
+
+    def test_envelope_carries_packet_and_workspace(self):
+        workflow.approve_spec(self.store, "d_mod")
+        fake = FakeProvider(reply(GOOD))
+        dispatch(self.store, "d_mod", provider=fake)
+        env = fake.envelopes[0]
+        self.assertEqual(env.role, "coder"); self.assertIn("Bounded task handoff", env.packet)
+        self.assertEqual(env.workspace, Path(self.store.project("d_mod")["root"]))
+
+    def test_add_task_then_dispatch_it(self):
+        workflow.approve_spec(self.store, "d_mod")
+        self.store.add_task("d_mod", "d_mod:SAPPHIRE", "coder", "Add a sapphire item")
+        out = dispatch(self.store, "d_mod", task_id="d_mod:SAPPHIRE", provider=FakeProvider(reply(GOOD | {"task": "d_mod:SAPPHIRE"})))
+        self.assertEqual(out["task_state"], "DONE")
+
+
+class ClaudeCodeCommand(unittest.TestCase):
+    def test_agent_definitions_inline_skills_and_tools(self):
+        agents = _load_agent_definitions()
+        self.assertEqual(len(agents), 12)
+        self.assertIn("# Preloaded skill: coder", agents["coder"]["prompt"])
+        self.assertIn("mcp__minecraft-orchestra__orchestra_generate_source", agents["coder"]["tools"])
+        self.assertNotIn("Edit", agents["release"].get("tools", []))
+
+    def test_packaged_resources_match_dot_claude(self):
+        root = Path(__file__).resolve().parents[1]
+        for rel in ["settings.json", "hooks/guard.py"] + [f"agents/{p.name}" for p in (root / ".claude/agents").glob("*.md")] \
+                   + [f"skills/{p.parent.name}/SKILL.md" for p in (root / ".claude/skills").glob("*/SKILL.md")]:
+            self.assertEqual((root / ".claude" / rel).read_bytes(), (RESOURCES / rel).read_bytes(), f"resources out of sync: {rel}")
+
+    def test_command_line_and_materialized_files(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        ws = Path(tmp.name) / "ws"; ws.mkdir()
+        captured = {}
+        def fake_run(cmd, *, cwd, log, timeout, env):
+            captured.update(cmd=cmd, cwd=cwd, env=env, timeout=timeout)
+            for i, a in enumerate(cmd):
+                if a == "--settings": captured["settings"] = json.loads(Path(cmd[i + 1]).read_text())
+                if a == "--agents": captured["agents"] = json.loads(Path(cmd[i + 1]).read_text())
+                if a == "--mcp-config": captured["mcp"] = json.loads(Path(cmd[i + 1]).read_text())
+            log.parent.mkdir(parents=True, exist_ok=True)
+            log.write_text("$ claude\n" + json.dumps({"result": reply(GOOD), "session_id": "s1", "total_cost_usd": 0.02, "num_turns": 3}))
+            return {"pid": 1, "exit_code": 0, "killed": False, "timeout_s": timeout, "duration_s": 1.0, "cmd": cmd}
+        with patch.object(pmod, "run_logged", fake_run):
+            prov = ClaudeCodeProvider(binary="claude-fake")
+            env = TaskEnvelope("d_mod", "d_mod:X", "coder", "t", ws, "# packet")
+            res = prov.run(env, ws / ".mod-orchestra/runs/r.log")
+        cmd = captured["cmd"]
+        self.assertEqual(cmd[:2], ["claude-fake", "-p"]); self.assertIn("--agent", cmd); self.assertEqual(cmd[cmd.index("--agent") + 1], "coder")
+        for flag in ("--agents", "--settings", "--mcp-config", "--strict-mcp-config", "--max-turns", "--output-format", "--permission-mode"):
+            self.assertIn(flag, cmd)
+        self.assertEqual(captured["cwd"], ws)
+        self.assertIn("Output contract (mandatory)", cmd[2])
+        deny = " ".join(captured["settings"]["permissions"]["deny"])
+        self.assertIn("craftctl decide", deny); self.assertIn("craftctl dispatch", deny)
+        self.assertIn("guard.py", captured["settings"]["hooks"]["PreToolUse"][0]["hooks"][0]["command"])
+        self.assertEqual(captured["mcp"]["mcpServers"]["minecraft-orchestra"]["args"], ["-m", "mod_orchestra.cli", "mcp"])
+        self.assertIn("CRAFTCTL_HOME", captured["env"])
+        self.assertEqual((res.session_id, res.cost_usd, res.turns, res.errors), ("s1", 0.02, 3, []))
+        self.assertEqual(res.handoff["status"], "DONE")
+
+    def test_missing_binary_is_a_clear_error(self):
+        with patch.object(pmod.shutil, "which", return_value=None), patch.dict("os.environ", {}, clear=False):
+            import os; os.environ.pop("CRAFTCTL_CLAUDE_BIN", None)
+            prov = ClaudeCodeProvider()
+            with self.assertRaisesRegex(StateError, "not found on PATH"):
+                prov.run(TaskEnvelope("p", "t", "coder", "t", Path("."), ""), Path(tempfile.mkdtemp()) / "l.log")
+
+
+if __name__ == "__main__":
+    unittest.main()

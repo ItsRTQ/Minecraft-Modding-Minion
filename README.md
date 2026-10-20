@@ -26,7 +26,8 @@
 | SHA-256 file manifest and static JSON/resource existence validation | **Implemented, tested** |
 | One-use, explicitly authorized Gradle build invocation | **Implemented; not exercised against Minecraft here** |
 | Restricted MCP interface (read-only tools plus approved source generation) | **Implemented, protocol smoke-tested** |
-| 12 subagents + 12 skills (one per role in `capabilities.py`), deny rules and a PreToolUse guard | **Included and exercised by a real Claude Code session; controller-driven dispatch (R2 proper) not built yet** |
+| 12 subagents + 12 skills (one per role in `capabilities.py`), deny rules and a PreToolUse guard | **Included and exercised by a real Claude Code session** |
+| Controller-driven dispatch (`craftctl dispatch`): one bounded Claude Code worker per task, schema-validated handoff, runs recorded | **Built and unit-tested with a fake provider; not yet proven against a real `claude -p` run** |
 | GeckoLib mob modeling, Blockbench MCP, fully automatic worlds | **Planned / not integrated** |
 | Real Minecraft GameTest, gameplay and multiplayer proof | **Not integrated** |
 | Windows installer/managed JDK/Gradle provisioning | **Planned** |
@@ -70,6 +71,10 @@ craftctl approvals crystal_frontier
 craftctl decide <approval-id> grant
 craftctl build crystal_frontier --approval-id <approval-id>
 craftctl logs crystal_frontier
+craftctl add-task crystal_frontier --id SAPPHIRE --role coder --title "Add a sapphire item"   # USER-ONLY
+craftctl dispatch crystal_frontier --task crystal_frontier:SAPPHIRE   # USER-ONLY: runs ONE Claude Code worker
+craftctl runs crystal_frontier
+craftctl requeue crystal_frontier:SAPPHIRE   # USER-ONLY: FAILED/WAITING_USER -> READY
 craftctl evidence crystal_frontier CLIENT_BOOT_PASS --note "Loading N mods: - crystal_frontier"   # USER-ONLY
 craftctl release crystal_frontier:SCAFFOLD      # USER-ONLY: break a stuck lease
 craftctl delete crystal_frontier --yes --workspace   # USER-ONLY

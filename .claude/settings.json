@@ -52,7 +52,13 @@
       "PowerShell(craftctl release*)",
       "PowerShell(craftctl new*)",
       "PowerShell(git push*)",
-      "PowerShell(git reset --hard*)"
+      "PowerShell(git reset --hard*)",
+      "Bash(craftctl requeue*)",
+      "Bash(craftctl add-task*)",
+      "Bash(craftctl dispatch*)",
+      "PowerShell(craftctl requeue*)",
+      "PowerShell(craftctl add-task*)",
+      "PowerShell(craftctl dispatch*)"
     ]
   },
   "hooks": {
