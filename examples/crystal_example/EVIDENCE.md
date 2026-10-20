@@ -13,3 +13,17 @@ Recorded by the project owner (RTQ) on **2026-10-20**, Windows, JDK 25. Source b
 Known harmless build warning: `duplicate input class net/fabricmc/fabric/mixin/tag/package-info` (Fabric API `convention-tags-v2` vs `tag-api-v1` packaging).
 
 Not yet verified: multiplayer join, dedicated-server content behaviour, any mechanic beyond static item/block registration.
+
+## Sapphire item — R2 proof (added by the Claude Code `coder` subagent)
+
+Source: `claude-feature/r2-smoke @ 2207685`. Recorded by RTQ on **2026-10-20**, Windows, JDK 25, after the
+orchestrating session verified the build artifact.
+
+| Level | Evidence |
+|---|---|
+| BUILD_PASS | `./gradlew build --no-daemon --console=plain` → exit 0, `BUILD SUCCESSFUL in 13s`, `Fabric Loom: 1.18.4`. JAR `build/libs/crystal_example-1.0.0.jar` SHA-256 `e8460b2e550e89563c79141fba6f22d6a1bf768bd39b207ef11495644f8d93c4`; contains `models/item/sapphire.json`, `textures/item/sapphire.png` (16×16 RGBA), updated `lang/en_us.json`, `ModMain.class`. Observed by the session, re-checked independently of the subagent's report. |
+| CLIENT_BOOT_PASS | `gradlew runClient` by RTQ. `run/logs/latest.log`: `Loading Minecraft 1.21.1 with Fabric Loader 0.19.5`, `Loading 56 mods: - crystal_example 1.0.0`; 0 errors; the only warnings are the known vanilla ones (`goat_horn` sounds, `rendertype_entity_translucent_emissive` sampler). No missing-texture/model entries for `sapphire`. |
+| CONTENT_VERIFIED | RTQ, creative test world: Sky Crystal, Lunar Gem **and** Sapphire all present in the **Ingredients** tab; sapphire renders as the flat blue placeholder and its hover name reads "sapphire" (lang entry resolved). |
+
+Not yet verified for sapphire: dedicated-server boot with this build, multiplayer. The texture is a deliberate
+placeholder, not final art.
