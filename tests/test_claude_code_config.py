@@ -70,8 +70,9 @@ class AgentFiles(unittest.TestCase):
         settings = json.loads((ROOT / ".claude/settings.json").read_text())
         deny = " ".join(settings["permissions"]["deny"])
         for cmd in USER_ONLY:
-            self.assertIn(f"craftctl {cmd}", deny)
-        self.assertIn("git push", deny)
+            self.assertIn(f"Bash(craftctl {cmd}", deny)
+            self.assertIn(f"PowerShell(craftctl {cmd}", deny, "A6: Windows desktop sessions use the PowerShell tool")
+        self.assertIn("Bash(git push", deny); self.assertIn("PowerShell(git push", deny)
         hook_cmds = [h["command"] for grp in settings["hooks"]["PreToolUse"] for h in grp["hooks"] if "guard.py" in h["command"]]
         self.assertTrue(hook_cmds)
         for cmd in hook_cmds:
