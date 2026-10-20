@@ -64,7 +64,7 @@ class DeleteProject(Base):  # H4
     def test_delete_rows_keeps_workspace_by_default(self):
         workflow.generate_project(self.store, "u_mod")
         out = workflow.delete_project(self.store, "u_mod", remove_workspace=False)
-        self.assertFalse(out["workspace_removed"]); self.assertTrue(self.root.is_dir())
+        self.assertFalse(out["workspace_removed"]); self.assertTrue(out["workspace_existed"]); self.assertTrue(self.root.is_dir())
         with self.assertRaisesRegex(StateError, "Project not found"):
             self.store.project("u_mod")
         self.assertEqual(self.store.tasks("u_mod"), []); self.assertEqual(self.store.events("u_mod"), [])

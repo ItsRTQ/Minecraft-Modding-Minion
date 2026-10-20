@@ -115,6 +115,7 @@ def delete_project(store: Store, pid: str, *, remove_workspace: bool) -> dict:
     root = Path(project["root"]).resolve()
     result = store.delete_project(pid)
     result["workspace"] = str(root)
+    result["workspace_existed"] = root.is_dir()
     result["workspace_removed"] = False
     if remove_workspace and root.is_dir():
         projects_root = PROJECTS.resolve()
