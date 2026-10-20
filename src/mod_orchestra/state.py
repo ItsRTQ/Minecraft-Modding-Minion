@@ -10,7 +10,11 @@ from pathlib import Path
 from typing import Any, Iterator
 from .config import ensure_home, HOME
 
-DDL = """
+# Schema migrations (STA-001). Append only; never edit a shipped step. Each step runs in its own
+# transaction and bumps PRAGMA user_version, so a DB opened by a newer craftctl is upgraded in
+# place (after a backup) and a DB from a *newer* craftctl is refused rather than misread.
+MIGRATIONS: list[tuple[int, str, str]] = [
+    (1, "baseline: projects, events, tasks, task_edges, approvals", """
 CREATE TABLE IF NOT EXISTS projects (
   id TEXT PRIMARY KEY, root TEXT NOT NULL UNIQUE, name TEXT NOT NULL, spec_json TEXT NOT NULL,
   spec_state TEXT NOT NULL DEFAULT 'DRAFT', status TEXT NOT NULL DEFAULT 'IDEA', created_at REAL NOT NULL
@@ -33,15 +37,20 @@ CREATE TABLE IF NOT EXISTS approvals (
   digest TEXT NOT NULL, description TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'PENDING',
   created_at REAL NOT NULL, expires_at REAL NOT NULL, used_at REAL
 );
+CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
+CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id, id);
+"""),
+    (2, "evidence levels (R1)", """
 CREATE TABLE IF NOT EXISTS evidence (
   id INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT NOT NULL REFERENCES projects(id),
   level TEXT NOT NULL, actor TEXT NOT NULL, created_at REAL NOT NULL, note TEXT NOT NULL DEFAULT '',
   artifact_sha256 TEXT, manifest_sha256 TEXT, payload_json TEXT NOT NULL DEFAULT '{}'
 );
 CREATE INDEX IF NOT EXISTS idx_evidence_project ON evidence(project_id, id);
-CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
-CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id, id);
-"""
+"""),
+]
+SCHEMA_VERSION = MIGRATIONS[-1][0]
+
 
 class StateError(RuntimeError):
     pass
@@ -71,21 +80,62 @@ class Store:
         finally:
             con.close()
 
+    def schema_version(self) -> int:
+        con = sqlite3.connect(self.path, timeout=15)
+        try:
+            return int(con.execute("PRAGMA user_version").fetchone()[0])
+        finally:
+            con.close()
+
     def _initialize(self) -> None:
         con = sqlite3.connect(self.path, timeout=15)
         try:
             con.execute("PRAGMA journal_mode=WAL")
             con.execute("PRAGMA foreign_keys=ON")
-            con.executescript(DDL)
-            con.execute("PRAGMA user_version=1")
-            con.commit()
+            con.execute("PRAGMA busy_timeout=15000")
+            current = int(con.execute("PRAGMA user_version").fetchone()[0])
+            if current > SCHEMA_VERSION:
+                raise StateError(f"State DB {self.path} is schema v{current}, newer than this craftctl (v{SCHEMA_VERSION}). "
+                                 "Upgrade craftctl or point CRAFTCTL_HOME at a different directory.")
+            pending = [m for m in MIGRATIONS if m[0] > current]
+            if not pending:
+                return
+            if current > 0:
+                self._backup(current)
+            for version, title, sql in pending:
+                con.execute("BEGIN IMMEDIATE")
+                try:
+                    for statement in (x.strip() for x in sql.split(";")):
+                        if statement:
+                            con.execute(statement)  # executescript would COMMIT first; keep the step atomic
+                    con.execute(f"PRAGMA user_version={version}")
+                    con.commit()
+                except Exception:
+                    con.rollback()
+                    raise StateError(f"Schema migration v{version} ({title}) failed; DB left at v{current}") from None
+                current = version
         finally:
             con.close()
 
+    def _backup(self, version: int) -> Path:
+        """Copy the DB before an in-place upgrade. Uses the SQLite backup API so WAL content is included."""
+        target = self.path.with_name(f"{self.path.name}.bak-v{version}")
+        src = sqlite3.connect(self.path, timeout=15)
+        try:
+            dst = sqlite3.connect(target)
+            try:
+                src.backup(dst)
+            finally:
+                dst.close()
+        finally:
+            src.close()
+        return target
+
     @staticmethod
     def event(con: sqlite3.Connection, pid: str, actor: str, kind: str, payload: dict) -> None:
+        from .redact import redact_obj  # SEC-003: events are exported to footprints and agents
         con.execute("INSERT INTO events(project_id,created_at,actor,kind,payload_json) VALUES(?,?,?,?,?)",
-                    (pid, time.time(), actor, kind, json.dumps(payload, sort_keys=True)))
+                    (pid, time.time(), actor, kind, json.dumps(redact_obj(payload), sort_keys=True)))
 
     def create_project(self, pid: str, root: str, name: str, spec: dict) -> dict:
         with self.tx() as con:

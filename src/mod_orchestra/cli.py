@@ -72,7 +72,8 @@ def parser() -> argparse.ArgumentParser:
     a.add_argument("--lines", type=int, default=70)
     a = sub.add_parser("ui", help="Run local-only web UI")
     a.add_argument("--port", type=int, default=8765)
-    sub.add_parser("projects", help="List all managed projects")
+    a = sub.add_parser("projects", help="List all managed projects (table; --json for scripts)")
+    a.add_argument("--json", action="store_true")
     sub.add_parser("capabilities", help="List available agent roles and capabilities")
     a = sub.add_parser("next", help="Select currently READY tasks")
     a.add_argument("project")
@@ -94,7 +95,10 @@ def dispatch(args: argparse.Namespace) -> object:
     if args.command == "new":
         return new_project(store, name=args.name, mod_id=args.id, package=args.package, idea=args.idea)
     if args.command == "projects":
-        return store.projects()
+        rows = store.projects()
+        if args.json:
+            return rows
+        return projects_table(rows)
     if args.command == "capabilities":
         return CAPABILITIES
     if args.command == "next":
@@ -158,6 +162,18 @@ def dispatch(args: argparse.Namespace) -> object:
         run(store)
         return None
     raise AssertionError(args.command)
+
+
+def projects_table(rows: list[dict]) -> str:
+    if not rows:
+        return "No projects yet. Create one with: craftctl new --name ... --id ... --package ... --idea ..."
+    import datetime as _dt
+    cols = ["id", "name", "status", "spec", "created"]
+    data = [[r["id"], r["name"], r["status"], r["spec_state"],
+             _dt.datetime.fromtimestamp(r["created_at"]).strftime("%Y-%m-%d %H:%M")] for r in rows]
+    widths = [max(len(c), *(len(d[i]) for d in data)) for i, c in enumerate(cols)]
+    line = lambda cells: "  ".join(c.ljust(widths[i]) for i, c in enumerate(cells)).rstrip()
+    return "\n".join([line(cols), line(["-" * w for w in widths])] + [line(d) for d in data])
 
 
 def main(argv: list[str] | None = None) -> int:

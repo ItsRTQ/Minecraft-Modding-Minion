@@ -7,8 +7,11 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
+import secrets
 import shutil
 import struct
+import time
 import zlib
 from pathlib import Path
 from .state import StateError
@@ -37,20 +40,62 @@ def placeholder_png(name: str, size: int = 16) -> bytes:
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b"")
 
 
+STAGING_DIRNAME = ".staging"
+STAGING_ORPHAN_AGE = 3600  # seconds; stagings older than this are leftovers of a dead process
+
+
+def staging_dir_for(spec: Spec, directory: Path) -> Path:
+    """projects/.staging/<name-slug>-<id>-<UTC timestamp>-<4 hex>: readable, unique per attempt (slug omitted when it equals the id)."""
+    slug = re.sub(r"[^a-z0-9]+", "_", spec.name.lower()).strip("_")[:40]
+    label = spec.mod_id if slug in ("", spec.mod_id) else f"{slug}-{spec.mod_id}"
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime()) + "-" + secrets.token_hex(2)  # unique within a second
+    return directory.parent / STAGING_DIRNAME / f"{label}-{stamp}"
+
+
+def sweep_orphan_stagings(projects_root: Path, max_age: int = STAGING_ORPHAN_AGE) -> list[str]:
+    """Remove stagings older than max_age (a crashed generate never got to rename). Returns what was removed."""
+    staging_root = projects_root / STAGING_DIRNAME
+    removed: list[str] = []
+    if not staging_root.is_dir():
+        return removed
+    now = time.time()
+    for entry in staging_root.iterdir():
+        if entry.is_dir() and not entry.is_symlink() and now - entry.stat().st_mtime > max_age:
+            shutil.rmtree(entry, ignore_errors=True)
+            removed.append(entry.name)
+    return removed
+
+
 def generate(spec: Spec, directory: Path) -> dict:
     """Write an entirely new workspace with a generated/UNVERIFIED status.
 
-    All-or-nothing: if any step fails after the directory was created, the partial
-    workspace is removed so a retry does not hit "No overwrite permitted".
+    SEC-001 atomic staging: files are written and hash-validated in a sibling staging
+    directory, then moved into place with one os.replace(). The final path either does
+    not exist or is a complete, validated workspace; a crash mid-way leaves only a
+    staging directory that the next generate sweeps.
     """
     directory = Path(directory).expanduser()
-    created = not directory.exists()
+    if directory.exists():
+        ensure_new_directory(directory)  # raises on nonempty/symlink; empty dir is replaced below
+    sweep_orphan_stagings(directory.parent)
+    staging = staging_dir_for(spec, directory)
+    staging.parent.mkdir(parents=True, exist_ok=True)
     try:
-        return _generate_into(spec, directory)
+        output = _generate_into(spec, staging)
+        checked = validate_generated(staging)
+        if checked["status"] != "PASS":
+            raise StateError("Staged source failed integrity validation before install: " + str(checked["problems"][:5]))
+        if directory.exists():
+            directory.rmdir()  # known empty from the check above
+        os.replace(staging, directory)
     except Exception:
-        if created and directory.is_dir():
-            shutil.rmtree(directory, ignore_errors=True)
+        shutil.rmtree(staging, ignore_errors=True)
         raise
+    output["path"] = str(directory)
+    output["manifest"] = str(directory / ".mod-orchestra" / "generation-manifest.json")
+    output["staged_as"] = staging.name
+    output["static_validation"] = checked | {"root": str(directory)}
+    return output
 
 
 def _generate_into(spec: Spec, directory: Path) -> dict:
