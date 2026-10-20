@@ -2,9 +2,10 @@
 from __future__ import annotations
 import os
 import shutil
-import subprocess
 from pathlib import Path
 from .fabric import validate_generated, workspace_generation_info
+from .broker import run_logged
+from .redact import redact
 from .state import Store, StateError
 
 
@@ -42,7 +43,7 @@ def request_build(store: Store, pid: str) -> dict:
     # We approve a concrete workspace build, not a generic command execution.
     args = {"root": str(root), "task": "build", "version": proj["spec"]["profile"]}
     return store.request_approval(pid, "execute_gradle_build", args,
-        "Run Gradle build scripts and resolve dependencies for " + str(root) + " (Gradle is executable project code; not sandboxed)")
+        "Run Gradle build scripts and resolve dependencies for " + redact(str(root)) + " (Gradle is executable project code; not sandboxed)")
 
 
 def build_project(store: Store, pid: str, approval_id: str) -> dict:
@@ -64,19 +65,13 @@ def build_project(store: Store, pid: str, approval_id: str) -> dict:
     args = {"root": str(root), "task": "build", "version": proj["spec"]["profile"]}
     if not store.consume_approval(approval_id, pid, "execute_gradle_build", args):
         raise StateError("An unexpired, one-use, specifically approved build is required")
-    cmd = [str(gradle), "--no-daemon", "build"]
+    cmd = [str(gradle), "--no-daemon", "--console=plain", "build"]
     log = log_path(root)
-    log.parent.mkdir(parents=True, exist_ok=True)
-    env = os.environ.copy()
-    env["JAVA_TOOL_OPTIONS"] = (env.get("JAVA_TOOL_OPTIONS", "") + " -Dfile.encoding=UTF-8").strip()
-    try:
-        with log.open("wb") as f:
-            proc = subprocess.run(cmd, cwd=root, stdout=f, stderr=subprocess.STDOUT, env=env, timeout=900, check=False)
-            code = proc.returncode
-    except subprocess.TimeoutExpired:
-        code = 124
-    result = {"exit_code": code, "log": str(log), "status": "BUILD_PASS" if code == 0 else "BUILD_FAILED"}
-    store.add_event(pid, "build", "BUILD_RESULT", result)
+    run = run_logged(cmd, cwd=root, log=log)  # SEC-002: controlled env, own process group, tree kill on timeout
+    code = run["exit_code"]
+    result = {"exit_code": code, "log": str(log), "status": "BUILD_PASS" if code == 0 else "BUILD_FAILED",
+              "duration_s": run["duration_s"], "killed": run["killed"], "timeout_s": run["timeout_s"]}
+    store.add_event(pid, "build", "BUILD_RESULT", result | {"pid": run["pid"]})
     if code == 0:
         tid = pid + ":BUILD"
         lease = store.claim(tid, "build", ttl=300)
@@ -103,4 +98,4 @@ def tail_log(store: Store, pid: str, limit: int = 100) -> str:
         f.seek(max(0, size - 65536))
         data = f.read()
     lines = data.decode("utf-8", "replace").splitlines()[-min(max(limit, 1), 250):]
-    return "\n".join(lines)
+    return redact("\n".join(lines))  # SEC-003: excerpts are shared with agents; the file on disk stays verbatim

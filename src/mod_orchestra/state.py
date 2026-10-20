@@ -133,8 +133,9 @@ class Store:
 
     @staticmethod
     def event(con: sqlite3.Connection, pid: str, actor: str, kind: str, payload: dict) -> None:
+        from .redact import redact_obj  # SEC-003: events are exported to footprints and agents
         con.execute("INSERT INTO events(project_id,created_at,actor,kind,payload_json) VALUES(?,?,?,?,?)",
-                    (pid, time.time(), actor, kind, json.dumps(payload, sort_keys=True)))
+                    (pid, time.time(), actor, kind, json.dumps(redact_obj(payload), sort_keys=True)))
 
     def create_project(self, pid: str, root: str, name: str, spec: dict) -> dict:
         with self.tx() as con:
