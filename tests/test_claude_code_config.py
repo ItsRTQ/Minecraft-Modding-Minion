@@ -23,7 +23,14 @@ def frontmatter(path: Path) -> dict:
     key = None
     for line in block.splitlines():
         if re.match(r"^[a-zA-Z]+:", line):
-            key, _, val = line.partition(":"); out[key.strip()] = val.strip() or []
+            key, _, val = line.partition(":"); val = val.strip()
+            # Claude Code parses this block as YAML: an unquoted scalar containing ": " is a
+            # mapping error and the whole agent is silently skipped (R2 smoke: 3 of 12 roles).
+            if val and val[0] not in "\"'":
+                assert ": " not in val and not val.endswith(":"), f"{path.name}: quote the `{key}` value, it contains ': '"
+            elif val:
+                val = val[1:-1]
+            out[key.strip()] = val or []
         elif line.strip().startswith("- ") and key:
             out[key].append(line.strip()[2:])
     return out
@@ -45,8 +52,9 @@ class AgentFiles(unittest.TestCase):
 
     def test_no_agent_lists_a_user_only_mcp_tool_or_unknown_mcp_tool(self):
         from mod_orchestra.mcp import TOOLS
-        known = {"mcp__minecraft-orchestra__" + t["name"].removeprefix("orchestra_") for t in TOOLS}
-        known |= {"mcp__minecraft-orchestra__" + t["name"] for t in TOOLS}
+        # Claude Code names an MCP tool mcp__<server>__<tool>; the server's tools are orchestra_*,
+        # so the only valid spelling is mcp__minecraft-orchestra__orchestra_<x>.
+        known = {"mcp__minecraft-orchestra__" + t["name"] for t in TOOLS}
         for path in AGENTS.glob("*.md"):
             for tool in [t.strip() for t in frontmatter(path)["tools"].split(",")]:
                 if tool.startswith("mcp__"):
@@ -64,7 +72,21 @@ class AgentFiles(unittest.TestCase):
         for cmd in USER_ONLY:
             self.assertIn(f"craftctl {cmd}", deny)
         self.assertIn("git push", deny)
-        self.assertTrue(any("guard.py" in h["command"] for grp in settings["hooks"]["PreToolUse"] for h in grp["hooks"]))
+        hook_cmds = [h["command"] for grp in settings["hooks"]["PreToolUse"] for h in grp["hooks"] if "guard.py" in h["command"]]
+        self.assertTrue(hook_cmds)
+        for cmd in hook_cmds:
+            # A cwd-relative script path breaks (and fails closed, blocking every shell/edit tool)
+            # as soon as the session `cd`s into a subdirectory. Anchor it to the project dir.
+            self.assertIn("$CLAUDE_PROJECT_DIR", cmd, cmd)
+            self.assertNotIn(" .claude/", cmd, cmd)
+
+    def test_mcp_json_launches_the_server_without_relying_on_path(self):
+        cfg = json.loads((ROOT / ".mcp.json").read_text())
+        server = cfg["mcpServers"]["minecraft-orchestra"]
+        # `craftctl` is often not on PATH (venv not activated, Store Python Scripts dir); the
+        # module form works wherever `python` can import the package (SETUP.md fallback).
+        self.assertEqual(server["command"], "python")
+        self.assertEqual(server["args"], ["-m", "mod_orchestra.cli", "mcp"])
 
 
 class Guard(unittest.TestCase):

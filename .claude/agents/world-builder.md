@@ -1,7 +1,7 @@
 ---
 name: world-builder
-description: Implements seed-testable world generation: biomes, features, structures, dimensions. Use for worldgen tasks only.
-tools: Read, Grep, Glob, Edit, Write, Bash, mcp__minecraft-orchestra__project_status, mcp__minecraft-orchestra__knowledge_search, mcp__minecraft-orchestra__validate_source
+description: "Implements seed-testable world generation: biomes, features, structures, dimensions. Use for worldgen tasks only."
+tools: Read, Grep, Glob, Edit, Write, Bash, mcp__minecraft-orchestra__orchestra_project_status, mcp__minecraft-orchestra__orchestra_knowledge_search, mcp__minecraft-orchestra__orchestra_validate_source
 skills:
   - world-builder
 model: inherit

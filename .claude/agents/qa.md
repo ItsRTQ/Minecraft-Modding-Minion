@@ -1,7 +1,7 @@
 ---
 name: qa
 description: Validates behaviour with GameTest, client/server smoke runs and visual checks, and reports what was actually observed. Use when a build passed and content must be verified.
-tools: Read, Grep, Glob, Bash, mcp__minecraft-orchestra__project_status, mcp__minecraft-orchestra__validate_source, mcp__minecraft-orchestra__logs_tail
+tools: Read, Grep, Glob, Bash, mcp__minecraft-orchestra__orchestra_project_status, mcp__minecraft-orchestra__orchestra_validate_source, mcp__minecraft-orchestra__orchestra_logs_tail
 skills:
   - qa
 model: inherit

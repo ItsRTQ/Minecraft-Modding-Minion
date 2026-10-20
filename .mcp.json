@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "minecraft-orchestra": {
-      "command": "craftctl",
-      "args": ["mcp"],
+      "command": "python",
+      "args": ["-m", "mod_orchestra.cli", "mcp"],
       "env": {}
     }
   }

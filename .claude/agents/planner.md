@@ -1,7 +1,7 @@
 ---
 name: planner
 description: Chooses vertical slices, architecture and acceptance criteria for a Fabric mod feature. Use after the spec is approved and before tasks are cut.
-tools: Read, Grep, Glob, mcp__minecraft-orchestra__project_status, mcp__minecraft-orchestra__project_plan, mcp__minecraft-orchestra__knowledge_search, mcp__minecraft-orchestra__capabilities
+tools: Read, Grep, Glob, mcp__minecraft-orchestra__orchestra_project_status, mcp__minecraft-orchestra__orchestra_project_plan, mcp__minecraft-orchestra__orchestra_knowledge_search, mcp__minecraft-orchestra__orchestra_capabilities
 skills:
   - planner
 model: inherit

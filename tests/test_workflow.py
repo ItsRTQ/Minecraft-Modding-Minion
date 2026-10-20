@@ -142,7 +142,10 @@ class TestWorkspace(unittest.TestCase):
         root.mkdir()
         with self.assertRaises(InputError):
             safe_inside(root, "../evil")
-        (root / "escape").symlink_to(self.base, target_is_directory=True)
+        try:
+            (root / "escape").symlink_to(self.base, target_is_directory=True)
+        except OSError as exc:  # Windows without Developer Mode/admin: WinError 1314
+            self.skipTest(f"symlink creation not permitted on this host: {exc}")
         with self.assertRaises(InputError):
             safe_inside(root, "escape/evil.txt")
 

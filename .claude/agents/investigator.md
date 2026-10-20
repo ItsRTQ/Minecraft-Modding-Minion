@@ -1,7 +1,7 @@
 ---
 name: investigator
-description: Reads an existing mod project or workspace and reports its baseline: structure, versions, build state, extension points. Use before changing code you did not write.
-tools: Read, Grep, Glob, Bash, mcp__minecraft-orchestra__project_status, mcp__minecraft-orchestra__validate_source, mcp__minecraft-orchestra__footprint
+description: "Reads an existing mod project or workspace and reports its baseline: structure, versions, build state, extension points. Use before changing code you did not write."
+tools: Read, Grep, Glob, Bash, mcp__minecraft-orchestra__orchestra_project_status, mcp__minecraft-orchestra__orchestra_validate_source, mcp__minecraft-orchestra__orchestra_footprint
 skills:
   - investigator
 model: inherit
