@@ -24,6 +24,11 @@ cd "$env:USERPROFILE\.minecraft-mod-orchestra\projects\<your-mod-id>"
 
 To run through the application-controlled build runner, instead approve `craftctl request-build ...` and execute `craftctl build ... --approval-id ...` after wrapper/bootstrap review. **A Gradle build runs executable build scripts** and downloads libraries. It is not sandboxed in v0.1.
 
+### Windows notes
+
+- **`(.venv)` shows in the prompt but `which python` points to `.../WindowsApps/python`:** the Microsoft Store Python aliases shadow the venv. Disable them in Settings → Apps → Advanced app settings → App execution aliases (`python.exe`, `python3.exe`), open a new terminal, and reinstall with `.venv/Scripts/python.exe -m pip install -e .`. Until then `python -m mod_orchestra.cli <command>` works in place of `craftctl`.
+- **`Embedded Gradle wrapper gradlew hash ... != recorded`:** a checkout converted `gradlew` to CRLF. The repo's `.gitattributes` pins it to LF; after pulling it run `git add --renormalize . && git checkout -- .` once (or re-clone).
+
 ### Minecraft version choice
 
 This release intentionally supports exactly **Minecraft 1.21.1 / Fabric** as a **candidate** toolchain. Version selection, newer tested profiles, managed downloads, GeckoLib profiles and migration are roadmap features. If you already have a mod targeting another version, do not import/overwrite it with this generator.
