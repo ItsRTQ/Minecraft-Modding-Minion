@@ -1,4 +1,6 @@
-# Roadmap and engineering backlog
+# Roadmap and engineering backlog (historical)
+
+> **Superseded 2026-10-19.** This file is kept as the v0.1.0 planning history. The forward plan is `docs/DEVELOPMENT_PATH.md` (releases R0–R11); milestones below map roughly M0→R0, M1→R1, M2→R1/R2, M3→R2–R5, M4→R6, M5→R7, M6→R9–R10.
 
 **Legend:** DONE = implemented and locally unit-tested; PROTOTYPE = partially functional; PLANNED = not shipped. Exit criteria are independent evidence, not AI confidence.
 
