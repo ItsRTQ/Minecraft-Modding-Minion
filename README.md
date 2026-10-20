@@ -26,7 +26,7 @@
 | SHA-256 file manifest and static JSON/resource existence validation | **Implemented, tested** |
 | One-use, explicitly authorized Gradle build invocation | **Implemented; not exercised against Minecraft here** |
 | Restricted MCP interface (read-only tools plus approved source generation) | **Implemented, protocol smoke-tested** |
-| 12 reusable Skills (one per role in `capabilities.py`) | **Included; `.claude/agents/` subagent files not yet written (R2)** |
+| 12 subagents + 12 skills (one per role in `capabilities.py`), deny rules and a PreToolUse guard | **Included; not yet exercised by a real Claude Code session (R2 proof pending)** |
 | GeckoLib mob modeling, Blockbench MCP, fully automatic worlds | **Planned / not integrated** |
 | Real Minecraft GameTest, gameplay and multiplayer proof | **Not integrated** |
 | Windows installer/managed JDK/Gradle provisioning | **Planned** |
@@ -79,7 +79,7 @@ A Gradle build runs project code **without OS-level sandboxing in this pre-alpha
 
 ## Integrate with Claude Code (advanced, optional)
 
-This repository contains `.mcp.json`, `skills/`, and `CLAUDE.md`. Claude Code subagent definitions (`.claude/agents/`) are **not shipped yet**; they are an R2 deliverable (see `docs/DEVELOPMENT_PATH.md`). After installing `craftctl` into an environment available to Claude Code, open the repository using Claude Code and verify the `minecraft-orchestra` MCP server appears. The MCP exposes only typed diagnostic/project/plan/generate/footprint/validation tools—**not user approval-granting tools, arbitrary shell execution, or Blockbench by default**.
+This repository contains `.mcp.json` (MCP server), `.claude/agents/` (12 subagents), `.claude/skills/` (12 skills, preloaded per role), `.claude/settings.json` (deny rules for USER-ONLY `craftctl` commands) and `.claude/hooks/guard.py` (PreToolUse backstop), plus `CLAUDE.md`. After installing `craftctl` into an environment available to Claude Code, open the repository using Claude Code and verify the `minecraft-orchestra` MCP server appears. The MCP exposes only typed diagnostic/project/plan/generate/footprint/validation tools—**not user approval-granting tools, arbitrary shell execution, or Blockbench by default**.
 
 The agent roles and skills are prompts/playbooks, not an implemented provider-independent execution sandbox or autonomous planner yet. When agents work on a mod, review `docs/SECURITY.md` first.
 
@@ -88,7 +88,10 @@ The agent roles and skills are prompts/playbooks, not an implemented provider-in
 ```text
 src/mod_orchestra/       Python stdlib controller, CLI, MCP, Fabric generator, state, UI
 src/mod_orchestra/static Local browser UI (no Node/npm build required)
-skills/                  Domain procedures (12)
+.claude/agents/          Claude Code subagents (12)
+.claude/skills/          Domain procedures (12), preloaded per subagent
+.claude/settings.json    Permission deny/allow rules + PreToolUse hook
+.claude/hooks/guard.py   Blocks USER-ONLY craftctl ops and git push from agents
 knowledge/               Pin-aware source notes and recipes
 profiles/                Version profile and policy metadata
 tests/                   Unittest suite, CLI workflow and security negative cases

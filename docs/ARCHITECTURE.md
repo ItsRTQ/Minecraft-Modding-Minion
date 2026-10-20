@@ -21,7 +21,7 @@ flowchart TD
 ### Implemented primitive boundaries
 
 - **Agent:** Claude Code file-based prompts in `.claude/agents`; optional adapter only. No built-in LLM runtime yet.
-- **Skill:** procedural Markdown in `skills/` with scope, references, safeguards and return contract.
+- **Skill:** procedural Markdown in `.claude/skills/` with scope, references, safeguards and return contract.
 - **Tool:** typed `craftctl` CLI/MCP operations for diagnostics, spec, planning, generation, validation, state and Gradle build.
 - **Hook / service:** SQLite state transitions are authoritative; developer hooks are a future supplemental mechanism.
 

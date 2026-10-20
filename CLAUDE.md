@@ -7,7 +7,7 @@ An **early working foundation**, not an autonomous arbitrary-mod generator. Pyth
 ## Architecture decisions (binding)
 
 1. Hybrid/local-first: user projects, Gradle, Blockbench and game testing run locally.
-2. Fabric first: do not silently change MC/loader versions; the `fabric-1.21.1-candidate` profile is **not runtime verified**.
+2. Fabric first: do not silently change MC/loader versions; the `fabric-1.21.1-candidate` profile (Mojang mappings, Loom 1.18.4) is build- and game-verified for static items/blocks only (`examples/crystal_example/EVIDENCE.md`).
 3. Approval autonomy: requester must explicitly authorize consequential operations.
 4. Trusted controller: `.claude/agents`, tools, prompts and Hooks are NOT a security boundary. Do not bypass `craftctl` approval state.
 5. Preserve evidence: build pass != game pass != visual pass.
@@ -26,7 +26,7 @@ An **early working foundation**, not an autonomous arbitrary-mod generator. Pyth
 
 ## Agent registry
 
-Reusable workflows: `skills/*/SKILL.md` (one per role). Subagent definitions (`.claude/agents/*.md`) are not yet shipped; see `docs/DEVELOPMENT_PATH.md` R2.
+Subagents: `.claude/agents/<role>.md` (12, one per role in `capabilities.py`), each preloading its skill from `.claude/skills/<role>/SKILL.md`. `.claude/settings.json` denies USER-ONLY `craftctl` commands and `git push`; `.claude/hooks/guard.py` is the PreToolUse backstop. The MCP server is registered in `.mcp.json`.
 
 - `coordinator` routes tasks, enforces gates and handoff expectations.
 - `interpreter` defines the spec, preserving user intent.
