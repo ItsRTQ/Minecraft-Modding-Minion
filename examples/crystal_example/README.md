@@ -8,9 +8,8 @@ Minecraft 1.21.1 / Fabric Loader 0.19.5 / Loom 1.18.4 / Mojang mappings / compil
 
 1. Review generated source and dependencies.
 2. Install JDK 25 (required to run Gradle 9.7.1 + Loom). Sources compile with `--release 21`, so no separate JDK 21 is needed.
-3. In this directory run `gradle wrapper --gradle-version 9.7.1` with a trusted Gradle install (produces official wrapper files locally).
-4. Run `./gradlew build` on Linux/macOS or `gradlew.bat build` on Windows.
-5. Review `build/libs/`. Do not call the mod tested until the game loads and the content is exercised.
+3. Run `./gradlew build` on Linux/macOS or `gradlew.bat build` on Windows. The wrapper is the official Gradle 9.7.1 wrapper (hash-verified, Apache-2.0) and checks the distribution download against `distributionSha256Sum`.
+4. Review `build/libs/`. Do not call the mod tested until the game loads and the content is exercised.
 
 No existing Minecraft launcher installation is needed to compile, but network access is needed on initial Gradle resolution.
 

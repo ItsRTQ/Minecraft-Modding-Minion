@@ -10,7 +10,8 @@ import os
 import struct
 import zlib
 from pathlib import Path
-from .config import PROFILE
+from .state import StateError
+from .config import PROFILE, WRAPPER_DIR, WRAPPER_FILES
 from .spec import Spec
 from .validation import InputError, safe_inside, ensure_new_directory
 
@@ -129,11 +130,16 @@ java {{
     targetCompatibility = JavaVersion.VERSION_{p['java_major']}
 }}
 """)
-    # The generated workspace deliberately omits the Gradle wrapper JAR/scripts (third-party binary).
-    # Properties mirror the upstream template so `gradle wrapper` reproduces the same distribution.
+    # Official Gradle wrapper (Apache-2.0), hash-verified against resources/gradle-wrapper/PROVENANCE.md.
+    for relative, expected in WRAPPER_FILES.items():
+        put(relative, verified_wrapper_file(relative, expected))
+    if os.name != "nt":
+        gradlew = directory / "gradlew"
+        gradlew.chmod(gradlew.stat().st_mode | 0o111)
     put("gradle/wrapper/gradle-wrapper.properties", f"""distributionBase=GRADLE_USER_HOME
 distributionPath=wrapper/dists
 distributionUrl=https\\://services.gradle.org/distributions/gradle-{p['gradle']}-bin.zip
+distributionSha256Sum={p['gradle_dist_sha256']}
 networkTimeout=10000
 retries=0
 retryBackOffMs=500
@@ -152,9 +158,8 @@ Minecraft {p['minecraft']} / Fabric Loader {p['fabric_loader']} / Loom {p['loom'
 
 1. Review generated source and dependencies.
 2. Install JDK {p['gradle_jdk_major']} (required to run Gradle {p['gradle']} + Loom). Sources compile with `--release {p['java_major']}`, so no separate JDK {p['java_major']} is needed.
-3. In this directory run `gradle wrapper --gradle-version {p['gradle']}` with a trusted Gradle install (produces official wrapper files locally).
-4. Run `./gradlew build` on Linux/macOS or `gradlew.bat build` on Windows.
-5. Review `build/libs/`. Do not call the mod tested until the game loads and the content is exercised.
+3. Run `./gradlew build` on Linux/macOS or `gradlew.bat build` on Windows. The wrapper is the official Gradle {p['gradle']} wrapper (hash-verified, Apache-2.0) and checks the distribution download against `distributionSha256Sum`.
+4. Review `build/libs/`. Do not call the mod tested until the game loads and the content is exercised.
 
 No existing Minecraft launcher installation is needed to compile, but network access is needed on initial Gradle resolution.
 
@@ -224,6 +229,18 @@ Your idea: {spec.idea}
     manifest = {"generator": "mod-orchestra 0.1.0", "status": "GENERATED_UNVERIFIED", "profile": p["id"], "files": written.copy(), "build_verified": False, "runtime_verified": False}
     put(".mod-orchestra/generation-manifest.json", json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     return {"path": str(directory), "files": len(written), "status": "GENERATED_UNVERIFIED", "manifest": str(directory / ".mod-orchestra/generation-manifest.json")}
+
+
+def verified_wrapper_file(relative: str, expected_sha256: str) -> bytes:
+    """Read an embedded wrapper file and refuse it if its bytes drifted from PROVENANCE.md."""
+    source = WRAPPER_DIR / relative
+    if not source.is_file():
+        raise StateError(f"Embedded Gradle wrapper file missing from install: {relative}")
+    data = source.read_bytes()
+    actual = hashlib.sha256(data).hexdigest()
+    if actual != expected_sha256:
+        raise StateError(f"Embedded Gradle wrapper {relative} hash {actual[:12]} != recorded {expected_sha256[:12]}; refusing to ship it")
+    return data
 
 
 def validate_generated(path: Path) -> dict:

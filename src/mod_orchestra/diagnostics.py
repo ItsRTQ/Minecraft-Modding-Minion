@@ -10,6 +10,7 @@ from .build import tail_log, log_path
 
 RULES = [
     ("JAVA_COMPILE", re.compile(r"(?:error: cannot find symbol|error: incompatible types|Compilation failed)", re.I), "Inspect pinned mappings/API signatures and compiler file:line before edits."),
+    ("WRAPPER_DOWNLOAD", re.compile(r"(?:Downloading https://services\.gradle\.org.*\n(?:.*\n){0,3}?.*(?:UnknownHostException|failed|SocketTimeoutException|Verification of Gradle distribution failed|checksum))", re.I), "The Gradle wrapper could not fetch or verify the distribution: check network/proxy access to services.gradle.org, then retry; a checksum mismatch means the download was corrupted or tampered."),
     ("GRADLE_DEPENDENCY", re.compile(r"(?:Could not resolve|Could not find|Plugin .* was not found|No matching variant)", re.I), "Verify Loom plugin, Fabric Maven repository, dependency coordinates, Java and Gradle versions."),
     ("JAVA_TOOLCHAIN", re.compile(r"(?:Unsupported class file major version|invalid source release|No matching toolchains found)", re.I), "Compare Java major with locked Minecraft/toolchain profile."),
     ("MIXIN", re.compile(r"(?:MixinApplyError|InjectionError|MixinTransformerError)", re.I), "Inspect Mixin target and loader/mapper compatibility."),

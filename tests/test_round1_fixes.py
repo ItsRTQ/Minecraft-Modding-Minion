@@ -1,4 +1,5 @@
 """Regression tests for pilot testing round 1 (docs/TESTING_LOG.md B1, B2, U1-U5)."""
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -60,7 +61,9 @@ class BuildFlow(unittest.TestCase):
     def test_missing_gradle_does_not_consume_approval(self):  # U1
         approval = build_mod.request_build(self.store, "m_mod")
         self.store.decide_approval(approval["id"], True)
-        with patch.object(build_mod.shutil, "which", return_value=None):
+        # The workspace now ships the official wrapper, so "no launcher" can only happen if it is
+        # unusable; simulate that at the resolver rather than by deleting hash-tracked files.
+        with patch.object(build_mod, "_gradle_launcher", return_value=None):
             with self.assertRaisesRegex(StateError, "not consumed"):
                 build_mod.build_project(self.store, "m_mod", approval["id"])
         row = next(a for a in self.store.approvals("m_mod") if a["id"] == approval["id"])
@@ -81,3 +84,28 @@ class BuildFlow(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WrapperShipping(unittest.TestCase):
+    def test_generated_workspace_ships_hash_verified_wrapper(self):
+        import hashlib
+        from mod_orchestra.config import WRAPPER_FILES, PROFILE
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); store = Store(base / "db.sqlite")
+        with patch.object(workflow, "PROJECTS", base / "projects"):
+            (base / "projects").mkdir()
+            proj = workflow.new_project(store, name="W", mod_id="w_mod", package="com.x.w", idea="items: gem")
+            workflow.plan_project(store, "w_mod"); workflow.approve_spec(store, "w_mod"); workflow.generate_project(store, "w_mod")
+        root = Path(proj["root"])
+        for relative, expected in WRAPPER_FILES.items():
+            self.assertEqual(hashlib.sha256((root / relative).read_bytes()).hexdigest(), expected, relative)
+        props = (root / "gradle/wrapper/gradle-wrapper.properties").read_text()
+        self.assertIn(f"distributionSha256Sum={PROFILE['gradle_dist_sha256']}", props)
+        self.assertIn(f"gradle-{PROFILE['gradle']}-bin.zip", props)
+        if os.name != "nt":
+            self.assertTrue(os.access(root / "gradlew", os.X_OK))
+
+    def test_drifted_embedded_wrapper_is_refused(self):
+        from mod_orchestra.fabric import verified_wrapper_file
+        with self.assertRaisesRegex(StateError, "refusing to ship"):
+            verified_wrapper_file("gradlew", "0" * 64)

@@ -69,7 +69,7 @@ every tool, forbidden names, malformed frames, schema violations, path traversal
 
 ## Not yet tested
 
-- `craftctl build` (the controller-driven path) against a real Gradle; the host build above used `gradlew` directly.
+- `craftctl build` (the controller-driven path) against a real Gradle on a host with network. In the sandbox it launched the shipped wrapper, which failed at the distribution download (no network) and was classified `WRAPPER_DOWNLOAD` — launcher wiring verified, full build not.
 - MCP server protocol and tool restrictions.
 - `diagnose` against real failing Gradle logs.
 - Skills/agents as prompts for a cold Claude Code session.

@@ -62,7 +62,7 @@ craftctl footprint crystal_frontier
 
 ### Build the generated Fabric mod
 
-Building requires **JDK 25** (Gradle 9.7.1 + Loom 1.18 runtime; sources target Java 21), Gradle or a reviewed Gradle wrapper, a network connection for initial dependency resolution, and your explicit one-time approval. The generated source currently **does not include a Gradle wrapper JAR**; see `docs/SETUP.md` for why and how to bootstrap one from trusted sources.
+Building requires **JDK 25** (Gradle 9.7.1 + Loom 1.18 runtime; sources target Java 21); Gradle itself is fetched by the shipped, hash-verified official wrapper, Gradle or a reviewed Gradle wrapper, a network connection for initial dependency resolution, and your explicit one-time approval. The generated source currently **does not include a Gradle wrapper JAR**; see `docs/SETUP.md` for why and how to bootstrap one from trusted sources.
 
 ```powershell
 craftctl request-build crystal_frontier
@@ -72,7 +72,7 @@ craftctl build crystal_frontier --approval-id <approval-id>
 craftctl logs crystal_frontier
 ```
 
-A Gradle build runs project code **without OS-level sandboxing in this pre-alpha**. Review Gradle files, JDK and wrapper before approving. Build success is not gameplay success; test in an isolated Minecraft instance before shipping.
+A Gradle build runs project code **without OS-level sandboxing in this pre-alpha**. Review Gradle files and JDK before approving; the wrapper is the official Gradle one, hash-verified (`src/mod_orchestra/resources/gradle-wrapper/PROVENANCE.md`). Build success is not gameplay success; test in an isolated Minecraft instance before shipping.
 
 ## Integrate with Claude Code (advanced, optional)
 

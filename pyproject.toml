@@ -20,4 +20,4 @@ craftctl = "mod_orchestra.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-mod_orchestra = ["static/*"]
+mod_orchestra = ["static/*", "resources/gradle-wrapper/*", "resources/gradle-wrapper/gradle/wrapper/*"]

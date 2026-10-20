@@ -62,12 +62,14 @@ class EvidenceFlow(unittest.TestCase):
 
     @unittest.skipIf(os.name == "nt", "fake gradlew is a POSIX shell script")
     def test_approved_build_records_build_pass_automatically(self):
-        gradlew = self.root / "gradlew"
-        gradlew.write_text("#!/bin/sh\nmkdir -p build/libs; echo jar > build/libs/e_mod-1.0.0.jar; echo BUILD SUCCESSFUL\n")
-        gradlew.chmod(gradlew.stat().st_mode | stat.S_IEXEC)
+        # Do not overwrite the shipped (hash-tracked) gradlew; inject a fake launcher instead.
+        fake = Path(self.tmp.name) / "fake-gradlew"
+        fake.write_text("#!/bin/sh\nmkdir -p build/libs; echo jar > build/libs/e_mod-1.0.0.jar; echo BUILD SUCCESSFUL\n")
+        fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
         approval = build_mod.request_build(self.store, "e_mod")
         self.store.decide_approval(approval["id"], True)
-        result = build_mod.build_project(self.store, "e_mod", approval["id"])
+        with patch.object(build_mod, "_gradle_launcher", return_value=fake):
+            result = build_mod.build_project(self.store, "e_mod", approval["id"])
         self.assertEqual(result["status"], "BUILD_PASS")
         self.assertEqual(len(result["evidence"]["artifact_sha256"]), 64)
         ev = self.store.evidence("e_mod")
