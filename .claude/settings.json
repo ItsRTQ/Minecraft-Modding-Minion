@@ -58,7 +58,9 @@
       "Bash(craftctl dispatch*)",
       "PowerShell(craftctl requeue*)",
       "PowerShell(craftctl add-task*)",
-      "PowerShell(craftctl dispatch*)"
+      "PowerShell(craftctl dispatch*)",
+      "Bash(craftctl orchestrate*)",
+      "PowerShell(craftctl orchestrate*)"
     ]
   },
   "hooks": {

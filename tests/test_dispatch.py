@@ -173,3 +173,47 @@ class ClaudeCodeCommand(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Orchestrate(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        base = Path(self.tmp.name); self.store = Store(base / "state.sqlite")
+        p = patch.object(workflow, "PROJECTS", base / "projects"); p.start(); self.addCleanup(p.stop)
+        (base / "projects").mkdir()
+        workflow.new_project(self.store, name="O", mod_id="o_mod", package="com.x.o", idea="items: gem; blocks: ore")
+        workflow.plan_project(self.store, "o_mod"); workflow.approve_spec(self.store, "o_mod")
+
+    def test_runs_until_no_ready_tasks(self):
+        from mod_orchestra.dispatch import orchestrate
+        class Echo(FakeProvider):  # every task reports DONE with its own id
+            def run(self, envelope, log_path):
+                self.reply = reply(GOOD | {"task": envelope.task_id})
+                return super().run(envelope, log_path)
+        out = orchestrate(self.store, "o_mod", max_runs=10, provider=Echo(""))
+        self.assertEqual(out["stopped_because"], "no READY tasks")
+        self.assertGreaterEqual(len(out["runs"]), 3)  # SCAFFOLD, CONTENT:01, CONTENT:02, BUILD, GAME…
+        self.assertTrue(all(r["task_state"] == "DONE" for r in out["runs"]))
+
+    def test_stops_when_user_is_needed(self):
+        from mod_orchestra.dispatch import orchestrate
+        out = orchestrate(self.store, "o_mod", max_runs=10, provider=FakeProvider(reply(GOOD | {"status": "WAITING_USER", "needs_user": ["craftctl request-build o_mod"]})))
+        self.assertEqual(len(out["runs"]), 1)
+        self.assertIn("WAITING_USER on o_mod:SCAFFOLD: craftctl request-build o_mod", out["stopped_because"])
+
+    def test_budgets_stop_the_loop(self):
+        from mod_orchestra.dispatch import orchestrate
+        class Echo(FakeProvider):
+            def run(self, envelope, log_path):
+                self.reply = reply(GOOD | {"task": envelope.task_id}); return super().run(envelope, log_path)
+        out = orchestrate(self.store, "o_mod", max_runs=2, provider=Echo(""))
+        self.assertEqual(out["stopped_because"], "max_runs (2) reached"); self.assertEqual(len(out["runs"]), 2)
+
+    def test_stale_running_run_is_reconciled_after_restart(self):
+        from mod_orchestra.dispatch import reconcile_stale_runs, STALE_RUN_AFTER
+        run = self.store.create_run("o_mod", "o_mod:SCAFFOLD", "coder", "claude-code")
+        with self.store.tx() as con:
+            con.execute("UPDATE runs SET created_at=? WHERE id=?", (__import__("time").time() - STALE_RUN_AFTER - 10, run["id"]))
+        self.assertEqual(reconcile_stale_runs(self.store, "o_mod"), [run["id"]])
+        self.assertEqual(self.store.runs("o_mod")[0]["state"], "FAILED")
+        self.assertEqual(reconcile_stale_runs(self.store, "o_mod"), [])

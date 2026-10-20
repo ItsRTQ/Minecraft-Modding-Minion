@@ -44,3 +44,4 @@ Updated by hand at each `dev → prod` promotion.
 | Date | Tag | Criteria passing | Notes |
 |---|---|---|---|
 | 2026-10-21 | v0.4.0-prealpha | 0 / 9 | R0–R1 done. R2 ≈ 35 % (adapter files + proof that a subagent works under gates; controller-side dispatch, statuses, activity feed not built). Estimated ~8–10 % of v1. |
+| 2026-10-21 | dev (`claude-feature/r2-dispatch`) | 0 / 9 | R2 ≈ 75 %: controller-driven dispatch, Claude Code provider, handoff schema, task states, runs table, orchestrate loop with budgets, restart reconciliation, UI activity feed + verification + evidence panels. Unit-tested with a fake provider only; **criterion 3 needs one real `craftctl dispatch` run on the owner's machine**, criterion 7 needs the UI seen in a browser. Not built: cancel of a running worker, concurrent workers. |

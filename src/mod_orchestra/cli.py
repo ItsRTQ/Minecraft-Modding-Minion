@@ -63,6 +63,10 @@ def parser() -> argparse.ArgumentParser:
     a.add_argument("project"); a.add_argument("--id", required=True, help="Short task suffix, e.g. SAPPHIRE -> <project>:SAPPHIRE")
     a.add_argument("--role", required=True, choices=sorted(__import__("mod_orchestra.capabilities", fromlist=["CAPABILITIES"]).CAPABILITIES))
     a.add_argument("--title", required=True); a.add_argument("--after", nargs="*", default=None, help="Task ids this one depends on")
+    a = sub.add_parser("orchestrate", help="USER-ONLY: dispatch READY tasks one after another until you are needed or a budget is hit")
+    a.add_argument("project"); a.add_argument("--max-runs", type=int, default=5); a.add_argument("--max-cost-usd", type=float, default=5.0)
+    a.add_argument("--max-seconds", type=int, default=3600)
+    a.add_argument("--provider", choices=["claude-code", "fake"], default="claude-code"); a.add_argument("--fake-reply-file", default=None)
     a = sub.add_parser("runs", help="List agent runs for a project")
     a.add_argument("project")
     a = sub.add_parser("delete", help="USER-ONLY: remove a project from the Footprint (and its workspace with --workspace)")
@@ -164,6 +168,14 @@ def dispatch(args: argparse.Namespace) -> object:
     if args.command == "add-task":
         tid = f"{args.project}:{args.id.upper()}"
         return store.add_task(args.project, tid, args.role, args.title, after=args.after)
+    if args.command == "orchestrate":
+        from .dispatch import orchestrate
+        from .provider import FakeProvider
+        provider = None
+        if args.provider == "fake":
+            reply = Path(args.fake_reply_file).read_text(encoding="utf8") if args.fake_reply_file else ""
+            provider = FakeProvider(reply)
+        return orchestrate(store, args.project, max_runs=args.max_runs, max_cost_usd=args.max_cost_usd, max_seconds=args.max_seconds, provider=provider)
     if args.command == "runs":
         return [{k: v for k, v in r.items() if k != "handoff"} | {"handoff_status": (r["handoff"] or {}).get("status")} for r in store.runs(args.project)]
     if args.command == "delete":

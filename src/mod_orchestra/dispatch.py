@@ -104,3 +104,54 @@ def dispatch(store: Store, pid: str, *, task_id: str | None = None, provider: Ag
     return {"run": run["id"], "task": task["id"], "role": task["role"], "provider": provider.name,
             "exit_code": result.exit_code, "duration_s": result.duration_s, "cost_usd": result.cost_usd, "turns": result.turns,
             "log": str(log_path), **outcome}
+
+
+STALE_RUN_AFTER = LEASE_TTL + 300
+
+
+def reconcile_stale_runs(store: Store, pid: str) -> list[str]:
+    """Restart safety: a run still RUNNING long after its lease could have expired belonged to a
+    controller that died mid-dispatch. Mark it FAILED so the board is honest; the task's lease has
+    expired on its own and refresh_ready puts it back to READY."""
+    stale = []
+    now = time.time()
+    for r in store.runs(pid):
+        if r["state"] == "RUNNING" and now - r["created_at"] > STALE_RUN_AFTER:
+            store.finish_run(r["id"], state="FAILED", exit_code=None, duration_s=None, log_path=r.get("log_path"),
+                             error="controller restarted while this run was in progress")
+            stale.append(r["id"])
+    store.refresh_ready(pid)
+    return stale
+
+
+HUMAN_NEEDED = ("WAITING_USER", "BLOCKED", "FAILED")
+
+
+def orchestrate(store: Store, pid: str, *, max_runs: int = 5, max_cost_usd: float = 5.0, max_seconds: int = 3600,
+                provider: AgentProvider | None = None) -> dict:
+    """Coordinator loop: dispatch READY tasks one at a time until the user is needed or a budget is hit.
+    Never crosses an approval gate: a WAITING_USER/BLOCKED/FAILED outcome ends the loop."""
+    started = time.time()
+    stale = reconcile_stale_runs(store, pid)
+    runs, cost = [], 0.0
+    reason = "no READY tasks"
+    while True:
+        if len(runs) >= max_runs:
+            reason = f"max_runs ({max_runs}) reached"; break
+        if cost >= max_cost_usd:
+            reason = f"max_cost_usd ({max_cost_usd}) reached"; break
+        if time.time() - started > max_seconds:
+            reason = f"max_seconds ({max_seconds}) reached"; break
+        store.refresh_ready(pid)
+        if not any(t["state"] == "READY" and t["role"] in DISPATCHABLE_ROLES for t in store.tasks(pid)):
+            reason = "no READY tasks"; break
+        out = dispatch(store, pid, provider=provider)
+        runs.append({k: out.get(k) for k in ("run", "task", "role", "task_state", "cost_usd", "duration_s", "error")})
+        cost += float(out.get("cost_usd") or 0.0)
+        if out["task_state"] in HUMAN_NEEDED:
+            needs = (out.get("handoff") or {}).get("needs_user") or []
+            reason = f"{out['task_state']} on {out['task']}" + (": " + "; ".join(needs) if needs else "")
+            break
+    store.add_event(pid, "controller", "ORCHESTRATE_STOPPED", {"reason": reason, "runs": len(runs), "cost_usd": round(cost, 4)})
+    return {"project": pid, "runs": runs, "total_cost_usd": round(cost, 4), "elapsed_s": round(time.time() - started, 1),
+            "stopped_because": reason, "stale_runs_reconciled": stale}
