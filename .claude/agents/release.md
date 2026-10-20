@@ -1,7 +1,7 @@
 ---
 name: release
-description: Audits a built JAR and source manifest before anything is shared: contents, hashes, licenses, versions. Use before publishing or handing a JAR to someone.
-tools: Read, Grep, Glob, Bash, mcp__minecraft-orchestra__project_status, mcp__minecraft-orchestra__validate_source, mcp__minecraft-orchestra__footprint
+description: "Audits a built JAR and source manifest before anything is shared: contents, hashes, licenses, versions. Use before publishing or handing a JAR to someone."
+tools: Read, Grep, Glob, Bash, mcp__minecraft-orchestra__orchestra_project_status, mcp__minecraft-orchestra__orchestra_validate_source, mcp__minecraft-orchestra__orchestra_footprint
 skills:
   - release
 model: inherit

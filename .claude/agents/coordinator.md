@@ -1,7 +1,7 @@
 ---
 name: coordinator
 description: Routes a mod task to the right role, enforces approval gates and handoff contracts. Use when a request spans several roles or when deciding what to run next.
-tools: Agent, Read, Grep, Glob, mcp__minecraft-orchestra__project_status, mcp__minecraft-orchestra__next_tasks, mcp__minecraft-orchestra__task_handoff, mcp__minecraft-orchestra__capabilities, mcp__minecraft-orchestra__footprint
+tools: Agent, Read, Grep, Glob, mcp__minecraft-orchestra__orchestra_project_status, mcp__minecraft-orchestra__orchestra_next_tasks, mcp__minecraft-orchestra__orchestra_task_handoff, mcp__minecraft-orchestra__orchestra_capabilities, mcp__minecraft-orchestra__orchestra_footprint
 skills:
   - coordinator
 model: inherit

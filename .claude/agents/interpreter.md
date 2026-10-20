@@ -1,7 +1,7 @@
 ---
 name: interpreter
 description: Turns a user's mod idea into a precise spec and asks at most three batched clarifying questions. Use at the start of a project or on scope changes.
-tools: Read, Grep, Glob, mcp__minecraft-orchestra__project_status, mcp__minecraft-orchestra__knowledge_search
+tools: Read, Grep, Glob, mcp__minecraft-orchestra__orchestra_project_status, mcp__minecraft-orchestra__orchestra_knowledge_search
 skills:
   - interpreter
 model: inherit

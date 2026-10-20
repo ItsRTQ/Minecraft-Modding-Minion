@@ -15,7 +15,22 @@
       "Bash(python -m unittest*)",
       "Bash(git status*)",
       "Bash(git diff*)",
-      "Bash(git log*)"
+      "Bash(git log*)",
+      "PowerShell(craftctl doctor*)",
+      "PowerShell(craftctl status*)",
+      "PowerShell(craftctl projects*)",
+      "PowerShell(craftctl validate*)",
+      "PowerShell(craftctl logs*)",
+      "PowerShell(craftctl diagnose*)",
+      "PowerShell(craftctl footprint*)",
+      "PowerShell(craftctl kb-search*)",
+      "PowerShell(craftctl capabilities*)",
+      "PowerShell(craftctl next*)",
+      "PowerShell(craftctl handoff*)",
+      "PowerShell(python -m unittest*)",
+      "PowerShell(git status*)",
+      "PowerShell(git diff*)",
+      "PowerShell(git log*)"
     ],
     "deny": [
       "Bash(craftctl approve-spec*)",
@@ -27,7 +42,17 @@
       "Bash(craftctl release*)",
       "Bash(craftctl new*)",
       "Bash(git push*)",
-      "Bash(git reset --hard*)"
+      "Bash(git reset --hard*)",
+      "PowerShell(craftctl approve-spec*)",
+      "PowerShell(craftctl request-build*)",
+      "PowerShell(craftctl decide*)",
+      "PowerShell(craftctl build*)",
+      "PowerShell(craftctl evidence*)",
+      "PowerShell(craftctl delete*)",
+      "PowerShell(craftctl release*)",
+      "PowerShell(craftctl new*)",
+      "PowerShell(git push*)",
+      "PowerShell(git reset --hard*)"
     ]
   },
   "hooks": {
@@ -35,7 +60,10 @@
       {
         "matcher": "Bash|PowerShell|Write|Edit|MultiEdit",
         "hooks": [
-          { "type": "command", "command": "python .claude/hooks/guard.py" }
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.py\""
+          }
         ]
       }
     ]

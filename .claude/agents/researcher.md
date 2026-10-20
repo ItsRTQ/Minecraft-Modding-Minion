@@ -1,7 +1,7 @@
 ---
 name: researcher
 description: Looks up version-matched official Fabric, Loom, GeckoLib and Blockbench references and records them under knowledge/. Use when an API, version or license is uncertain.
-tools: Read, Grep, Glob, Write, WebFetch, WebSearch, mcp__minecraft-orchestra__knowledge_search
+tools: Read, Grep, Glob, Write, WebFetch, WebSearch, mcp__minecraft-orchestra__orchestra_knowledge_search
 skills:
   - researcher
 model: inherit

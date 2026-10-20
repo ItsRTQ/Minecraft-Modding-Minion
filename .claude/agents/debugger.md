@@ -1,7 +1,7 @@
 ---
 name: debugger
 description: Reads build logs, crash reports and live logs to find root cause and propose the minimal fix. Use proactively on any BUILD_FAILED, crash or unexpected behaviour.
-tools: Read, Grep, Glob, Edit, Bash, mcp__minecraft-orchestra__project_status, mcp__minecraft-orchestra__diagnose_build, mcp__minecraft-orchestra__logs_tail, mcp__minecraft-orchestra__validate_source
+tools: Read, Grep, Glob, Edit, Bash, mcp__minecraft-orchestra__orchestra_project_status, mcp__minecraft-orchestra__orchestra_diagnose_build, mcp__minecraft-orchestra__orchestra_logs_tail, mcp__minecraft-orchestra__orchestra_validate_source
 skills:
   - debugger
 model: inherit

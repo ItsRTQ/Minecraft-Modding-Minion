@@ -1,7 +1,7 @@
 ---
 name: scrum-master
 description: Breaks an approved plan into independent task contracts with dependencies and acceptance criteria. Use when a plan exists but tasks are missing or unclear.
-tools: Read, Grep, Glob, mcp__minecraft-orchestra__project_status, mcp__minecraft-orchestra__next_tasks, mcp__minecraft-orchestra__task_handoff
+tools: Read, Grep, Glob, mcp__minecraft-orchestra__orchestra_project_status, mcp__minecraft-orchestra__orchestra_next_tasks, mcp__minecraft-orchestra__orchestra_task_handoff
 skills:
   - scrum-master
 model: inherit
