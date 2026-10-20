@@ -19,6 +19,15 @@ def _version(command: list[str]) -> str | None:
         return None
 
 
+def _schema_status() -> dict:
+    from .state import Store, SCHEMA_VERSION, StateError
+    try:
+        store = Store()
+        return {"version": store.schema_version(), "current": SCHEMA_VERSION, "path": str(store.path), "ok": True}
+    except StateError as exc:
+        return {"version": None, "current": SCHEMA_VERSION, "ok": False, "error": str(exc)}
+
+
 def _wrapper_status() -> dict:
     """Recompute embedded wrapper hashes against the provenance record."""
     files = {}
@@ -54,6 +63,7 @@ def inspect() -> dict:
         "gradle": {"executable": gradle, "version": _version([gradle, "--version"]) if gradle else None,
                    "note": "Optional: generated workspaces ship the official hash-verified wrapper (see wrapper)"},
         "wrapper": _wrapper_status(),
+        "schema": _schema_status(),
         "git": {"executable": git, "version": _version([git, "--version"]) if git else None},
         "blockbench": {"executable": blockbench, "note": "Optional for static item/block prototypes"},
         "minecraft": {"directory": str(minecraft), "launcher_files_found": minecraft.is_dir(),
