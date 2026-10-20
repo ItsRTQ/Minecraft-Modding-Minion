@@ -8,7 +8,6 @@ from mod_orchestra import workflow
 from mod_orchestra.mcp import handle, TOOLS, SUPPORTED_PROTOCOLS
 from mod_orchestra.state import Store
 
-FORBIDDEN = ("approve", "decide", "grant", "build", "new_project", "create")
 
 
 class McpProtocol(unittest.TestCase):
@@ -39,10 +38,11 @@ class McpProtocol(unittest.TestCase):
         for needle in ("approve-spec", "request-build", "decide", "NO tool"):
             self.assertIn(needle, text)
 
-    def test_no_tool_name_hints_at_approval_or_build(self):
-        for tool in TOOLS:
-            for word in FORBIDDEN:
-                self.assertNotIn(word, tool["name"])
+    def test_mcp_module_never_reaches_user_only_operations(self):
+        import inspect, mod_orchestra.mcp as mcp
+        src = inspect.getsource(mcp)
+        for symbol in ("consume_approval", "decide_approval", "request_approval", "build_project", "new_project", "approve_spec"):
+            self.assertNotIn(symbol, src, f"MCP must not be able to call {symbol}")
 
     def test_validate_before_generate_is_a_clean_state_error(self):  # M2
         r = self.call("orchestra_validate_source", {"project": "m_mod"})
