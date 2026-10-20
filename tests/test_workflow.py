@@ -63,7 +63,7 @@ class TestWorkspace(unittest.TestCase):
         self.assertEqual(validate_generated(root)["status"], "PASS")
         self.assertTrue((root / "src/main/java/com/example/mymod/ModMain.java").is_file())
         self.assertTrue((root / "src/main/resources/assets/my_mod/textures/block/silver_ore.png").is_file())
-        self.assertTrue((root / "src/main/resources/data/my_mod/loot_tables/blocks/silver_ore.json").is_file())
+        self.assertTrue((root / "src/main/resources/data/my_mod/loot_table/blocks/silver_ore.json").is_file())
         self.assertTrue((root / "src/main/resources/fabric.mod.json").is_file())
         self.assertEqual(len([t for t in self.store.tasks("my_mod") if t["state"] == "DONE"]), 4)
         self.assertIn("BUILD", [t["id"].split(":")[-1] for t in self.store.tasks("my_mod") if t["state"] == "READY"])
@@ -73,6 +73,27 @@ class TestWorkspace(unittest.TestCase):
         # Generated file changes make the static integrity gate fail.
         (root / "gradle.properties").write_text("modified", encoding="utf8")
         self.assertEqual(validate_generated(root)["status"], "FAIL")
+
+    def test_generated_sources_use_mojang_mappings_profile(self):
+        self.create()
+        workflow.approve_spec(self.store, "my_mod")
+        root = Path(workflow.generate_project(self.store, "my_mod")["path"])
+        java = (root / "src/main/java/com/example/mymod/ModMain.java").read_text(encoding="utf8")
+        gradle = (root / "build.gradle").read_text(encoding="utf8")
+        props = (root / "gradle.properties").read_text(encoding="utf8")
+        # Mojmap names; Yarn names must not leak into generated Java.
+        for needle in ("ResourceLocation.fromNamespaceAndPath", "BuiltInRegistries.ITEM", "BlockBehaviour.Properties.of()",
+                       "CreativeModeTabs.BUILDING_BLOCKS", "entries.accept("):
+            self.assertIn(needle, java)
+        for yarn in ("Identifier", "net.minecraft.registry.Registries", "AbstractBlock", "ItemGroups.", "Item.Settings"):
+            self.assertNotIn(yarn, java)
+        self.assertIn("net.fabricmc.fabric-loom-remap", gradle)
+        self.assertIn("loom.officialMojangMappings()", gradle)
+        self.assertNotIn("yarn", gradle + props)
+        self.assertIn("loom_version=", props)
+        # 1.21+ datapack folders are singular.
+        self.assertFalse((root / "src/main/resources/data/my_mod/loot_tables").exists())
+        self.assertTrue((root / "src/main/resources/data/my_mod/loot_table/blocks/silver_ore.json").is_file())
 
     def test_fabric_metadata_and_png_are_valid(self):
         p = self.create()

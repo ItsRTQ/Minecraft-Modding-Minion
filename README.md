@@ -9,7 +9,7 @@
 ## Architecture commitments
 
 - **Hybrid local-first:** Fabric workspaces, Gradle, Blockbench and future game tests stay local. Claude Code is an optional *developer integration*, not a required application dependency.
-- **Fabric-first:** one narrowly scoped, pinned `fabric-1.21.1-candidate` profile. Pinned coordinates are sourced from Fabric Maven but the *combined stack has not yet been compiled and tested*.
+- **Fabric-first:** one narrowly scoped, pinned `fabric-1.21.1-candidate` profile mirroring the official FabricMC example mod (Mojang mappings, Loom 1.18, Gradle 9.7.1). The upstream template has been build-verified locally; *generated output has not yet been compiled*.
 - **Approval autonomy:** reviewers approve the specification and any Gradle execution; source files are only generated in a new/empty folder; no silent executable installation, publishing or Minecraft save modification.
 - **Evidence instead of wishful thinking:** `SOURCE_GENERATED_UNVERIFIED`, `BUILD_PASSED_GAME_UNTESTED`, and separate QA tasks are distinct outcomes.
 
@@ -62,7 +62,7 @@ craftctl footprint crystal_frontier
 
 ### Build the generated Fabric mod
 
-Building requires **JDK 21**, Gradle or a reviewed Gradle wrapper, a network connection for initial dependency resolution, and your explicit one-time approval. The generated source currently **does not include a Gradle wrapper JAR**; see `docs/SETUP.md` for why and how to bootstrap one from trusted sources.
+Building requires **JDK 25** (Gradle 9.7.1 + Loom 1.18 runtime; sources target Java 21), Gradle or a reviewed Gradle wrapper, a network connection for initial dependency resolution, and your explicit one-time approval. The generated source currently **does not include a Gradle wrapper JAR**; see `docs/SETUP.md` for why and how to bootstrap one from trusted sources.
 
 ```powershell
 craftctl request-build crystal_frontier
@@ -113,7 +113,7 @@ All ordinary Python dependencies are standard-library modules. `pip install -e .
 
 ## Honest limitations
 
-1. **No guaranteed Fabric JAR build yet:** dependency coordinates exist; verification against actual Gradle/Minecraft runtime is still pending. The Gradle wrapper JAR cannot be bundled without a verified source.
+1. **No guaranteed Fabric JAR build yet:** the toolchain is verified via the upstream template, but the generator's own output has not been compiled against it. The Gradle wrapper JAR cannot be bundled without a verified source.
 2. **No automatic third-party software installers yet:** first-run checks and actionable instructions exist, but managed installation is a later milestone.
 3. **No arbitrary natural language auto-coding yet:** advanced ideas are still tasks for Claude Code workers or human developers. No OpenAI/Anthropic API account is required to use deterministic mode.
 4. **Local web UI is a developer prototype:** token-authenticated localhost, not a hardened multiuser desktop product. Disable port forwarding and do not expose it to the LAN/internet.
