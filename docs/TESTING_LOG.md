@@ -77,9 +77,20 @@ every tool, forbidden names, malformed frames, schema violations, path traversal
 | H4 | Med | CLI | No `craftctl delete <id>`; removing a workspace by hand leaves an orphan project row in SQLite. | OPEN |
 | H5 | Low | docs | SETUP assumed `pip install -e .` puts `craftctl` on PATH; on Windows the Store Python aliases can shadow a venv. Documented. | FIXED (docs) |
 
+## Host run 3 — 2026-10-20 · RTQ · Windows / JDK 25 · `claude-feature/hotfix-wrapper-eol`
+
+Controller-driven path verified end to end with the shipped wrapper and no manual steps:
+`new → plan → approve-spec → generate → request-build → decide grant → build` on project `wrap_test3`.
+`build` exit 0; `BUILD_PASS` recorded by the controller with JAR sha256 `fb58b290f5c0d7f29f95dc1454b38a1c4149eb262e2016fb50bd53f18d95ec9c`;
+approval `CONSUMED`; `:BUILD` task `DONE`, `:GAME` `READY`; status `BUILD_PASSED_GAME_UNTESTED`.
+H1 (`.gitattributes`) and H2 (lease release, `TASK_RELEASED` event observed) confirmed on Windows. **R1 FAB-001 complete.**
+
+| ID | Sev | Area | Finding | Status |
+|---|---|---|---|---|
+| H6 | Med | UX | A task held by an expired-but-not-yet-timed-out lease reports only "task unavailable"; nothing shows who holds it or when it expires, and there is no `craftctl release`. | OPEN |
+
 ## Not yet tested
 
-- `craftctl build` (the controller-driven path) against a real Gradle on a host with network. In the sandbox it launched the shipped wrapper, which failed at the distribution download (no network) and was classified `WRAPPER_DOWNLOAD` — launcher wiring verified, full build not.
 - MCP server protocol and tool restrictions.
 - `diagnose` against real failing Gradle logs.
 - Skills/agents as prompts for a cold Claude Code session.
