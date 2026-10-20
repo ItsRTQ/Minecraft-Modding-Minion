@@ -89,9 +89,51 @@ H1 (`.gitattributes`) and H2 (lease release, `TASK_RELEASED` event observed) con
 |---|---|---|---|---|
 | H6 | Med | UX | A task held by an expired-but-not-yet-timed-out lease reports only "task unavailable"; nothing shows who holds it or when it expires, and there is no `craftctl release`. | FIXED (`claude-feature/r1-ux-leases-delete`) |
 
+## Round 3 — 2026-10-20 · Claude Code session (R2 adapter smoke) · base `dev` @ 37f06aa · Windows / JDK 25
+
+First real Claude Code session (desktop app, PowerShell primary tool) opened on the repo after the
+adapter merge. Baseline: local `dev` was 18 commits behind `origin/dev` (fast-forwarded first);
+`python -m unittest` 79 tests, 1 error (A5), 3 skipped; `python -m mod_orchestra.cli doctor` OK
+(`craftctl` itself not on PATH, see A1). Fixes on `claude-feature/r2-smoke`.
+
+| ID | Sev | Area | Finding | Status |
+|---|---|---|---|---|
+| A1 | **High** | MCP | `.mcp.json` ran `craftctl mcp`; `craftctl.exe` lives in the Store-Python `Scripts/` dir that is not on PATH, so Claude Code reported `minecraft-orchestra (CONNECTION_CLOSED)` at startup. Launched by hand as `python -m mod_orchestra.cli mcp` the server is fine: handshake echoes `2025-06-18`, 563-char `instructions`, 12 tools, `orchestra_doctor`/`orchestra_capabilities` answer. `.mcp.json` now uses the module form; test added. Reconnect needs a session restart (not yet observed). | FIXED (`claude-feature/r2-smoke`) |
+| A2 | **High** | agents | All 12 agents listed `mcp__minecraft-orchestra__project_status` etc. Claude Code names MCP tools `mcp__<server>__<tool>` and the server's tools are `orchestra_*`, so the real name is `mcp__minecraft-orchestra__orchestra_project_status`; no role would have received any MCP tool. `test_claude_code_config` accepted both spellings, which is how it slipped through. Renamed in all agents; test now accepts only real names. | FIXED (`claude-feature/r2-smoke`) |
+| A3 | **High** | hook | `settings.json` ran `python .claude/hooks/guard.py` relative to the shell cwd. After one `cd examples/crystal_example` the script was not found and Claude Code fails closed: **every** Bash/PowerShell/Write/Edit call was blocked ("can't open file ... examples\crystal_example\.claude\hooks\guard.py") until the session directory was reset. Anchored to `"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.py"`; settings hot-reloaded and the same call from the subdirectory now passes. Test asserts the anchor. | FIXED (`claude-feature/r2-smoke`) |
+| A4 | **High** | agents | Only 9 of 12 subagents loaded (`Agent(subagent_type: investigator/release/world-builder)` → "not found"). Their unquoted YAML `description:` contains `": "` (e.g. "reports its baseline: structure, ..."), a YAML mapping error; Claude Code skips the file silently. Descriptions quoted; frontmatter test rejects unquoted scalars with `": "`. Agent files are **not** hot-reloaded: loading of the three must be confirmed in a fresh session. | FIXED, load unconfirmed |
+| A5 | Low | tests | `test_safe_inside_blocks_symlinks` errors on Windows without Developer Mode/admin (`WinError 1314` creating the symlink). CI passes because runners are elevated. Now `skipTest` when the host cannot create symlinks. | FIXED (`claude-feature/r2-smoke`) |
+| A6 | Med | settings | `permissions.deny` rules are spelled `Bash(craftctl decide*)`. In the desktop app on Windows the primary shell tool is `PowerShell`, which those rules do not cover; the hook is the only control there. Hook matcher does include `PowerShell`. Decide whether to mirror the rules as `PowerShell(...)` once that syntax is confirmed honoured. | OPEN |
+| A7 | Low | hook | Guard regex is bypassable by indirection (`C=craftctl; $C decide ...`, `python -c "from mod_orchestra.cli import main; main([...])"`). Expected: CLAUDE.md rule 4 says hooks are not a security boundary; the controller's approval state is. Logged so nobody mistakes the hook for one. | OPEN (design) |
+| A8 | Low | hook | False positive: the guard scans the whole command string, so a `git commit` whose heredoc message mentions "git push" is blocked. Worked around with `git commit -F <file>` (which also shows how thin the regex is, see A7). Consider matching only at command-start positions (`^`, `&&`, `;`, `|`). | OPEN |
+| A9 | Low | session | Adapter files that land mid-session (here via the fast-forward) are not picked up: subagents appeared only after the session directory was reloaded; hooks did hot-reload. Not a repo bug; worth a line in SETUP ("restart the session after pulling adapter changes"). | OPEN (doc) |
+
+### R2 proof — `sapphire` item added by the `coder` subagent
+
+Task `R2-PROOF-001`: the real `coder` subagent (skill preloaded, under the hook) added a `sapphire`
+item to `examples/crystal_example`: `SAPPHIRE` registered with Mojang mappings in `ModMain.java` and
+added to `INGREDIENTS`; `models/item/sapphire.json`; lang entry; 16×16 RGBA placeholder texture made
+with the Python stdlib. Scope held: exactly four files under `src/main/`, nothing else touched, no
+USER-ONLY command run. `./gradlew build --no-daemon --console=plain` → exit 0, `BUILD SUCCESSFUL in 13s`
+(incremental; `compileJava`, `jar`, `remapJar` executed). The orchestrating session re-verified the diff,
+the PNG header (16×16, RGBA), and the JAR: `build/libs/crystal_example-1.0.0.jar` SHA-256
+`e8460b2e550e89563c79141fba6f22d6a1bf768bd39b207ef11495644f8d93c4` contains the new model, texture, lang
+and `ModMain.class`. The handoff reported only observed evidence and named the right next actions.
+
+**Level reached: BUILD_PASS, observed in-session.** Not recorded in the Footprint (`crystal_example` is
+not a controller project; `craftctl projects` lists only `wrap_test3`), not client-booted, not seen
+in-game. A first attempt with a generic worker, launched before the `coder` type had loaded, stalled on
+A3 and was stopped; it left no file changes but did open a terminal tab ("write build wrapper").
+
+### Verified OK
+
+- Guard (`.claude/hooks/guard.py`) exercised with hook payloads: blocks all eight USER-ONLY commands in both spellings (`craftctl …`, `python -m mod_orchestra.cli …`), for `Bash` and `PowerShell` payloads, including when prefixed by `cd … &&`; blocks `git push`, `git reset --hard`, `git clean -fd`; allows `craftctl doctor/status`, `./gradlew build`, `git status`; researcher `Write` only under `knowledge/`. Live check: a Bash call containing `craftctl decide x grant` was refused by the running hook with the USER-ONLY message (after A3 was fixed).
+- MCP server over stdio via the module entry point (see A1). The `coder`, `coordinator`, `debugger`, `designer`, `interpreter`, `planner`, `qa`, `researcher`, `scrum-master` subagents load and `coder` runs with its skill preloaded.
+- Session environment: `git fetch` over SSH fails (`Permission denied (publickey)`) inside the tool shell, so feature branches from a session must be pushed by the user.
+
 ## Not yet tested
 
-- MCP server protocol and tool restrictions.
+- MCP server **as connected by Claude Code** (only the hand-driven stdio run in Round 3; needs a restart after A1).
+- Loading of the `investigator`, `release` and `world-builder` subagents after A4 (fresh session).
 - `diagnose` against real failing Gradle logs.
-- Skills/agents as prompts for a cold Claude Code session.
 - UI rendered in a browser (only the API was exercised).
