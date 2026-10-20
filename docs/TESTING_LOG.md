@@ -12,19 +12,19 @@ Status legend: OPEN · FIXED(branch) · WONTFIX
 
 | ID | Sev | Area | Finding | Status |
 |---|---|---|---|---|
-| B1 | High | generator | Item/block id `mod_id` → `public static final Item MOD_ID` collides with the `MOD_ID` string constant. Duplicate field, javac fails. Uniqueness check only compares raw identifiers, not derived Java names. | OPEN |
-| B2 | High | generator | Item `ruby_item` + block `ruby` → `RUBY_ITEM` emitted twice (item + BlockItem). Duplicate field; block also lands in the wrong creative tab. Same root cause as B1. | OPEN |
+| B1 | High | generator | Item/block id `mod_id` → `public static final Item MOD_ID` collides with the `MOD_ID` string constant. Duplicate field, javac fails. Uniqueness check only compares raw identifiers, not derived Java names. | FIXED (`claude-feature/round1-fixes`) |
+| B2 | High | generator | Item `ruby_item` + block `ruby` → `RUBY_ITEM` emitted twice (item + BlockItem). Duplicate field; block also lands in the wrong creative tab. Same root cause as B1. | FIXED (`claude-feature/round1-fixes`) |
 | B3 | Med | generator | Datapack folder `loot_tables/` is ignored by 1.21+ (singular `loot_table/`); blocks dropped nothing. Test asserted the wrong path. | FIXED (`claude-feature/mojmap-1.21.1-generator`) |
 
 ### UX / correctness
 
 | ID | Sev | Area | Finding | Status |
 |---|---|---|---|---|
-| U1 | Med | build | One-use build approval is **consumed even when no Gradle is found** (`BUILD_BLOCKED`). User must request + grant again for a tooling problem. Pre-check wrapper/Gradle before `consume_approval`. | OPEN |
-| U2 | Med | build | `request-build` succeeds on a tampered workspace; failure only surfaces at `build` after the approval is spent. Run `validate_generated` inside `request_build` and refuse early. | OPEN |
-| U3 | Low | validation | Single-char identifiers rejected (regex `{1,39}` → min 2) but the message says "starting with a letter". Fix message (or allow 1 char). | OPEN |
-| U4 | Low | validation | Invalid-identifier error echoes the full offending string (tested 300 chars). Truncate to ~40. | OPEN |
-| U5 | Low | diagnose | `diagnose` with no build log returns `lines_reviewed: 1, classifications: []` instead of saying there is no log. | OPEN |
+| U1 | Med | build | One-use build approval is **consumed even when no Gradle is found** (`BUILD_BLOCKED`). User must request + grant again for a tooling problem. Pre-check wrapper/Gradle before `consume_approval`. | FIXED (`claude-feature/round1-fixes`) |
+| U2 | Med | build | `request-build` succeeds on a tampered workspace; failure only surfaces at `build` after the approval is spent. Run `validate_generated` inside `request_build` and refuse early. | FIXED (`claude-feature/round1-fixes`) |
+| U3 | Low | validation | Single-char identifiers rejected (regex `{1,39}` → min 2) but the message says "starting with a letter". Fix message (or allow 1 char). | FIXED (`claude-feature/round1-fixes`) |
+| U4 | Low | validation | Invalid-identifier error echoes the full offending string (tested 300 chars). Truncate to ~40. | FIXED (`claude-feature/round1-fixes`) |
+| U5 | Low | diagnose | `diagnose` with no build log returns `lines_reviewed: 1, classifications: []` instead of saying there is no log. | FIXED (`claude-feature/round1-fixes`) |
 | U6 | Low | planner | `:BUILD` task is assigned role `debugger`. Arguably `coder`/`release`; debugger should own the failure path. Design question. | OPEN |
 | U7 | Med | UI clarity | UI exposes plan/approve/generate/request-build/grant/deny/build but **no validate, logs or diagnose views**. After a failed build the user cannot see why from the UI. | OPEN |
 | U8 | Low | UI/CLI clarity | Blocking-question message says "Update the idea in a new project" — there is no edit path, so the user must pick a new mod id. Either allow re-interpreting the idea on an unapproved project or explain the constraint. | OPEN |
