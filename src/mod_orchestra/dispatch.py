@@ -6,6 +6,7 @@ The worker never decides its own task state; the handoff's `status` is a claim t
 controller maps onto the task after validation.
 """
 from __future__ import annotations
+import os
 import time
 from pathlib import Path
 
@@ -71,11 +72,19 @@ def apply_outcome(store: Store, pid: str, task: dict, lease: dict, run: dict, re
     return {"task_state": task_state, "handoff": h}
 
 
+def provider_from_env() -> AgentProvider:
+    """CRAFTCTL_PROVIDER=fake (+ CRAFTCTL_FAKE_REPLY_FILE) lets the UI/CLI be exercised without Claude Code."""
+    if os.environ.get("CRAFTCTL_PROVIDER") == "fake":
+        path = os.environ.get("CRAFTCTL_FAKE_REPLY_FILE")
+        return FakeProvider(Path(path).read_text(encoding="utf8") if path else "")
+    return ClaudeCodeProvider()
+
+
 def dispatch(store: Store, pid: str, *, task_id: str | None = None, provider: AgentProvider | None = None) -> dict:
     proj = store.project(pid)
     if proj["spec_state"] != "APPROVED":
         raise StateError("Dispatch requires a user-approved spec (craftctl approve-spec)")
-    provider = provider or ClaudeCodeProvider()
+    provider = provider or provider_from_env()
     task = pick_task(store, pid, task_id)
     worker = f"agent:{task['role']}"
     lease = store.claim(task["id"], worker, ttl=LEASE_TTL)

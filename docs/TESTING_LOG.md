@@ -26,7 +26,7 @@ Status legend: OPEN · FIXED(branch) · WONTFIX
 | U4 | Low | validation | Invalid-identifier error echoes the full offending string (tested 300 chars). Truncate to ~40. | FIXED (`claude-feature/round1-fixes`) |
 | U5 | Low | diagnose | `diagnose` with no build log returns `lines_reviewed: 1, classifications: []` instead of saying there is no log. | FIXED (`claude-feature/round1-fixes`) |
 | U6 | Low | planner | `:BUILD` task is assigned role `debugger`. Arguably `coder`/`release`; debugger should own the failure path. Design question. | FIXED (`claude-feature/r2-dispatch`: BUILD → coder; debugger owns BUILD_FAILED) |
-| U7 | Med | UI clarity | UI exposes plan/approve/generate/request-build/grant/deny/build but **no validate, logs or diagnose views**. After a failed build the user cannot see why from the UI. | OPEN |
+| U7 | Med | UI clarity | UI exposes plan/approve/generate/request-build/grant/deny/build but **no validate, logs or diagnose views**. After a failed build the user cannot see why from the UI. | FIXED (`claude-feature/r2-dispatch`: Verification panel — validate/build log/diagnose; Evidence panel; Agent runs feed with handoff, needs_user and worker log; dispatch + requeue from the UI). Browser rendering not yet checked by RTQ. |
 | U8 | Low | UI/CLI clarity | Blocking-question message says "Update the idea in a new project" — there is no edit path, so the user must pick a new mod id. Either allow re-interpreting the idea on an unapproved project or explain the constraint. | OPEN |
 
 ### Verified OK
