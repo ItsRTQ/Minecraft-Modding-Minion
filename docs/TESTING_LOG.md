@@ -120,9 +120,11 @@ the PNG header (16×16, RGBA), and the JAR: `build/libs/crystal_example-1.0.0.ja
 `e8460b2e550e89563c79141fba6f22d6a1bf768bd39b207ef11495644f8d93c4` contains the new model, texture, lang
 and `ModMain.class`. The handoff reported only observed evidence and named the right next actions.
 
-**Level reached: BUILD_PASS, observed in-session.** Not recorded in the Footprint (`crystal_example` is
-not a controller project; `craftctl projects` lists only `wrap_test3`), not client-booted, not seen
-in-game. A first attempt with a generic worker, launched before the `coder` type had loaded, stalled on
+**Level reached: BUILD_PASS observed in-session; then CLIENT_BOOT_PASS (client log: `crystal_example 1.0.0`
+loaded, 0 errors, no missing texture/model) and CONTENT_VERIFIED by RTQ (all three gems in the Ingredients
+tab, sapphire named and textured).** Recorded in `examples/crystal_example/EVIDENCE.md`, not in the Footprint
+(`crystal_example` is not a controller project; `craftctl projects` lists only `wrap_test3`). **R2 proof
+complete.** A first attempt with a generic worker, launched before the `coder` type had loaded, stalled on
 A3 and was stopped; it left no file changes but did open a terminal tab ("write build wrapper").
 
 ### Verified OK
