@@ -7,6 +7,7 @@ from pathlib import Path
 HOME = Path(os.environ.get("CRAFTCTL_HOME", str(Path.home() / ".minecraft-mod-orchestra"))).expanduser()
 PROJECTS = HOME / "projects"
 SUPPORTED_PROFILE = "fabric-1.21.1-candidate"
+GENERATOR_VERSION = 2  # bump when generated layout changes in ways older workspaces cannot satisfy (1: no wrapper; 2: shipped wrapper)
 PROFILE = {
     "id": SUPPORTED_PROFILE,
     "status": "BUILD_VERIFIED",  # Generator output compiled, client+server booted, content verified 2026-10-20; see evidence.

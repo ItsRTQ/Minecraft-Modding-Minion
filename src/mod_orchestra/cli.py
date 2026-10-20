@@ -8,7 +8,7 @@ from .config import PROFILE
 from .doctor import inspect
 from .state import Store, StateError
 from .validation import InputError
-from .workflow import new_project, plan_project, approve_spec, generate_project, summary, export_state_markdown
+from .workflow import delete_project, new_project, plan_project, approve_spec, generate_project, summary, export_state_markdown
 from .fabric import validate_generated
 from .build import request_build, build_project, tail_log
 from .capabilities import CAPABILITIES, available_tasks, handoff
@@ -53,6 +53,11 @@ def parser() -> argparse.ArgumentParser:
     a = sub.add_parser("decide", help="USER-ONLY: grant or deny a specific operation")
     a.add_argument("approval_id")
     a.add_argument("decision", choices=["grant", "deny"])
+    a = sub.add_parser("delete", help="USER-ONLY: remove a project from the Footprint (and its workspace with --workspace)")
+    a.add_argument("project"); a.add_argument("--yes", action="store_true", help="Required; confirms the deletion")
+    a.add_argument("--workspace", action="store_true", help="Also delete the generated directory (only inside the projects root)")
+    a = sub.add_parser("release", help="USER-ONLY: break a stuck task lease and return the task to READY")
+    a.add_argument("task_id"); a.add_argument("--reason", default="released by user")
     a = sub.add_parser("evidence", help="USER-ONLY: record what you observed (BUILD_PASS, CLIENT_BOOT_PASS, SERVER_BOOT_PASS, CONTENT_VERIFIED)")
     a.add_argument("project"); a.add_argument("level", choices=["BUILD_PASS", "CLIENT_BOOT_PASS", "SERVER_BOOT_PASS", "CONTENT_VERIFIED"])
     a.add_argument("--note", default="", help="What exactly you saw (log line, tab, behaviour)")
@@ -130,6 +135,12 @@ def dispatch(args: argparse.Namespace) -> object:
         return {"status": args.decision.upper(), "id": args.approval_id}
     if args.command == "build":
         return build_project(store, args.project, args.approval_id)
+    if args.command == "delete":
+        if not args.yes:
+            raise StateError("Refusing to delete without --yes")
+        return delete_project(store, args.project, remove_workspace=args.workspace)
+    if args.command == "release":
+        return store.force_release(args.task_id, args.reason)
     if args.command == "evidence":
         from .evidence import record_evidence
         return record_evidence(store, args.project, args.level, actor="user", note=args.note,

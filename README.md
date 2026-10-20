@@ -70,6 +70,9 @@ craftctl approvals crystal_frontier
 craftctl decide <approval-id> grant
 craftctl build crystal_frontier --approval-id <approval-id>
 craftctl logs crystal_frontier
+craftctl evidence crystal_frontier CLIENT_BOOT_PASS --note "Loading N mods: - crystal_frontier"   # USER-ONLY
+craftctl release crystal_frontier:SCAFFOLD      # USER-ONLY: break a stuck lease
+craftctl delete crystal_frontier --yes --workspace   # USER-ONLY
 ```
 
 A Gradle build runs project code **without OS-level sandboxing in this pre-alpha**. Review Gradle files and JDK before approving; the wrapper is the official Gradle one, hash-verified (`src/mod_orchestra/resources/gradle-wrapper/PROVENANCE.md`). Build success is not gameplay success; test in an isolated Minecraft instance before shipping.
