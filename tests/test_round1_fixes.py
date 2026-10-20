@@ -109,3 +109,22 @@ class WrapperShipping(unittest.TestCase):
         from mod_orchestra.fabric import verified_wrapper_file
         with self.assertRaisesRegex(StateError, "refusing to ship"):
             verified_wrapper_file("gradlew", "0" * 64)
+
+
+class GenerateAtomicity(unittest.TestCase):
+    def test_failed_generation_leaves_no_partial_workspace(self):
+        from mod_orchestra import fabric
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); store = Store(base / "db.sqlite")
+        with patch.object(workflow, "PROJECTS", base / "projects"):
+            (base / "projects").mkdir()
+            proj = workflow.new_project(store, name="A", mod_id="a_mod", package="com.x.a", idea="items: gem")
+            workflow.plan_project(store, "a_mod"); workflow.approve_spec(store, "a_mod")
+            with patch.object(fabric, "verified_wrapper_file", side_effect=StateError("hash drift")):
+                with self.assertRaisesRegex(StateError, "hash drift"):
+                    workflow.generate_project(store, "a_mod")
+            self.assertFalse(Path(proj["root"]).exists(), "partial workspace must be removed")
+            self.assertEqual(store.project("a_mod")["status"], "PLAN_READY")
+            # And a retry succeeds once the cause is fixed.
+            workflow.generate_project(store, "a_mod")
+            self.assertTrue((Path(proj["root"]) / "gradlew").is_file())

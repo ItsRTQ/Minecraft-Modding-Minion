@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import struct
 import zlib
 from pathlib import Path
@@ -37,7 +38,22 @@ def placeholder_png(name: str, size: int = 16) -> bytes:
 
 
 def generate(spec: Spec, directory: Path) -> dict:
-    """Write an entirely new workspace with a generated/UNVERIFIED status."""
+    """Write an entirely new workspace with a generated/UNVERIFIED status.
+
+    All-or-nothing: if any step fails after the directory was created, the partial
+    workspace is removed so a retry does not hit "No overwrite permitted".
+    """
+    directory = Path(directory).expanduser()
+    created = not directory.exists()
+    try:
+        return _generate_into(spec, directory)
+    except Exception:
+        if created and directory.is_dir():
+            shutil.rmtree(directory, ignore_errors=True)
+        raise
+
+
+def _generate_into(spec: Spec, directory: Path) -> dict:
     if spec.questions:
         raise InputError("Cannot generate until blocking questions are resolved: " + "; ".join(spec.questions))
     if not spec.features:

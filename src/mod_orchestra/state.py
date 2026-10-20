@@ -150,6 +150,17 @@ class Store:
             self.event(con, row["project_id"], worker, "TASK_LEASED", {"task": task_id})
             return dict(con.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone())
 
+    def release(self, task_id: str, worker: str, version: int, reason: str) -> bool:
+        """Give a lease back (task returns to READY) when the worker failed before producing evidence."""
+        with self.tx() as con:
+            cur = con.execute("UPDATE tasks SET state='READY',lease_owner=NULL,lease_expiry=NULL,version=version+1 "
+                              "WHERE id=? AND lease_owner=? AND version=? AND state IN ('LEASED','RUNNING')",
+                              (task_id, worker, version))
+            if cur.rowcount == 1:
+                pid = con.execute("SELECT project_id FROM tasks WHERE id=?", (task_id,)).fetchone()["project_id"]
+                self.event(con, pid, worker, "TASK_RELEASED", {"task": task_id, "reason": reason[:300]})
+            return cur.rowcount == 1
+
     def heartbeat(self, task_id: str, worker: str, version: int, ttl: int = 300) -> bool:
         with self.tx() as con:
             cur = con.execute("UPDATE tasks SET lease_expiry=? WHERE id=? AND lease_owner=? AND version=? AND state IN ('LEASED','RUNNING')",

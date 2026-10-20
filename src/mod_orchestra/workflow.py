@@ -72,10 +72,15 @@ def generate_project(store: Store, pid: str) -> dict:
     lease = store.claim(t_id, "coder", ttl=600)
     if not lease:
         raise StateError("Scaffold task unavailable")
-    output = generate(read_spec(project["spec"]), Path(project["root"]))
-    checked = validate_generated(Path(project["root"]))
-    if checked["status"] != "PASS":
-        raise StateError("Generated source failed static integrity validation: " + str(checked))
+    try:
+        output = generate(read_spec(project["spec"]), Path(project["root"]))
+        checked = validate_generated(Path(project["root"]))
+        if checked["status"] != "PASS":
+            raise StateError("Generated source failed static integrity validation: " + str(checked))
+    except Exception as exc:
+        # generate() already removed any partial workspace; give the lease back so a retry can run.
+        store.release(t_id, "coder", lease["version"], f"generation failed: {exc}")
+        raise
     if not store.finish(t_id, "coder", lease["version"], [{"kind": "STATIC_MANIFEST", "value": output["manifest"]}]):
         raise StateError("Scaffold lease expired")
     store.refresh_ready(pid)
