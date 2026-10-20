@@ -26,7 +26,7 @@
 | SHA-256 file manifest and static JSON/resource existence validation | **Implemented, tested** |
 | One-use, explicitly authorized Gradle build invocation | **Implemented; not exercised against Minecraft here** |
 | Restricted MCP interface (read-only tools plus approved source generation) | **Implemented, protocol smoke-tested** |
-| 11 Claude Code role definitions and 12 reusable Skills | **Included; agent implementation is not automatic** |
+| 12 reusable Skills (one per role in `capabilities.py`) | **Included; `.claude/agents/` subagent files not yet written (R2)** |
 | GeckoLib mob modeling, Blockbench MCP, fully automatic worlds | **Planned / not integrated** |
 | Real Minecraft GameTest, gameplay and multiplayer proof | **Not integrated** |
 | Windows installer/managed JDK/Gradle provisioning | **Planned** |
@@ -76,7 +76,7 @@ A Gradle build runs project code **without OS-level sandboxing in this pre-alpha
 
 ## Integrate with Claude Code (advanced, optional)
 
-This repository contains `.mcp.json`, `.claude/agents/`, `skills/`, and `CLAUDE.md`. After installing `craftctl` into an environment available to Claude Code, open the repository using Claude Code and verify the `minecraft-orchestra` MCP server appears. The MCP exposes only typed diagnostic/project/plan/generate/footprint/validation tools—**not user approval-granting tools, arbitrary shell execution, or Blockbench by default**.
+This repository contains `.mcp.json`, `skills/`, and `CLAUDE.md`. Claude Code subagent definitions (`.claude/agents/`) are **not shipped yet**; they are an R2 deliverable (see `docs/DEVELOPMENT_PATH.md`). After installing `craftctl` into an environment available to Claude Code, open the repository using Claude Code and verify the `minecraft-orchestra` MCP server appears. The MCP exposes only typed diagnostic/project/plan/generate/footprint/validation tools—**not user approval-granting tools, arbitrary shell execution, or Blockbench by default**.
 
 The agent roles and skills are prompts/playbooks, not an implemented provider-independent execution sandbox or autonomous planner yet. When agents work on a mod, review `docs/SECURITY.md` first.
 
@@ -85,7 +85,6 @@ The agent roles and skills are prompts/playbooks, not an implemented provider-in
 ```text
 src/mod_orchestra/       Python stdlib controller, CLI, MCP, Fabric generator, state, UI
 src/mod_orchestra/static Local browser UI (no Node/npm build required)
-.claude/agents/          Claude Code role definitions (11)
 skills/                  Domain procedures (12)
 knowledge/               Pin-aware source notes and recipes
 profiles/                Version profile and policy metadata
@@ -107,7 +106,7 @@ Tests check intake, generated JSON/PNG/file integrity, safe workspace paths, tas
 
 ## Project status, development and contributions
 
-The master architectural plan from the research review is in `docs/MASTER_PLAN_v2.md`, and the executable milestone backlog is in `docs/ROADMAP.md`. The origin audit includes [Universal Modder](https://github.com/rehan-remade/universal-modder), Fabric's [official example mod](https://github.com/FabricMC/fabric-example-mod), [GeckoLib](https://github.com/bernie-g/geckolib) and Blockbench MCP candidates. **These projects are not bundled or executed**; provider adoption requires license and safety review.
+The master architectural plan from the research review is in `docs/MASTER_PLAN_v2.md`; the forward execution plan is `docs/DEVELOPMENT_PATH.md` (`docs/ROADMAP.md` is kept as history). The origin audit includes [Universal Modder](https://github.com/rehan-remade/universal-modder), Fabric's [official example mod](https://github.com/FabricMC/fabric-example-mod), [GeckoLib](https://github.com/bernie-g/geckolib) and Blockbench MCP candidates. **These projects are not bundled or executed**; provider adoption requires license and safety review.
 
 All ordinary Python dependencies are standard-library modules. `pip install -e .` uses `setuptools` packaging; users need a working Python packaging environment. Local state/credentials are not included in the Git repo or ZIP.
 

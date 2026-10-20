@@ -34,6 +34,7 @@ def search(query: str, profile: str | None = None, *, limit: int = 8) -> list[di
             if not match:
                 continue
             score = len(match) * 10 + sum(contents.lower().count(t) for t in query_terms)
-            results.append({"path": str(path), "title": path.stem, "score": score,
+            source = "repo" if root == REPO_KB else "home"
+            results.append({"path": f"{source}:{path.relative_to(root).as_posix()}", "title": path.stem, "score": score,
                             "excerpt": " ".join(contents[:750].split())[:500]})
     return sorted(results, key=lambda x: (-x["score"], x["path"]))[:max(1, min(30, limit))]

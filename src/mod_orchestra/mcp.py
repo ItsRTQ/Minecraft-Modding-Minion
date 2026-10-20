@@ -6,7 +6,7 @@ NO approval-grant endpoint. The trusted local user must approve from CLI/UI.
 from __future__ import annotations
 import json
 import sys
-from .state import Store
+from .state import Store, StateError
 from .doctor import inspect
 from .workflow import summary, plan_project, generate_project, export_state_markdown
 from .capabilities import CAPABILITIES, available_tasks, handoff
@@ -15,6 +15,19 @@ from .diagnostics import project_diagnose
 from .build import tail_log
 from .fabric import validate_generated
 from pathlib import Path
+
+SUPPORTED_PROTOCOLS = ("2025-06-18", "2025-03-26")
+
+# Shown to the connecting client (Claude Code reads this). Tells a cold agent what it can
+# and cannot do here so it does not go looking for approval/build tools that do not exist.
+INSTRUCTIONS = (
+    "minecraft-mod-orchestra: local Fabric mod project controller. Tools are read-only except "
+    "orchestra_project_plan (once per project) and orchestra_generate_source (only after the user "
+    "approved the spec from the craftctl CLI or UI). There is deliberately NO tool to create projects, "
+    "approve specs, grant approvals or run Gradle: ask the user to run `craftctl approve-spec <id>`, "
+    "`craftctl request-build <id>`, `craftctl decide <approval> grant` and `craftctl build ...` themselves. "
+    "Generated source is SOURCE_GENERATED_UNVERIFIED until a build and in-game test pass."
+)
 
 TOOLS = [
     {"name": "orchestra_doctor", "description": "Read-only Java/Gradle/Blockbench diagnostic", "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False}},
@@ -55,7 +68,10 @@ def invoke(store: Store, name: str, a: dict) -> object:
     if name == "orchestra_footprint":
         return export_state_markdown(store, a["project"])
     if name == "orchestra_validate_source":
-        return validate_generated(Path(store.project(a["project"])["root"]))
+        root = Path(store.project(a["project"])["root"])
+        if not (root / ".mod-orchestra" / "generation-manifest.json").is_file():
+            raise StateError("No generated source to validate yet; the user must approve the spec and source must be generated first")
+        return validate_generated(root)
     raise ValueError("Unknown or forbidden MCP tool")
 
 def handle(store: Store, message: dict) -> dict | None:
@@ -65,8 +81,11 @@ def handle(store: Store, message: dict) -> dict | None:
         return None
     try:
         if method == "initialize":
-            result = {"protocolVersion": "2025-03-26", "capabilities": {"tools": {"listChanged": False}},
-                      "serverInfo": {"name": "minecraft-mod-orchestra", "version": "0.1.0"}}
+            requested = (message.get("params") or {}).get("protocolVersion")
+            version = requested if requested in SUPPORTED_PROTOCOLS else SUPPORTED_PROTOCOLS[0]
+            result = {"protocolVersion": version, "capabilities": {"tools": {"listChanged": False}},
+                      "serverInfo": {"name": "minecraft-mod-orchestra", "version": "0.1.0"},
+                      "instructions": INSTRUCTIONS}
         elif method == "ping":
             result = {}
         elif method == "tools/list":
@@ -78,9 +97,12 @@ def handle(store: Store, message: dict) -> dict | None:
             allowed = next((x for x in TOOLS if x["name"] == name), None)
             if allowed is None or not isinstance(args, dict):
                 raise ValueError("Unknown tool or invalid arguments")
-            keys = set(allowed["inputSchema"]["properties"])
-            if not set(args) <= keys or not set(allowed["inputSchema"].get("required", [])) <= set(args):
+            props = allowed["inputSchema"]["properties"]
+            if not set(args) <= set(props) or not set(allowed["inputSchema"].get("required", [])) <= set(args):
                 raise ValueError("Unexpected or missing arguments")
+            for key, value in args.items():
+                if props[key].get("type") == "string" and not isinstance(value, str):
+                    raise ValueError(f"Argument {key!r} must be a string")
             value = invoke(store, name, args)
             result = {"content": [{"type": "text", "text": json.dumps(value, ensure_ascii=False) if not isinstance(value, str) else value}]}
         else:
