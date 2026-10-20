@@ -53,6 +53,10 @@ def parser() -> argparse.ArgumentParser:
     a = sub.add_parser("decide", help="USER-ONLY: grant or deny a specific operation")
     a.add_argument("approval_id")
     a.add_argument("decision", choices=["grant", "deny"])
+    a = sub.add_parser("evidence", help="USER-ONLY: record what you observed (BUILD_PASS, CLIENT_BOOT_PASS, SERVER_BOOT_PASS, CONTENT_VERIFIED)")
+    a.add_argument("project"); a.add_argument("level", choices=["BUILD_PASS", "CLIENT_BOOT_PASS", "SERVER_BOOT_PASS", "CONTENT_VERIFIED"])
+    a.add_argument("--note", default="", help="What exactly you saw (log line, tab, behaviour)")
+    a.add_argument("--jar", default=None, help="Path to the built JAR to hash (default: build/libs/<id>-*.jar for BUILD_PASS)")
     a = sub.add_parser("build", help="Execute approved, one-use, unsandboxed Gradle build")
     a.add_argument("project")
     a.add_argument("--approval-id", required=True)
@@ -108,7 +112,7 @@ def dispatch(args: argparse.Namespace) -> object:
         if args.write:
             from .validation import safe_inside
             project = store.project(args.project)
-            if project["status"] not in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED"):
+            if project["status"] not in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
                 raise StateError("Project workspace is not yet generated")
             root = Path(project["root"])
             target = safe_inside(root, ".mod-orchestra/STATE.md")
@@ -126,6 +130,10 @@ def dispatch(args: argparse.Namespace) -> object:
         return {"status": args.decision.upper(), "id": args.approval_id}
     if args.command == "build":
         return build_project(store, args.project, args.approval_id)
+    if args.command == "evidence":
+        from .evidence import record_evidence
+        return record_evidence(store, args.project, args.level, actor="user", note=args.note,
+                               jar=Path(args.jar) if args.jar else None)
     if args.command == "diagnose":
         return project_diagnose(store, args.project)
     if args.command == "logs":

@@ -73,7 +73,9 @@ def build_project(store: Store, pid: str, approval_id: str) -> dict:
         if lease:
             store.finish(tid, "build", lease["version"], [{"kind": "BUILD_EXIT_0", "value": str(log)}])
             store.refresh_ready(pid)
-        store.update_project(pid, status="BUILD_PASSED_GAME_UNTESTED")
+        from .evidence import record_evidence
+        ev = record_evidence(store, pid, "BUILD_PASS", actor="controller", note=f"craftctl build exit 0; log {log.name}")
+        result["evidence"] = {"id": ev["id"], "artifact_sha256": ev["artifact_sha256"]}
     else:
         store.update_project(pid, status="BUILD_FAILED")
     return result
