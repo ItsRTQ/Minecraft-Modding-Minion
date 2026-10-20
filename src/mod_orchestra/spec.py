@@ -30,6 +30,27 @@ PATTERNS = [
     ("item", re.compile(r"\b(?:item|items)\s*:\s*([^;\n]+)", re.I)),
     ("block", re.compile(r"\b(?:block|blocks)\s*:\s*([^;\n]+)", re.I)),
 ]
+# Java constant names the generator reserves inside ModMain; user content may not shadow them.
+RESERVED_JAVA_NAMES = {"MOD_ID"}
+
+
+def java_constant_names(feature: Feature) -> list[str]:
+    """Constant names ModMain.java will declare for a feature (mirrors fabric.py)."""
+    base = feature.identifier.upper()
+    return [base, base + "_ITEM"] if feature.kind == "block" else [base]
+
+
+def check_java_name_collisions(features: list[Feature]) -> None:
+    owners: dict[str, str] = {name: "generator reserved" for name in RESERVED_JAVA_NAMES}
+    for feature in features:
+        for name in java_constant_names(feature):
+            if name in owners:
+                raise InputError(
+                    f"{feature.kind} '{feature.identifier}' would declare Java constant {name}, "
+                    f"which collides with {owners[name]}. Rename one of them.")
+            owners[name] = f"{feature.kind} '{feature.identifier}'"
+
+
 UNSUPPORTED = re.compile(r"\b(?:mob|entity|boss|biome|dimension|structure|worldgen|geckolib|animate|animation|portal|spell|GUI|HUD|multiplayer)\b", re.I)
 
 def interpret(*, name: str, mod_id: str, package: str, idea: str, profile: str) -> Spec:
@@ -53,6 +74,7 @@ def interpret(*, name: str, mod_id: str, package: str, idea: str, profile: str) 
                     raise InputError("Item and block identifiers must be unique: " + identifier)
                 seen.add(identifier)
                 found.append(Feature(kind=kind, identifier=identifier, label=label))
+    check_java_name_collisions(found)
     questions = []
     if not found:
         questions.append("For the deterministic starter, specify content as 'items: copper coin, ruby; blocks: ruby ore'. Other ideas can be retained for a human/agent implementation plan.")

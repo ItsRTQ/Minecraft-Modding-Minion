@@ -1,30 +1,57 @@
 ---
 id: fabric.profile.1.21.1.candidate
-status: candidate-unverified
+status: build-verified
 loader: fabric
 minecraft: 1.21.1
-java: 21
-last_reviewed: 2026-10-19
+mappings: mojang
+java_compile: 21
+java_runtime: 25
+last_reviewed: 2026-10-20
 ---
 
-# Fabric 1.21.1 — candidate build profile
+# Fabric 1.21.1 — candidate build profile (Mojang mappings)
 
-## Artifact coordinates (individually located in upstream Maven)
+## Source of truth
 
-- Fabric Loom `1.10.5`: https://maven.fabricmc.net/net/fabricmc/fabric-loom/1.10.5/
-- Fabric Loader `0.16.14`: https://maven.fabricmc.net/net/fabricmc/fabric-loader/0.16.14/
-- Yarn `1.21.1+build.3`: https://maven.fabricmc.net/net/fabricmc/yarn/1.21.1+build.3/
-- Fabric API `0.116.16+1.21.1`: https://maven.fabricmc.net/net/fabricmc/fabric-api/fabric-api/
-- Gradle `8.14.3` candidate (distribution URL is pinned in source project). JDK 21.
+The profile mirrors the official template: https://github.com/FabricMC/fabric-example-mod/tree/1.21.1 (commit `684b581`, 2026-09-26). Upstream moved from Yarn to **Mojang official mappings** and to Loom 1.18 with the `net.fabricmc.fabric-loom-remap` plugin id (used for obfuscated Minecraft versions before 26.1; newer versions use `net.fabricmc.fabric-loom`).
 
-**Do not mark this profile validated until a full `gradle build`, Minecraft client launch and dedicated server test succeed.** Pin wrapper SHA and upstream example commit during the validation task.
+## Pinned coordinates
+
+- Loom plugin `net.fabricmc.fabric-loom-remap` version `1.18.4` (upstream pins `1.18-SNAPSHOT`, which resolved to 1.18.4 in the verified build)
+- Fabric Loader `0.19.5`
+- Fabric API `0.116.17+1.21.1`
+- Mappings: `loom.officialMojangMappings()` (no Yarn artifact)
+- Gradle `9.7.1` via wrapper. **JDK 25 runs Gradle/Loom**; sources compile with `--release 21`.
+
+## Evidence
+
+- 2026-10-19: the unmodified upstream template compiled successfully (`gradlew build`) on Windows with JDK 25. This verifies the *toolchain*, not the generator output.
+- 2026-10-20: generator output `examples/crystal_example` compiled (`BUILD SUCCESSFUL in 1m 4s`, Loom 1.18.4, JAR sha256 `6de89b8c…b857f1`), loaded in the client (`Loading 56 mods: - crystal_example 1.0.0`), dedicated server booted after EULA, items appear in Ingredients, block in Building Blocks, placeable, drops itself in survival. Full record in `examples/crystal_example/EVIDENCE.md`.
+- Known harmless build warning: `duplicate input class net/fabricmc/fabric/mixin/tag/package-info` between `fabric-convention-tags-v2` and `fabric-tag-api-v1` (upstream Fabric API packaging).
+
+## Mojmap vs Yarn cheat sheet (1.21.1)
+
+| Concept | Yarn (old generator) | Mojmap (current) |
+|---|---|---|
+| Identifier | `net.minecraft.util.Identifier` / `Identifier.of(ns, path)` | `net.minecraft.resources.ResourceLocation` / `ResourceLocation.fromNamespaceAndPath(ns, path)` |
+| Registries | `net.minecraft.registry.Registries` | `net.minecraft.core.registries.BuiltInRegistries` |
+| Register | `net.minecraft.registry.Registry.register` | `net.minecraft.core.Registry.register` |
+| Block | `net.minecraft.block.Block` + `AbstractBlock.Settings.create()` | `net.minecraft.world.level.block.Block` + `BlockBehaviour.Properties.of()` |
+| Item | `net.minecraft.item.Item` + `Item.Settings()` | `net.minecraft.world.item.Item` + `Item.Properties()` |
+| Creative tabs | `ItemGroups.INGREDIENTS`, `entries.add(x)` | `CreativeModeTabs.INGREDIENTS`, `entries.accept(x)` |
+
+`ItemGroupEvents` (Fabric API) keeps the same package under both mappings. In 1.21.2+ `Item.Properties`/`BlockBehaviour.Properties` require a registry key via `.setId(...)`; 1.21.1 does not.
+
+## 1.21 datapack folder rename
+
+Since 1.21 (pack format 48) datapack folders are singular: `loot_table/`, `recipe/`, `advancement/`, `predicate/`, `item_modifier/`, `function/`, `structure/`, `tags/block`, `tags/item`, etc. The generator previously wrote `loot_tables/` (silently ignored by the game: block dropped nothing). Resource pack `pack_format` for 1.21.1 is 34.
 
 ## Authoritative patterns
 
-Official Fabric docs: https://docs.fabricmc.net/1.21.1/develop/
-Official example: https://github.com/FabricMC/fabric-example-mod
-Fabric 1.21.1 porting: https://docs.fabricmc.net/1.21.1/develop/porting
+- Official Fabric docs: https://docs.fabricmc.net/1.21.1/develop/
+- Loom plugin ids and mappings DSL: https://docs.fabricmc.net/develop/loom/
+- Fabric 1.21.1 porting notes: https://docs.fabricmc.net/1.21.1/develop/porting
 
 ## Caveat
 
-The project currently generates static block/item source and basic model JSON; it does not install dependencies, create animations, register worldgen, or automatically invoke GameTest. Treat compile/runtime compatibility as an open issue until measured.
+The generator still only emits static item/block source and basic model JSON; no datagen, recipes, worldgen, GeckoLib or GameTest. Treat compile/runtime compatibility of generated output as open until measured.

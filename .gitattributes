@@ -1,0 +1,11 @@
+# Normalize line endings so content hashes are identical on every OS.
+* text=auto
+
+# Gradle wrapper (hash-verified; see src/mod_orchestra/resources/gradle-wrapper/PROVENANCE.md)
+gradlew          text eol=lf
+*.bat            text eol=crlf
+*.jar            binary
+*.png            binary
+
+# Shell scripts must stay LF to be executable on POSIX
+*.sh             text eol=lf

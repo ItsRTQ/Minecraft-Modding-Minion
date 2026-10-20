@@ -9,7 +9,7 @@
 ## Architecture commitments
 
 - **Hybrid local-first:** Fabric workspaces, Gradle, Blockbench and future game tests stay local. Claude Code is an optional *developer integration*, not a required application dependency.
-- **Fabric-first:** one narrowly scoped, pinned `fabric-1.21.1-candidate` profile. Pinned coordinates are sourced from Fabric Maven but the *combined stack has not yet been compiled and tested*.
+- **Fabric-first:** one narrowly scoped, pinned `fabric-1.21.1-candidate` profile mirroring the official FabricMC example mod (Mojang mappings, Loom 1.18, Gradle 9.7.1). Generator output has been **build-verified and tested in-game** (2026-10-20): see `examples/crystal_example/EVIDENCE.md`.
 - **Approval autonomy:** reviewers approve the specification and any Gradle execution; source files are only generated in a new/empty folder; no silent executable installation, publishing or Minecraft save modification.
 - **Evidence instead of wishful thinking:** `SOURCE_GENERATED_UNVERIFIED`, `BUILD_PASSED_GAME_UNTESTED`, and separate QA tasks are distinct outcomes.
 
@@ -26,7 +26,7 @@
 | SHA-256 file manifest and static JSON/resource existence validation | **Implemented, tested** |
 | One-use, explicitly authorized Gradle build invocation | **Implemented; not exercised against Minecraft here** |
 | Restricted MCP interface (read-only tools plus approved source generation) | **Implemented, protocol smoke-tested** |
-| 11 Claude Code role definitions and 12 reusable Skills | **Included; agent implementation is not automatic** |
+| 12 reusable Skills (one per role in `capabilities.py`) | **Included; `.claude/agents/` subagent files not yet written (R2)** |
 | GeckoLib mob modeling, Blockbench MCP, fully automatic worlds | **Planned / not integrated** |
 | Real Minecraft GameTest, gameplay and multiplayer proof | **Not integrated** |
 | Windows installer/managed JDK/Gradle provisioning | **Planned** |
@@ -62,7 +62,7 @@ craftctl footprint crystal_frontier
 
 ### Build the generated Fabric mod
 
-Building requires **JDK 21**, Gradle or a reviewed Gradle wrapper, a network connection for initial dependency resolution, and your explicit one-time approval. The generated source currently **does not include a Gradle wrapper JAR**; see `docs/SETUP.md` for why and how to bootstrap one from trusted sources.
+Building requires **JDK 25** (Gradle 9.7.1 + Loom 1.18 runtime; sources target Java 21); Gradle itself is fetched by the shipped, hash-verified official wrapper, Gradle or a reviewed Gradle wrapper, a network connection for initial dependency resolution, and your explicit one-time approval. The generated source currently **does not include a Gradle wrapper JAR**; see `docs/SETUP.md` for why and how to bootstrap one from trusted sources.
 
 ```powershell
 craftctl request-build crystal_frontier
@@ -70,13 +70,16 @@ craftctl approvals crystal_frontier
 craftctl decide <approval-id> grant
 craftctl build crystal_frontier --approval-id <approval-id>
 craftctl logs crystal_frontier
+craftctl evidence crystal_frontier CLIENT_BOOT_PASS --note "Loading N mods: - crystal_frontier"   # USER-ONLY
+craftctl release crystal_frontier:SCAFFOLD      # USER-ONLY: break a stuck lease
+craftctl delete crystal_frontier --yes --workspace   # USER-ONLY
 ```
 
-A Gradle build runs project code **without OS-level sandboxing in this pre-alpha**. Review Gradle files, JDK and wrapper before approving. Build success is not gameplay success; test in an isolated Minecraft instance before shipping.
+A Gradle build runs project code **without OS-level sandboxing in this pre-alpha**. Review Gradle files and JDK before approving; the wrapper is the official Gradle one, hash-verified (`src/mod_orchestra/resources/gradle-wrapper/PROVENANCE.md`). Build success is not gameplay success; test in an isolated Minecraft instance before shipping.
 
 ## Integrate with Claude Code (advanced, optional)
 
-This repository contains `.mcp.json`, `.claude/agents/`, `skills/`, and `CLAUDE.md`. After installing `craftctl` into an environment available to Claude Code, open the repository using Claude Code and verify the `minecraft-orchestra` MCP server appears. The MCP exposes only typed diagnostic/project/plan/generate/footprint/validation tools—**not user approval-granting tools, arbitrary shell execution, or Blockbench by default**.
+This repository contains `.mcp.json`, `skills/`, and `CLAUDE.md`. Claude Code subagent definitions (`.claude/agents/`) are **not shipped yet**; they are an R2 deliverable (see `docs/DEVELOPMENT_PATH.md`). After installing `craftctl` into an environment available to Claude Code, open the repository using Claude Code and verify the `minecraft-orchestra` MCP server appears. The MCP exposes only typed diagnostic/project/plan/generate/footprint/validation tools—**not user approval-granting tools, arbitrary shell execution, or Blockbench by default**.
 
 The agent roles and skills are prompts/playbooks, not an implemented provider-independent execution sandbox or autonomous planner yet. When agents work on a mod, review `docs/SECURITY.md` first.
 
@@ -85,7 +88,6 @@ The agent roles and skills are prompts/playbooks, not an implemented provider-in
 ```text
 src/mod_orchestra/       Python stdlib controller, CLI, MCP, Fabric generator, state, UI
 src/mod_orchestra/static Local browser UI (no Node/npm build required)
-.claude/agents/          Claude Code role definitions (11)
 skills/                  Domain procedures (12)
 knowledge/               Pin-aware source notes and recipes
 profiles/                Version profile and policy metadata
@@ -107,13 +109,13 @@ Tests check intake, generated JSON/PNG/file integrity, safe workspace paths, tas
 
 ## Project status, development and contributions
 
-The master architectural plan from the research review is in `docs/MASTER_PLAN_v2.md`, and the executable milestone backlog is in `docs/ROADMAP.md`. The origin audit includes [Universal Modder](https://github.com/rehan-remade/universal-modder), Fabric's [official example mod](https://github.com/FabricMC/fabric-example-mod), [GeckoLib](https://github.com/bernie-g/geckolib) and Blockbench MCP candidates. **These projects are not bundled or executed**; provider adoption requires license and safety review.
+The master architectural plan from the research review is in `docs/MASTER_PLAN_v2.md`; the forward execution plan is `docs/DEVELOPMENT_PATH.md` (`docs/ROADMAP.md` is kept as history). The origin audit includes [Universal Modder](https://github.com/rehan-remade/universal-modder), Fabric's [official example mod](https://github.com/FabricMC/fabric-example-mod), [GeckoLib](https://github.com/bernie-g/geckolib) and Blockbench MCP candidates. **These projects are not bundled or executed**; provider adoption requires license and safety review.
 
 All ordinary Python dependencies are standard-library modules. `pip install -e .` uses `setuptools` packaging; users need a working Python packaging environment. Local state/credentials are not included in the Git repo or ZIP.
 
 ## Honest limitations
 
-1. **No guaranteed Fabric JAR build yet:** dependency coordinates exist; verification against actual Gradle/Minecraft runtime is still pending. The Gradle wrapper JAR cannot be bundled without a verified source.
+1. **One verified path only:** static items/blocks on Fabric 1.21.1 build and run (`examples/crystal_example/EVIDENCE.md`). Anything beyond that (recipes, entities, worldgen) is still unverified. The Gradle wrapper JAR cannot be bundled without a verified source.
 2. **No automatic third-party software installers yet:** first-run checks and actionable instructions exist, but managed installation is a later milestone.
 3. **No arbitrary natural language auto-coding yet:** advanced ideas are still tasks for Claude Code workers or human developers. No OpenAI/Anthropic API account is required to use deterministic mode.
 4. **Local web UI is a developer prototype:** token-authenticated localhost, not a hardened multiuser desktop product. Disable port forwarding and do not expose it to the LAN/internet.

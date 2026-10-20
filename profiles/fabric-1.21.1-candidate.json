@@ -1,14 +1,38 @@
 {
   "id": "fabric-1.21.1-candidate",
-  "status": "UNVERIFIED_BUILD",
+  "status": "BUILD_VERIFIED",
   "loader": "fabric",
   "minecraft": "1.21.1",
   "java_major": 21,
-  "loom": "1.10.5",
-  "yarn": "1.21.1+build.3",
-  "fabric_loader": "0.16.14",
-  "fabric_api": "0.116.16+1.21.1",
-  "gradle": "8.14.3",
-  "runtime_tested": false,
-  "full_gradle_build_tested": false
+  "gradle_jdk_major": 25,
+  "mappings": "mojang",
+  "loom_plugin": "net.fabricmc.fabric-loom-remap",
+  "loom": "1.18.4",
+  "fabric_loader": "0.19.5",
+  "fabric_api": "0.116.17+1.21.1",
+  "gradle": "9.7.1",
+  "upstream_template": "https://github.com/FabricMC/fabric-example-mod/tree/1.21.1",
+  "upstream_template_commit": "684b581",
+  "template_build_verified": true,
+  "runtime_tested": true,
+  "full_gradle_build_tested": true,
+  "evidence": {
+    "date": "2026-10-20",
+    "host": "Windows, JDK 25",
+    "levels": [
+      "BUILD_PASS",
+      "CLIENT_BOOT_PASS",
+      "SERVER_BOOT_PASS",
+      "CONTENT_VERIFIED"
+    ],
+    "jar_sha256": "6de89b8cebde3bac596c504489d07fad9c6c858eaffa97e99414f24cf4b857f1",
+    "jar_sha1": "8469487abcb98fa061fff77df19027a8238cb9dc",
+    "manifest": {
+      "Fabric-Loom-Version": "1.18.4",
+      "Fabric-Gradle-Version": "9.7.1",
+      "Fabric-Loader-Version": "0.19.5",
+      "Fabric-Mapping-Namespace": "intermediary"
+    },
+    "details": "examples/crystal_example/EVIDENCE.md"
+  }
 }

@@ -1,12 +1,13 @@
 """Non-invasive first-run diagnostics. Never install or run downloaded software."""
 from __future__ import annotations
+import hashlib
 import os
 import platform
 import re
 import shutil
 import subprocess
 from pathlib import Path
-from .config import PROFILE
+from .config import PROFILE, WRAPPER_DIR, WRAPPER_FILES
 
 
 def _version(command: list[str]) -> str | None:
@@ -16,6 +17,19 @@ def _version(command: list[str]) -> str | None:
         return p.stdout.strip().splitlines()[0][:180] if p.stdout.strip() else None
     except (OSError, subprocess.TimeoutExpired):
         return None
+
+
+def _wrapper_status() -> dict:
+    """Recompute embedded wrapper hashes against the provenance record."""
+    files = {}
+    ok = True
+    for relative, expected in WRAPPER_FILES.items():
+        path = WRAPPER_DIR / relative
+        actual = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+        files[relative] = {"sha256": actual, "ok": actual == expected}
+        ok = ok and actual == expected
+    return {"gradle": PROFILE["gradle"], "distribution_sha256": PROFILE["gradle_dist_sha256"], "ok": ok,
+            "files": files, "provenance": str(WRAPPER_DIR / "PROVENANCE.md")}
 
 
 def inspect() -> dict:
@@ -35,8 +49,11 @@ def inspect() -> dict:
     return {
         "os": platform.system(), "machine": platform.machine(), "python": platform.python_version(),
         "profile": PROFILE, "java": {"executable": java, "version": java_version, "major": major,
-                                    "compatible": major == PROFILE["java_major"]},
-        "gradle": {"executable": gradle, "version": _version([gradle, "--version"]) if gradle else None},
+                                    "compatible": major is not None and major >= PROFILE["gradle_jdk_major"],
+                                    "note": f"JDK {PROFILE['gradle_jdk_major']}+ runs Gradle/Loom; sources compile with --release {PROFILE['java_major']}"},
+        "gradle": {"executable": gradle, "version": _version([gradle, "--version"]) if gradle else None,
+                   "note": "Optional: generated workspaces ship the official hash-verified wrapper (see wrapper)"},
+        "wrapper": _wrapper_status(),
         "git": {"executable": git, "version": _version([git, "--version"]) if git else None},
         "blockbench": {"executable": blockbench, "note": "Optional for static item/block prototypes"},
         "minecraft": {"directory": str(minecraft), "launcher_files_found": minecraft.is_dir(),

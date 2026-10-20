@@ -33,6 +33,12 @@ CREATE TABLE IF NOT EXISTS approvals (
   digest TEXT NOT NULL, description TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'PENDING',
   created_at REAL NOT NULL, expires_at REAL NOT NULL, used_at REAL
 );
+CREATE TABLE IF NOT EXISTS evidence (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, project_id TEXT NOT NULL REFERENCES projects(id),
+  level TEXT NOT NULL, actor TEXT NOT NULL, created_at REAL NOT NULL, note TEXT NOT NULL DEFAULT '',
+  artifact_sha256 TEXT, manifest_sha256 TEXT, payload_json TEXT NOT NULL DEFAULT '{}'
+);
+CREATE INDEX IF NOT EXISTS idx_evidence_project ON evidence(project_id, id);
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id);
 CREATE INDEX IF NOT EXISTS idx_events_project ON events(project_id, id);
 """
@@ -144,6 +150,52 @@ class Store:
             self.event(con, row["project_id"], worker, "TASK_LEASED", {"task": task_id})
             return dict(con.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone())
 
+    def lease_info(self, task_id: str) -> dict | None:
+        with self.tx() as con:
+            row = con.execute("SELECT id,state,lease_owner,lease_expiry,version FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if row is None:
+            return None
+        remaining = max(0, int((row["lease_expiry"] or 0) - time.time())) if row["lease_owner"] else 0
+        return {"task": row["id"], "state": row["state"], "holder": row["lease_owner"], "seconds_left": remaining, "version": row["version"]}
+
+    def force_release(self, task_id: str, reason: str) -> dict:
+        """USER-ONLY: break any lease on a task and return it to READY."""
+        with self.tx() as con:
+            row = con.execute("SELECT project_id,state,lease_owner FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if row is None:
+                raise StateError(f"Task not found: {task_id}")
+            if row["state"] not in ("LEASED", "RUNNING"):
+                raise StateError(f"Task {task_id} is {row['state']}, nothing to release")
+            con.execute("UPDATE tasks SET state='READY',lease_owner=NULL,lease_expiry=NULL,version=version+1 WHERE id=?", (task_id,))
+            self.event(con, row["project_id"], "user", "TASK_FORCE_RELEASED", {"task": task_id, "previous_holder": row["lease_owner"], "reason": reason[:300]})
+        return {"task": task_id, "state": "READY", "previous_holder": row["lease_owner"]}
+
+    def delete_project(self, pid: str) -> dict:
+        """USER-ONLY: remove every row for a project. The workspace directory is handled by the caller."""
+        with self.tx() as con:
+            if con.execute("SELECT 1 FROM projects WHERE id=?", (pid,)).fetchone() is None:
+                raise StateError(f"Project not found: {pid}")
+            counts = {}
+            for table in ("evidence", "approvals", "events"):
+                counts[table] = con.execute(f"DELETE FROM {table} WHERE project_id=?", (pid,)).rowcount
+            counts["task_edges"] = con.execute(
+                "DELETE FROM task_edges WHERE predecessor IN (SELECT id FROM tasks WHERE project_id=?) "
+                "OR successor IN (SELECT id FROM tasks WHERE project_id=?)", (pid, pid)).rowcount
+            counts["tasks"] = con.execute("DELETE FROM tasks WHERE project_id=?", (pid,)).rowcount
+            con.execute("DELETE FROM projects WHERE id=?", (pid,))
+        return {"deleted": pid, "rows": counts}
+
+    def release(self, task_id: str, worker: str, version: int, reason: str) -> bool:
+        """Give a lease back (task returns to READY) when the worker failed before producing evidence."""
+        with self.tx() as con:
+            cur = con.execute("UPDATE tasks SET state='READY',lease_owner=NULL,lease_expiry=NULL,version=version+1 "
+                              "WHERE id=? AND lease_owner=? AND version=? AND state IN ('LEASED','RUNNING')",
+                              (task_id, worker, version))
+            if cur.rowcount == 1:
+                pid = con.execute("SELECT project_id FROM tasks WHERE id=?", (task_id,)).fetchone()["project_id"]
+                self.event(con, pid, worker, "TASK_RELEASED", {"task": task_id, "reason": reason[:300]})
+            return cur.rowcount == 1
+
     def heartbeat(self, task_id: str, worker: str, version: int, ttl: int = 300) -> bool:
         with self.tx() as con:
             cur = con.execute("UPDATE tasks SET lease_expiry=? WHERE id=? AND lease_owner=? AND version=? AND state IN ('LEASED','RUNNING')",
@@ -199,6 +251,28 @@ class Store:
             if cur.rowcount:
                 self.event(con, pid, "controller", "APPROVAL_CONSUMED", {"id": approval, "kind": kind})
             return bool(cur.rowcount)
+
+    def add_evidence(self, pid: str, level: str, actor: str, note: str, *, artifact_sha256: str | None,
+                     manifest_sha256: str | None, payload: dict) -> dict:
+        row = {"project_id": pid, "level": level, "actor": actor, "created_at": time.time(), "note": note,
+               "artifact_sha256": artifact_sha256, "manifest_sha256": manifest_sha256}
+        with self.tx() as con:
+            cur = con.execute(
+                "INSERT INTO evidence(project_id,level,actor,created_at,note,artifact_sha256,manifest_sha256,payload_json) "
+                "VALUES(?,?,?,?,?,?,?,?)",
+                (pid, level, actor, row["created_at"], note, artifact_sha256, manifest_sha256, json.dumps(payload, sort_keys=True)))
+            row["id"] = cur.lastrowid
+            self.event(con, pid, actor, "EVIDENCE", {"level": level, "artifact_sha256": artifact_sha256})
+        return row
+
+    def evidence(self, pid: str) -> list[dict]:
+        with self.tx() as con:
+            rows = con.execute("SELECT id,level,actor,created_at,note,artifact_sha256,manifest_sha256,payload_json "
+                               "FROM evidence WHERE project_id=? ORDER BY id", (pid,)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r); d["payload"] = json.loads(d.pop("payload_json")); out.append(d)
+        return out
 
     def add_event(self, pid: str, actor: str, kind: str, payload: dict) -> None:
         with self.tx() as con:

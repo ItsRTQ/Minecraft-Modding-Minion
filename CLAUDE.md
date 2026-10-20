@@ -26,7 +26,7 @@ An **early working foundation**, not an autonomous arbitrary-mod generator. Pyth
 
 ## Agent registry
 
-Agent definitions: `.claude/agents/*.md`; reusable workflows: `skills/*/SKILL.md`.
+Reusable workflows: `skills/*/SKILL.md` (one per role). Subagent definitions (`.claude/agents/*.md`) are not yet shipped; see `docs/DEVELOPMENT_PATH.md` R2.
 
 - `coordinator` routes tasks, enforces gates and handoff expectations.
 - `interpreter` defines the spec, preserving user intent.

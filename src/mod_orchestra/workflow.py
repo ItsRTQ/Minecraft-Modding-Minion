@@ -1,6 +1,7 @@
 """Coordinator: typed actions, bounded planning, approval and deterministic execution."""
 from __future__ import annotations
 import json
+import shutil
 import hashlib
 from pathlib import Path
 from .config import PROJECTS, PROFILE, save_json
@@ -71,11 +72,16 @@ def generate_project(store: Store, pid: str) -> dict:
     t_id = pid + ":SCAFFOLD"
     lease = store.claim(t_id, "coder", ttl=600)
     if not lease:
-        raise StateError("Scaffold task unavailable")
-    output = generate(read_spec(project["spec"]), Path(project["root"]))
-    checked = validate_generated(Path(project["root"]))
-    if checked["status"] != "PASS":
-        raise StateError("Generated source failed static integrity validation: " + str(checked))
+        raise StateError(unavailable_message(store, t_id))
+    try:
+        output = generate(read_spec(project["spec"]), Path(project["root"]))
+        checked = validate_generated(Path(project["root"]))
+        if checked["status"] != "PASS":
+            raise StateError("Generated source failed static integrity validation: " + str(checked))
+    except Exception as exc:
+        # generate() already removed any partial workspace; give the lease back so a retry can run.
+        store.release(t_id, "coder", lease["version"], f"generation failed: {exc}")
+        raise
     if not store.finish(t_id, "coder", lease["version"], [{"kind": "STATIC_MANIFEST", "value": output["manifest"]}]):
         raise StateError("Scaffold lease expired")
     store.refresh_ready(pid)
@@ -93,6 +99,33 @@ def generate_project(store: Store, pid: str) -> dict:
     return output | {"static_validation": checked}
 
 
+def unavailable_message(store: Store, task_id: str) -> str:
+    info = store.lease_info(task_id)
+    if info is None:
+        return f"Task {task_id} does not exist"
+    if info["holder"]:
+        return (f"Task {task_id} is {info['state']} by '{info['holder']}' for {info['seconds_left']}s more. "
+                f"Wait, or run: craftctl release {task_id}")
+    return f"Task {task_id} is {info['state']}, not READY"
+
+
+def delete_project(store: Store, pid: str, *, remove_workspace: bool) -> dict:
+    """USER-ONLY. Removes the Footprint rows; the directory only on explicit request and only inside PROJECTS."""
+    project = store.project(pid)
+    root = Path(project["root"]).resolve()
+    result = store.delete_project(pid)
+    result["workspace"] = str(root)
+    result["workspace_existed"] = root.is_dir()
+    result["workspace_removed"] = False
+    if remove_workspace and root.is_dir():
+        projects_root = PROJECTS.resolve()
+        if projects_root not in root.parents:
+            raise StateError(f"Refusing to delete a directory outside {projects_root}: {root}")
+        shutil.rmtree(root)
+        result["workspace_removed"] = True
+    return result
+
+
 def summary(store: Store, pid: str) -> dict:
     project = store.project(pid)
     tasks = store.tasks(pid)
@@ -100,13 +133,19 @@ def summary(store: Store, pid: str) -> dict:
             "status": project["status"], "spec_state": project["spec_state"], "spec": project["spec"],
             "tasks": [{"id": t["id"], "title": t["title"], "role": t["role"], "state": t["state"]} for t in tasks],
             "approvals": [{"id": a["id"], "kind": a["kind"], "state": a["state"], "description": a["description"]} for a in store.approvals(pid)],
+            "evidence": [{"level": e["level"], "actor": e["actor"], "note": e["note"], "artifact_sha256": e["artifact_sha256"],
+                          "created_at": e["created_at"]} for e in store.evidence(pid)],
             "events": store.events(pid, 20)}
 
 
 def export_state_markdown(store: Store, pid: str) -> str:
     data = summary(store, pid)
     lines = ["# Project State", "", f"Project: {data['name']} ({pid})", f"Status: {data['status']}",
-             f"Spec: {data['spec_state']}", "", "## Task board"]
+             f"Spec: {data['spec_state']}", "", "## Evidence"]
+    lines += [f"- {e['level']} by {e['actor']}" + (f" — {e['note']}" if e["note"] else "")
+              + (f" (sha256 {e['artifact_sha256'][:12]}…)" if e["artifact_sha256"] else "")
+              for e in data["evidence"]] or ["- none recorded"]
+    lines += ["", "## Task board"]
     for task in data["tasks"][:50]:
         lines.append(f"- {task['state']}: {task['id']} — {task['title']} [{task['role']}]")
     lines.extend(["", "## Recent events"])

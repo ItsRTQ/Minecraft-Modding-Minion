@@ -57,7 +57,7 @@ flowchart LR
 
 ## Fabric generator
 
-The initial `fabric-1.21.1-candidate` profile includes Minecraft 1.21.1, Java 21, Fabric Loom 1.10.5, Loader 0.16.14, Yarn 1.21.1+build.3, Fabric API 0.116.16+1.21.1, and Gradle 8.14.3. Individual artifact coordinates were discovered in Fabric Maven; **the combined stack and generated Java haven't been build-proven yet**. A verified profile is only promoted after Gradle client and dedicated server checks.
+The `fabric-1.21.1-candidate` profile mirrors the official FabricMC example mod (branch `1.21.1`, commit `684b581`): Minecraft 1.21.1, **Mojang official mappings**, Loom 1.18 (`net.fabricmc.fabric-loom-remap`), Loader 0.19.5, Fabric API 0.116.17+1.21.1, Gradle 9.7.1; JDK 25 runs Gradle, sources compile with `--release 21`. Generator output has been build-verified and tested in-game (2026-10-20; `examples/crystal_example/EVIDENCE.md`). Evidence levels `BUILD_PASS` (controller, from an approved build) and `CLIENT_BOOT_PASS` / `SERVER_BOOT_PASS` / `CONTENT_VERIFIED` (user-only, `craftctl evidence`) are stored per project with the workspace manifest hash and JAR SHA-256; all three game levels promote a project to `GAME_VERIFIED`. A verified profile is only promoted after Gradle client and dedicated server checks.
 
 ## Target architecture (from v2 master plan)
 
