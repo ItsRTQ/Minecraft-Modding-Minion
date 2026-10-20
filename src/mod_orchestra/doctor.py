@@ -1,6 +1,7 @@
 """Non-invasive first-run diagnostics. Never install or run downloaded software."""
 from __future__ import annotations
 import hashlib
+import time
 import os
 import platform
 import re
@@ -17,6 +18,18 @@ def _version(command: list[str]) -> str | None:
         return p.stdout.strip().splitlines()[0][:180] if p.stdout.strip() else None
     except (OSError, subprocess.TimeoutExpired):
         return None
+
+
+def _staging_status() -> dict:
+    from .config import PROJECTS
+    from .fabric import STAGING_DIRNAME, STAGING_ORPHAN_AGE
+    root = PROJECTS / STAGING_DIRNAME
+    if not root.is_dir():
+        return {"pending": [], "note": "none"}
+    now = time.time()
+    pending = [{"name": e.name, "age_s": int(now - e.stat().st_mtime), "orphan": now - e.stat().st_mtime > STAGING_ORPHAN_AGE}
+               for e in root.iterdir() if e.is_dir()]
+    return {"pending": pending, "note": "orphans are removed by the next craftctl generate"}
 
 
 def _schema_status() -> dict:
@@ -64,6 +77,7 @@ def inspect() -> dict:
                    "note": "Optional: generated workspaces ship the official hash-verified wrapper (see wrapper)"},
         "wrapper": _wrapper_status(),
         "schema": _schema_status(),
+        "stagings": _staging_status(),
         "git": {"executable": git, "version": _version([git, "--version"]) if git else None},
         "blockbench": {"executable": blockbench, "note": "Optional for static item/block prototypes"},
         "minecraft": {"directory": str(minecraft), "launcher_files_found": minecraft.is_dir(),

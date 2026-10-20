@@ -74,12 +74,9 @@ def generate_project(store: Store, pid: str) -> dict:
     if not lease:
         raise StateError(unavailable_message(store, t_id))
     try:
-        output = generate(read_spec(project["spec"]), Path(project["root"]))
-        checked = validate_generated(Path(project["root"]))
-        if checked["status"] != "PASS":
-            raise StateError("Generated source failed static integrity validation: " + str(checked))
+        output = generate(read_spec(project["spec"]), Path(project["root"]))  # validated in staging, installed atomically
     except Exception as exc:
-        # generate() already removed any partial workspace; give the lease back so a retry can run.
+        # generate() leaves nothing at the final path; give the lease back so a retry can run.
         store.release(t_id, "coder", lease["version"], f"generation failed: {exc}")
         raise
     if not store.finish(t_id, "coder", lease["version"], [{"kind": "STATIC_MANIFEST", "value": output["manifest"]}]):
@@ -96,7 +93,7 @@ def generate_project(store: Store, pid: str) -> dict:
     store.refresh_ready(pid)
     store.update_project(pid, status="SOURCE_GENERATED_UNVERIFIED")
     store.add_event(pid, "generator", "SOURCE_GENERATED", output)
-    return output | {"static_validation": checked}
+    return output
 
 
 def unavailable_message(store: Store, task_id: str) -> str:
