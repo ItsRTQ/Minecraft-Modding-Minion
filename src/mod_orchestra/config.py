@@ -9,16 +9,19 @@ PROJECTS = HOME / "projects"
 SUPPORTED_PROFILE = "fabric-1.21.1-candidate"
 PROFILE = {
     "id": SUPPORTED_PROFILE,
-    "status": "UNVERIFIED_BUILD",  # Pinned artifact coordinates; full build needs network + Gradle/JDK.
+    "status": "UNVERIFIED_BUILD",  # Generator output not yet compiled; see template_evidence for what IS verified.
     "minecraft": "1.21.1",
     "loader": "fabric",
-    "java_major": 21,
-    "loom": "1.10.5",
-    "yarn": "1.21.1+build.3",
-    "fabric_loader": "0.16.14",
-    "fabric_api": "0.116.16+1.21.1",
-    "gradle": "8.14.3",
-    "source": "Fabric Maven and official Fabric docs; not yet validated by a successful runtime test",
+    "java_major": 21,          # compile target (options.release)
+    "gradle_jdk_major": 25,    # JDK required to RUN Gradle + Loom 1.18 (official CI uses 25)
+    "mappings": "mojang",      # loom.officialMojangMappings(); Yarn dropped to match upstream template
+    "loom_plugin": "net.fabricmc.fabric-loom-remap",  # plugin id for obfuscated MC (<26.1)
+    "loom": "1.18-SNAPSHOT",
+    "fabric_loader": "0.19.5",
+    "fabric_api": "0.116.17+1.21.1",
+    "gradle": "9.7.1",
+    "source": "FabricMC/fabric-example-mod branch 1.21.1 @ 684b581 (2026-09-26)",
+    "template_evidence": "Upstream template compiled locally on Windows/JDK 25 (2026-10-19); generated output not yet compiled",
 }
 
 def ensure_home() -> None:

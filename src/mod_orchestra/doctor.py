@@ -35,7 +35,8 @@ def inspect() -> dict:
     return {
         "os": platform.system(), "machine": platform.machine(), "python": platform.python_version(),
         "profile": PROFILE, "java": {"executable": java, "version": java_version, "major": major,
-                                    "compatible": major == PROFILE["java_major"]},
+                                    "compatible": major is not None and major >= PROFILE["gradle_jdk_major"],
+                                    "note": f"JDK {PROFILE['gradle_jdk_major']}+ runs Gradle/Loom; sources compile with --release {PROFILE['java_major']}"},
         "gradle": {"executable": gradle, "version": _version([gradle, "--version"]) if gradle else None},
         "git": {"executable": git, "version": _version([git, "--version"]) if git else None},
         "blockbench": {"executable": blockbench, "note": "Optional for static item/block prototypes"},
