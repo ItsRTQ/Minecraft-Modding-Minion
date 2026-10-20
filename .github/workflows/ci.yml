@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, prod, "claude-feature/**"]
+  pull_request:
+    branches: [dev, prod]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python ${{ matrix.python }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: python -m pip install -e .
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Wrapper provenance holds on this OS
+        shell: bash
+        run: |
+          craftctl doctor | python -c "import sys,json; w=json.load(sys.stdin)['wrapper']; print(json.dumps(w['files'], indent=1)); sys.exit(0 if w['ok'] else 1)"
+
+  fabric-build:
+    name: Build examples/crystal_example (JDK 25, clean runner)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build with the shipped wrapper
+        working-directory: examples/crystal_example
+        run: ./gradlew build --no-daemon --console=plain
+      - name: Inspect JAR
+        working-directory: examples/crystal_example
+        run: |
+          ls -la build/libs
+          unzip -p build/libs/crystal_example-1.0.0.jar META-INF/MANIFEST.MF
+          unzip -l build/libs/crystal_example-1.0.0.jar | grep -E "loot_table/blocks/crystal_stone.json|ModMain.class"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crystal_example-jar
+          path: examples/crystal_example/build/libs/*.jar
+          if-no-files-found: error
+
+  generated-build:
+    name: Generate a fresh project with craftctl and build it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install craftctl
+        run: python -m pip install -e .
+      - name: Controller-driven path (new → plan → approve → generate → request → grant → build)
+        env:
+          CRAFTCTL_HOME: ${{ runner.temp }}/craft
+        run: |
+          set -euo pipefail
+          craftctl new --name "CI Mod" --id ci_mod --package com.example.cimod --idea "items: ci gem, ci dust; blocks: ci ore" > /dev/null
+          craftctl plan ci_mod > /dev/null
+          craftctl approve-spec ci_mod > /dev/null
+          craftctl generate ci_mod > /dev/null
+          APPROVAL=$(craftctl request-build ci_mod | python -c "import sys,json; print(json.load(sys.stdin)['id'])")
+          craftctl decide "$APPROVAL" grant > /dev/null
+          craftctl build ci_mod --approval-id "$APPROVAL" | tee build.json
+          python -c "import json; r=json.load(open('build.json')); assert r['status']=='BUILD_PASS', r; print('BUILD_PASS sha256', r['evidence']['artifact_sha256'])"
+          craftctl status ci_mod | python -c "import sys,json; d=json.load(sys.stdin); assert d['status']=='BUILD_PASSED_GAME_UNTESTED', d['status']; print('evidence:', [(e['level'], e['actor']) for e in d['evidence']])"
+      - name: Show build log tail on failure
+        if: failure()
+        env:
+          CRAFTCTL_HOME: ${{ runner.temp }}/craft
+        run: craftctl logs ci_mod --lines 120 || true
