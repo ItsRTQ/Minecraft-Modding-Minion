@@ -100,13 +100,19 @@ def summary(store: Store, pid: str) -> dict:
             "status": project["status"], "spec_state": project["spec_state"], "spec": project["spec"],
             "tasks": [{"id": t["id"], "title": t["title"], "role": t["role"], "state": t["state"]} for t in tasks],
             "approvals": [{"id": a["id"], "kind": a["kind"], "state": a["state"], "description": a["description"]} for a in store.approvals(pid)],
+            "evidence": [{"level": e["level"], "actor": e["actor"], "note": e["note"], "artifact_sha256": e["artifact_sha256"],
+                          "created_at": e["created_at"]} for e in store.evidence(pid)],
             "events": store.events(pid, 20)}
 
 
 def export_state_markdown(store: Store, pid: str) -> str:
     data = summary(store, pid)
     lines = ["# Project State", "", f"Project: {data['name']} ({pid})", f"Status: {data['status']}",
-             f"Spec: {data['spec_state']}", "", "## Task board"]
+             f"Spec: {data['spec_state']}", "", "## Evidence"]
+    lines += [f"- {e['level']} by {e['actor']}" + (f" — {e['note']}" if e["note"] else "")
+              + (f" (sha256 {e['artifact_sha256'][:12]}…)" if e["artifact_sha256"] else "")
+              for e in data["evidence"]] or ["- none recorded"]
+    lines += ["", "## Task board"]
     for task in data["tasks"][:50]:
         lines.append(f"- {task['state']}: {task['id']} — {task['title']} [{task['role']}]")
     lines.extend(["", "## Recent events"])

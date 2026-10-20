@@ -63,9 +63,13 @@ every tool, forbidden names, malformed frames, schema violations, path traversal
 - Project ids are looked up, never used as paths: `../../etc` → `Project not found`.
 - Notifications get no reply (correct per spec).
 
+## Host verification — 2026-10-20 · RTQ · Windows / JDK 25 · `dev` @ aa8538d
+
+`examples/crystal_example` built, client and dedicated server booted, content verified in-game (R1 FAB-001/FAB-002). Full record: `examples/crystal_example/EVIDENCE.md`. Evidence levels and `craftctl evidence` added in `claude-feature/r1-evidence-levels`.
+
 ## Not yet tested
 
-- `craftctl build` against a real Gradle (needs host machine).
+- `craftctl build` (the controller-driven path) against a real Gradle; the host build above used `gradlew` directly.
 - MCP server protocol and tool restrictions.
 - `diagnose` against real failing Gradle logs.
 - Skills/agents as prompts for a cold Claude Code session.

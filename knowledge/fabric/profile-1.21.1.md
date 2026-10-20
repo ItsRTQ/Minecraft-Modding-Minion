@@ -1,12 +1,12 @@
 ---
 id: fabric.profile.1.21.1.candidate
-status: candidate-template-verified
+status: build-verified
 loader: fabric
 minecraft: 1.21.1
 mappings: mojang
 java_compile: 21
 java_runtime: 25
-last_reviewed: 2026-10-19
+last_reviewed: 2026-10-20
 ---
 
 # Fabric 1.21.1 — candidate build profile (Mojang mappings)
@@ -17,7 +17,7 @@ The profile mirrors the official template: https://github.com/FabricMC/fabric-ex
 
 ## Pinned coordinates
 
-- Loom plugin `net.fabricmc.fabric-loom-remap` version `1.18-SNAPSHOT` (upstream pins the snapshot; pin a release once one is confirmed to resolve)
+- Loom plugin `net.fabricmc.fabric-loom-remap` version `1.18.4` (upstream pins `1.18-SNAPSHOT`, which resolved to 1.18.4 in the verified build)
 - Fabric Loader `0.19.5`
 - Fabric API `0.116.17+1.21.1`
 - Mappings: `loom.officialMojangMappings()` (no Yarn artifact)
@@ -26,7 +26,8 @@ The profile mirrors the official template: https://github.com/FabricMC/fabric-ex
 ## Evidence
 
 - 2026-10-19: the unmodified upstream template compiled successfully (`gradlew build`) on Windows with JDK 25. This verifies the *toolchain*, not the generator output.
-- Generator output (`examples/crystal_example`) has **not** yet been compiled. Do not promote the profile until it builds, launches a client and a dedicated server.
+- 2026-10-20: generator output `examples/crystal_example` compiled (`BUILD SUCCESSFUL in 1m 4s`, Loom 1.18.4, JAR sha256 `6de89b8c…b857f1`), loaded in the client (`Loading 56 mods: - crystal_example 1.0.0`), dedicated server booted after EULA, items appear in Ingredients, block in Building Blocks, placeable, drops itself in survival. Full record in `examples/crystal_example/EVIDENCE.md`.
+- Known harmless build warning: `duplicate input class net/fabricmc/fabric/mixin/tag/package-info` between `fabric-convention-tags-v2` and `fabric-tag-api-v1` (upstream Fabric API packaging).
 
 ## Mojmap vs Yarn cheat sheet (1.21.1)
 
