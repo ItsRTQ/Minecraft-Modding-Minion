@@ -45,8 +45,11 @@ class Migrations(unittest.TestCase):
         backup = self.dir / "old.sqlite.bak-v1"
         self.assertTrue(backup.is_file())
         con = sqlite3.connect(backup)
-        self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 1)
-        self.assertEqual(con.execute("SELECT count(*) FROM projects").fetchone()[0], 1)
+        try:
+            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 1)
+            self.assertEqual(con.execute("SELECT count(*) FROM projects").fetchone()[0], 1)
+        finally:
+            con.close()  # Windows cannot remove an open DB file during TemporaryDirectory cleanup
 
     def test_db_from_newer_craftctl_is_refused(self):
         db = self.dir / "future.sqlite"
@@ -62,8 +65,11 @@ class Migrations(unittest.TestCase):
             with self.assertRaisesRegex(StateError, "migration v%d .*failed" % (SCHEMA_VERSION + 1)):
                 Store(db)
         con = sqlite3.connect(db)
-        self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
-        self.assertEqual(con.execute("SELECT name FROM sqlite_master WHERE name='half'").fetchall(), [])
+        try:
+            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
+            self.assertEqual(con.execute("SELECT name FROM sqlite_master WHERE name='half'").fetchall(), [])
+        finally:
+            con.close()
 
     def test_migration_list_is_contiguous_and_append_only(self):
         self.assertEqual([m[0] for m in MIGRATIONS], list(range(1, len(MIGRATIONS) + 1)))
