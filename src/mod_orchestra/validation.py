@@ -10,10 +10,15 @@ PACKAGE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 class InputError(ValueError):
     pass
 
+def _short(value: str, limit: int = 40) -> str:
+    return value if len(value) <= limit else value[:limit] + "…"
+
 def normalize_id(value: str, *, content: bool = False) -> str:
     name = re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
+    limit = 50 if content else 40
     if not (CONTENT_IDENTIFIER if content else IDENTIFIER).fullmatch(name):
-        raise InputError(f"Invalid identifier: {value!r}; expected lowercase letters/numbers/underscores, starting with a letter")
+        raise InputError(f"Invalid identifier: {_short(value)!r} (normalized: {_short(name)!r}); "
+                         f"expected 2–{limit} chars of lowercase letters/numbers/underscores, starting with a letter")
     return name
 
 def validate_package(value: str) -> str:

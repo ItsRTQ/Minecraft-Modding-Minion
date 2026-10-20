@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from .state import Store
-from .build import tail_log
+from .build import tail_log, log_path
 
 RULES = [
     ("JAVA_COMPILE", re.compile(r"(?:error: cannot find symbol|error: incompatible types|Compilation failed)", re.I), "Inspect pinned mappings/API signatures and compiler file:line before edits."),
@@ -34,5 +34,8 @@ def diagnose(text: str, *, max_lines: int = 250) -> dict:
 
 
 def project_diagnose(store: Store, pid: str) -> dict:
-    text = tail_log(store, pid, 250)
-    return diagnose(text)
+    root = Path(store.project(pid)["root"])
+    if not log_path(root).is_file():
+        return {"classifications": [], "lines_reviewed": 0, "raw_log_excerpt": "", "status": "NO_LOG",
+                "note": "No build log exists yet; run an approved build first."}
+    return diagnose(tail_log(store, pid, 250))
