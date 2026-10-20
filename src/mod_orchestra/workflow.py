@@ -1,6 +1,7 @@
 """Coordinator: typed actions, bounded planning, approval and deterministic execution."""
 from __future__ import annotations
 import json
+import shutil
 import hashlib
 from pathlib import Path
 from .config import PROJECTS, PROFILE, save_json
@@ -71,7 +72,7 @@ def generate_project(store: Store, pid: str) -> dict:
     t_id = pid + ":SCAFFOLD"
     lease = store.claim(t_id, "coder", ttl=600)
     if not lease:
-        raise StateError("Scaffold task unavailable")
+        raise StateError(unavailable_message(store, t_id))
     try:
         output = generate(read_spec(project["spec"]), Path(project["root"]))
         checked = validate_generated(Path(project["root"]))
@@ -96,6 +97,32 @@ def generate_project(store: Store, pid: str) -> dict:
     store.update_project(pid, status="SOURCE_GENERATED_UNVERIFIED")
     store.add_event(pid, "generator", "SOURCE_GENERATED", output)
     return output | {"static_validation": checked}
+
+
+def unavailable_message(store: Store, task_id: str) -> str:
+    info = store.lease_info(task_id)
+    if info is None:
+        return f"Task {task_id} does not exist"
+    if info["holder"]:
+        return (f"Task {task_id} is {info['state']} by '{info['holder']}' for {info['seconds_left']}s more. "
+                f"Wait, or run: craftctl release {task_id}")
+    return f"Task {task_id} is {info['state']}, not READY"
+
+
+def delete_project(store: Store, pid: str, *, remove_workspace: bool) -> dict:
+    """USER-ONLY. Removes the Footprint rows; the directory only on explicit request and only inside PROJECTS."""
+    project = store.project(pid)
+    root = Path(project["root"]).resolve()
+    result = store.delete_project(pid)
+    result["workspace"] = str(root)
+    result["workspace_removed"] = False
+    if remove_workspace and root.is_dir():
+        projects_root = PROJECTS.resolve()
+        if projects_root not in root.parents:
+            raise StateError(f"Refusing to delete a directory outside {projects_root}: {root}")
+        shutil.rmtree(root)
+        result["workspace_removed"] = True
+    return result
 
 
 def summary(store: Store, pid: str) -> dict:

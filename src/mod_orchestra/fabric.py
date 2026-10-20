@@ -12,7 +12,7 @@ import struct
 import zlib
 from pathlib import Path
 from .state import StateError
-from .config import PROFILE, WRAPPER_DIR, WRAPPER_FILES
+from .config import PROFILE, WRAPPER_DIR, WRAPPER_FILES, GENERATOR_VERSION
 from .spec import Spec
 from .validation import InputError, safe_inside, ensure_new_directory
 
@@ -242,7 +242,7 @@ Your idea: {spec.idea}
             put(f"{res}/textures/block/{key}.png", placeholder_png(spec.mod_id + "/" + key))
             put(f"src/main/resources/data/{spec.mod_id}/loot_table/blocks/{key}.json", json.dumps({"type": "minecraft:block", "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{spec.mod_id}:{key}"}], "conditions": [{"condition": "minecraft:survives_explosion"}]}]}, indent=2) + "\n")
     put(f"{res}/lang/en_us.json", json.dumps(lang, indent=2, sort_keys=True) + "\n")
-    manifest = {"generator": "mod-orchestra 0.1.0", "status": "GENERATED_UNVERIFIED", "profile": p["id"], "files": written.copy(), "build_verified": False, "runtime_verified": False}
+    manifest = {"generator": "mod-orchestra 0.1.0", "generator_version": GENERATOR_VERSION, "status": "GENERATED_UNVERIFIED", "profile": p["id"], "files": written.copy(), "build_verified": False, "runtime_verified": False}
     put(".mod-orchestra/generation-manifest.json", json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     return {"path": str(directory), "files": len(written), "status": "GENERATED_UNVERIFIED", "manifest": str(directory / ".mod-orchestra/generation-manifest.json")}
 
@@ -257,6 +257,17 @@ def verified_wrapper_file(relative: str, expected_sha256: str) -> bytes:
     if actual != expected_sha256:
         raise StateError(f"Embedded Gradle wrapper {relative} hash {actual[:12]} != recorded {expected_sha256[:12]}; refusing to ship it")
     return data
+
+
+def workspace_generation_info(path: Path) -> dict:
+    """Which generator wrote this workspace and whether it ships the wrapper (H3)."""
+    manifest_file = path / ".mod-orchestra/generation-manifest.json"
+    if not manifest_file.is_file():
+        return {"generator_version": None, "has_wrapper": False, "current": GENERATOR_VERSION}
+    files = json.loads(manifest_file.read_text(encoding="utf8")).get("files", {})
+    version = json.loads(manifest_file.read_text(encoding="utf8")).get("generator_version", 1)
+    return {"generator_version": version, "has_wrapper": all(k in files for k in WRAPPER_FILES),
+            "current": GENERATOR_VERSION, "outdated": version < GENERATOR_VERSION}
 
 
 def validate_generated(path: Path) -> dict:
