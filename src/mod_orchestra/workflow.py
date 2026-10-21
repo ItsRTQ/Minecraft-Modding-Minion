@@ -33,7 +33,7 @@ def plan_project(store: Store, pid: str) -> dict:
         tid = f"{pid}:CONTENT:{index:02d}"
         tasks.append({"id": tid, "role": "designer" if feat.kind == "block" else "coder", "title": f"Generate {feat.kind}: {feat.label}"})
         edges.append((f"{pid}:SCAFFOLD", tid))
-    tasks.append({"id": f"{pid}:BUILD", "role": "debugger", "title": "Compile with trusted approved Gradle toolchain"})
+    tasks.append({"id": f"{pid}:BUILD", "role": "coder", "title": "Compile with trusted approved Gradle toolchain (debugger takes over on BUILD_FAILED)"})
     tasks.append({"id": f"{pid}:GAME", "role": "qa", "title": "Launch isolated Minecraft test and verify behavior"})
     if spec.features:
         edges.extend((f"{pid}:CONTENT:{i:02d}", f"{pid}:BUILD") for i in range(1, len(spec.features) + 1))

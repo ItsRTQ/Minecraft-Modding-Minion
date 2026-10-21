@@ -11,7 +11,7 @@ import json
 import re
 import sys
 
-USER_ONLY = r"(?:craftctl|mod_orchestra\.cli)\s+(approve-spec|request-build|decide|build|evidence|delete|release|new)\b"
+USER_ONLY = r"(?:craftctl|mod_orchestra\.cli)\s+(approve-spec|request-build|decide|build|evidence|delete|release|new|requeue|add-task|dispatch|orchestrate|accept-changes)\b"
 GIT_BLOCK = r"\bgit\s+(push|reset\s+--hard|clean\s+-[a-z]*f|checkout\s+--\s+\.)"
 
 def main() -> int:

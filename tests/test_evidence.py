@@ -81,10 +81,12 @@ class EvidenceFlow(unittest.TestCase):
         self.assertEqual(workflow.summary(self.store, "e_mod")["evidence"][0]["level"], "BUILD_PASS")
         self.assertIn("## Evidence", workflow.export_state_markdown(self.store, "e_mod"))
 
-    def test_mcp_and_ui_cannot_record_evidence(self):
-        for module in (mcp, ui):
-            src = inspect.getsource(module)
-            self.assertNotIn("record_evidence", src); self.assertNotIn("add_evidence", src)
+    def test_mcp_cannot_record_evidence(self):
+        # The UI is the authenticated local user (it already decides approvals), so it may record evidence.
+        # Agents reach the controller only through MCP, which must never be able to.
+        src = inspect.getsource(mcp)
+        self.assertNotIn("record_evidence", src); self.assertNotIn("add_evidence", src)
+        self.assertNotIn("dispatch", src); self.assertNotIn("requeue", src)
 
 
 if __name__ == "__main__":

@@ -47,8 +47,10 @@ def _kill_tree(proc: subprocess.Popen) -> None:
 
 
 def run_logged(cmd: list[str], *, cwd: Path, log: Path, timeout: int = DEFAULT_TIMEOUT,
-               env: dict[str, str] | None = None) -> dict:
-    """Run cmd with stdout+stderr appended to `log`. Never raises on process failure."""
+               env: dict[str, str] | None = None, stdin_text: str | None = None) -> dict:
+    """Run cmd with stdout+stderr written to `log`. Never raises on process failure.
+    stdin_text, if given, is fed to the process and the pipe closed (prompts must not go on the
+    command line: Windows limits it and it would be echoed into logs)."""
     env = env or controlled_env()
     popen_kwargs: dict = {}
     if os.name == "nt":
@@ -59,9 +61,19 @@ def run_logged(cmd: list[str], *, cwd: Path, log: Path, timeout: int = DEFAULT_T
     started = time.time()
     killed = False
     with log.open("wb") as f:
-        f.write(f"$ {' '.join(cmd)}\n".encode())
-        proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=f, stderr=subprocess.STDOUT, env=env, **popen_kwargs)
+        shown = " ".join(a if len(a) <= 200 else a[:200] + "…" for a in cmd)
+        f.write(f"$ {shown}\n".encode())
+        f.flush()  # the child writes to the fd directly; without this the header lands after its output
+        proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=f, stderr=subprocess.STDOUT, env=env,
+                                stdin=subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL, **popen_kwargs)
         try:
+            if stdin_text is not None:
+                try:
+                    proc.stdin.write(stdin_text.encode("utf-8"))
+                except (BrokenPipeError, OSError):
+                    pass
+                finally:
+                    proc.stdin.close()
             code = proc.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             _kill_tree(proc)

@@ -315,11 +315,44 @@ def workspace_generation_info(path: Path) -> dict:
             "current": GENERATOR_VERSION, "outdated": version < GENERATOR_VERSION}
 
 
+def current_hashes(manifest: dict) -> dict[str, str]:
+    """Generation hashes overlaid with every accepted revision, in order."""
+    files = dict(manifest["files"])
+    for rev in manifest.get("revisions", []):
+        files.update(rev["files"])
+    return files
+
+
+def accept_changes(path: Path, *, run_id: str, actor: str, changed: list[str]) -> dict:
+    """Record files a worker reported as changed (or added) as a manifest revision attributed to a run.
+    Only reported files are re-hashed: anything else that differs stays CHANGED (unreported = tampered)."""
+    manifest_file = path / ".mod-orchestra/generation-manifest.json"
+    manifest = json.loads(manifest_file.read_text(encoding="utf8"))
+    before = current_hashes(manifest)
+    files, skipped = {}, []
+    for relative in changed:
+        relative = relative.replace("\\", "/").lstrip("./")
+        try:
+            file_path = safe_inside(path, relative)
+        except InputError:
+            skipped.append(relative); continue
+        if not file_path.is_file():
+            skipped.append(relative); continue
+        digest = hashlib.sha256(file_path.read_bytes()).hexdigest()
+        if before.get(relative) != digest:
+            files[relative] = digest
+    if files:
+        manifest.setdefault("revisions", []).append({"run": run_id, "actor": actor, "at": time.time(), "files": files})
+        manifest_file.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf8")
+    return {"accepted": sorted(files), "unchanged_or_missing": skipped}
+
+
 def validate_generated(path: Path) -> dict:
     manifest_file = path / ".mod-orchestra/generation-manifest.json"
     manifest = json.loads(manifest_file.read_text(encoding="utf8"))
     problems = []
-    for relative, expected in manifest["files"].items():
+    files = current_hashes(manifest)
+    for relative, expected in files.items():
         file_path = safe_inside(path, relative)
         if not file_path.is_file():
             problems.append("MISSING: " + relative)
@@ -330,4 +363,5 @@ def validate_generated(path: Path) -> dict:
                 json.loads(file_path.read_text(encoding="utf8"))
             except (ValueError, UnicodeDecodeError) as exc:
                 problems.append("BAD JSON: " + relative + ": " + str(exc))
-    return {"status": "PASS" if not problems else "FAIL", "checked": len(manifest["files"]), "problems": problems, "note": "Static generation-only check; not a Minecraft build or runtime test"}
+    return {"status": "PASS" if not problems else "FAIL", "checked": len(files), "revisions": len(manifest.get("revisions", [])),
+            "problems": problems, "note": "Static generation-only check; not a Minecraft build or runtime test"}

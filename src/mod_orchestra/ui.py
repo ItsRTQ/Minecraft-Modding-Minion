@@ -1,6 +1,8 @@
 """Local-only browser GUI with per-process bearer token; no silent shell or network install."""
 from __future__ import annotations
+import threading
 import json
+from pathlib import Path
 import secrets
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -11,6 +13,11 @@ from .validation import InputError
 from .doctor import inspect
 from .workflow import new_project, plan_project, approve_spec, generate_project, summary
 from .build import request_build, build_project, tail_log
+from .diagnostics import project_diagnose
+from .dispatch import dispatch
+from .evidence import record_evidence
+from .fabric import validate_generated
+from .redact import redact
 
 MAX_BODY = 16_384
 
@@ -19,6 +26,40 @@ def serve(store: Store, port: int = 8765) -> None:
         raise ValueError("Use a port between 1024 and 65535")
     token = secrets.token_urlsafe(32)
     origin = f"http://127.0.0.1:{port}"
+
+    inflight: dict[str, threading.Thread] = {}
+    inflight_lock = threading.Lock()
+
+    def start_dispatch(pid: str, task_id: str | None) -> dict:
+        """The UI is the user: dispatch runs in a background thread, the page polls /api/project/<id>."""
+        with inflight_lock:
+            t = inflight.get(pid)
+            if t and t.is_alive():
+                raise StateError("A worker is already running for this project; wait for it to finish")
+            def worker():
+                try:
+                    dispatch(store, pid, task_id=task_id)
+                except Exception as exc:  # recorded in the Footprint by dispatch(); surface in events too
+                    store.add_event(pid, "controller", "DISPATCH_ERROR", {"error": str(exc)[:400]})
+                finally:
+                    with inflight_lock:
+                        inflight.pop(pid, None)
+            th = threading.Thread(target=worker, name=f"dispatch-{pid}", daemon=True)
+            inflight[pid] = th
+            th.start()
+        return {"started": True, "project": pid, "task": task_id}
+
+    def run_detail(run_id: str) -> dict:
+        for p in store.projects():
+            for r in store.runs(p["id"]):
+                if r["id"] == run_id:
+                    log = Path(r["log_path"]) if r.get("log_path") else None
+                    tail = ""
+                    if log and log.is_file():
+                        data = log.read_bytes()[-32768:]
+                        tail = redact("\n".join(data.decode("utf-8", "replace").splitlines()[-150:]))
+                    return r | {"log_tail": tail}
+        raise InputError("Run not found")
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "CraftCtlLocal/0.1"
@@ -45,10 +86,25 @@ def serve(store: Store, port: int = 8765) -> None:
             if self.command == "GET":
                 if path == "/api/doctor": return inspect()
                 if path == "/api/projects": return store.projects()
+                if path.startswith("/api/run/"):
+                    run_id = path.removeprefix("/api/run/")
+                    if "/" in run_id: raise InputError("Unexpected run path")
+                    return run_detail(run_id)
                 if path.startswith("/api/project/"):
-                    pid = path.removeprefix("/api/project/")
-                    if "/" in pid: raise InputError("Unexpected subpath")
-                    return summary(store, pid)
+                    parts = path.strip("/").split("/")
+                    if len(parts) == 3:
+                        return summary(store, parts[2]) | {"dispatching": parts[2] in inflight}
+                    if len(parts) != 4: raise InputError("Unexpected subpath")
+                    pid, op = parts[2], parts[3]
+                    if op == "runs": return store.runs(pid)
+                    if op == "logs": return {"text": tail_log(store, pid, 200)}
+                    if op == "diagnose": return project_diagnose(store, pid)
+                    if op == "validate":
+                        root = Path(store.project(pid)["root"])
+                        if not (root / ".mod-orchestra" / "generation-manifest.json").is_file():
+                            return {"status": "NO_SOURCE", "checked": 0, "problems": ["No generated source yet"]}
+                        return validate_generated(root)
+                    raise InputError("Unknown project query")
             else:
                 if path == "/api/projects":
                     return new_project(store, name=payload["name"], mod_id=payload["id"], package=payload["package"], idea=payload["idea"])
@@ -64,6 +120,14 @@ def serve(store: Store, port: int = 8765) -> None:
                     if op == "generate": return generate_project(store, pid)
                     if op == "request-build": return request_build(store, pid)
                     if op == "build": return build_project(store, pid, payload["approval_id"])
+                    if op == "dispatch": return start_dispatch(pid, payload.get("task") or None)
+                    if op == "evidence":
+                        return record_evidence(store, pid, payload["level"], actor="user", note=str(payload.get("note", "")),
+                                               jar=Path(payload["jar"]) if payload.get("jar") else None)
+                if path.startswith("/api/task/"):
+                    parts = path.strip("/").split("/")
+                    if len(parts) != 4 or parts[3] != "requeue": raise InputError("Unknown task command")
+                    return store.requeue(parts[2], str(payload.get("reason") or "requeued from UI"))
                 if path.startswith("/api/approval/"):
                     approval_id = path.removeprefix("/api/approval/")
                     if "/" in approval_id: raise InputError("Unexpected approval path")
