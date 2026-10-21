@@ -67,6 +67,8 @@ def apply_outcome(store: Store, pid: str, task: dict, lease: dict, run: dict, re
             accepted = accept_changes(root, run_id=run["id"], actor=f"agent:{task['role']}", changed=sorted(reported))
             store.add_event(pid, "controller", "CHANGES_ACCEPTED", {"run": run["id"], **accepted})
             h = h | {"accepted_changes": accepted}
+            if accepted["accepted"]:
+                _source_changed(store, pid)
     if status == "DONE":
         evidence = [{"kind": "WORKER_HANDOFF", "value": f"run:{run['id']}"},
                     {"kind": h["evidence"]["level"], "value": str(h["evidence"].get("pointer") or log)}]
@@ -171,6 +173,14 @@ def orchestrate(store: Store, pid: str, *, max_runs: int = 5, max_cost_usd: floa
             "stopped_because": reason, "stale_runs_reconciled": stale}
 
 
+def _source_changed(store: Store, pid: str) -> None:
+    """Accepted edits mean the source differs from what any evidence was observed on."""
+    proj = store.project(pid)
+    if proj["status"] in ("BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
+        store.update_project(pid, status="SOURCE_GENERATED_UNVERIFIED")
+        store.add_event(pid, "controller", "VERIFICATION_RESET", {"reason": "source revised; previous evidence applies to an earlier manifest"})
+
+
 def accept_run_changes(store: Store, run_id: str) -> dict:
     """USER-ONLY: accept the files a given run reported as changed, after reviewing its handoff."""
     for p in store.projects():
@@ -182,5 +192,7 @@ def accept_run_changes(store: Store, run_id: str) -> dict:
                 root = Path(p["root"])
                 out = accept_changes(root, run_id=run_id, actor="user", changed=files)
                 store.add_event(p["id"], "user", "CHANGES_ACCEPTED", {"run": run_id, **out})
+                if out["accepted"]:
+                    _source_changed(store, p["id"])
                 return out | {"project": p["id"], "task": r["task_id"]}
     raise StateError(f"Run not found: {run_id}")

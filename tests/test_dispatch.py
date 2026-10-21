@@ -319,3 +319,37 @@ class ManifestRevisions(unittest.TestCase):
         self.assertEqual(validate_generated(self.root)["status"], "PASS")
         with self.assertRaisesRegex(StateError, "Run not found"):
             accept_run_changes(self.store, "nope")
+
+
+class RebuildAfterRevision(unittest.TestCase):
+    """Host run 4 (D7): after an agent revision the project must be rebuildable and prior evidence must not carry over."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        base = Path(self.tmp.name); self.store = Store(base / "state.sqlite")
+        p = patch.object(workflow, "PROJECTS", base / "projects"); p.start(); self.addCleanup(p.stop)
+        (base / "projects").mkdir()
+        proj = workflow.new_project(self.store, name="R", mod_id="r_mod", package="com.x.r", idea="items: gem")
+        workflow.plan_project(self.store, "r_mod"); workflow.approve_spec(self.store, "r_mod"); workflow.generate_project(self.store, "r_mod")
+        self.root = Path(proj["root"]); self.java = self.root / "src/main/java/com/x/r/ModMain.java"
+
+    def test_revision_resets_status_and_allows_request_build_again(self):
+        from mod_orchestra import build as build_mod
+        from mod_orchestra.evidence import record_evidence
+        jar = self.root / "build/libs/r_mod-1.0.0.jar"; jar.parent.mkdir(parents=True); jar.write_bytes(b"j")
+        record_evidence(self.store, "r_mod", "BUILD_PASS", actor="user", jar=jar)
+        for lvl in ("CLIENT_BOOT_PASS", "SERVER_BOOT_PASS", "CONTENT_VERIFIED"):
+            record_evidence(self.store, "r_mod", lvl, actor="user")
+        self.assertEqual(self.store.project("r_mod")["status"], "GAME_VERIFIED")
+        # agent edits + accepted
+        self.java.write_text(self.java.read_text() + "\n// sapphire\n")
+        self.store.add_task("r_mod", "r_mod:S", "coder", "s")
+        out = dispatch(self.store, "r_mod", task_id="r_mod:S", provider=FakeProvider(reply(GOOD | {"task": "r_mod:S", "changed_files": ["src/main/java/com/x/r/ModMain.java"]})))
+        self.assertEqual(out["task_state"], "DONE")
+        self.assertEqual(self.store.project("r_mod")["status"], "SOURCE_GENERATED_UNVERIFIED", "old evidence was for another manifest")
+        self.assertIn("VERIFICATION_RESET", [e["kind"] for e in self.store.events("r_mod")])
+        # rebuild path open again; game evidence on the new source needs a new BUILD_PASS first
+        self.assertEqual(build_mod.request_build(self.store, "r_mod")["kind"], "execute_gradle_build")
+        with self.assertRaisesRegex(StateError, "needs a prior BUILD_PASS on this exact source"):
+            record_evidence(self.store, "r_mod", "CLIENT_BOOT_PASS", actor="user")
+        record_evidence(self.store, "r_mod", "BUILD_PASS", actor="user", jar=jar)
+        self.assertEqual(self.store.project("r_mod")["status"], "BUILD_PASSED_GAME_UNTESTED")

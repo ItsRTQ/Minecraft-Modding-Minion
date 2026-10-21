@@ -9,6 +9,9 @@ from .redact import redact
 from .state import Store, StateError
 
 
+BUILDABLE_STATUSES = ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED")
+
+
 def _require_current_generator(root: Path) -> None:
     info = workspace_generation_info(root)
     if info.get("outdated") or not info.get("has_wrapper"):
@@ -32,8 +35,8 @@ def log_path(root: Path) -> Path:
 
 def request_build(store: Store, pid: str) -> dict:
     proj = store.project(pid)
-    if proj["status"] != "SOURCE_GENERATED_UNVERIFIED":
-        raise StateError("Only a generated starter may be built")
+    if proj["status"] not in BUILDABLE_STATUSES:
+        raise StateError(f"Nothing to build in status {proj['status']}; generate source first")
     root = Path(proj["root"])
     _require_current_generator(root)
     checked = validate_generated(root)
@@ -48,7 +51,7 @@ def request_build(store: Store, pid: str) -> dict:
 
 def build_project(store: Store, pid: str, approval_id: str) -> dict:
     proj = store.project(pid)
-    if proj["status"] != "SOURCE_GENERATED_UNVERIFIED":
+    if proj["status"] not in BUILDABLE_STATUSES:
         raise StateError("Project has not generated a buildable source tree")
     root = Path(proj["root"])
     checked = validate_generated(root)
