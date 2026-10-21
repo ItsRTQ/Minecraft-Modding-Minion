@@ -98,8 +98,18 @@ class RepairLoop(Base):
                 return super().run(envelope, log_path)
         out = orchestrate(self.store, "r_mod", max_runs=6, provider=FlakyDebugger(""))
         states = [r["task_state"] for r in out["runs"]]
-        self.assertEqual(states[:2], ["FAILED", "DONE"], states)
+        self.assertEqual(states, ["FAILED", "DONE"], states)  # stops right after the repair succeeds
+        self.assertIn("confirm with the trusted build", out["stopped_because"])
         self.assertEqual(self.tasks()["r_mod:REPAIR:2"]["state"], "DONE")
+
+    def test_game_task_waits_for_trusted_build_pass_on_current_source(self):
+        # host run 5: after a repair, orchestrate dispatched the qa GAME task ($2.11) whose evidence cannot be accepted.
+        from mod_orchestra.dispatch import pick_task
+        self.controller_build(0)  # BUILD DONE -> GAME READY, and BUILD_PASS on current source
+        self.assertEqual(pick_task(self.store, "r_mod", None)["id"], "r_mod:GAME")
+        inject_fault(self.store, "r_mod", "missing-import")  # source changed: BUILD_PASS no longer applies
+        with self.assertRaisesRegex(StateError, "trusted BUILD_PASS"):
+            pick_task(self.store, "r_mod", None)
 
 
 @unittest.skipIf(os.name == "nt", "POSIX shell fixtures")

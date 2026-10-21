@@ -30,12 +30,24 @@ def pick_task(store: Store, pid: str, task_id: str | None) -> dict:
         if t["state"] != "READY":
             raise StateError(f"Task {task_id} is {t['state']}, not READY" + (f" (last error: {t['last_error']})" if t.get("last_error") else ""))
         return t
-    ready = [t for t in tasks if t["state"] == "READY" and t["role"] in DISPATCHABLE_ROLES]
+    ready = [t for t in tasks if t["state"] == "READY" and t["role"] in DISPATCHABLE_ROLES and _dispatchable_now(store, pid, t)]
     if not ready:
-        raise StateError("No READY task to dispatch; run `craftctl next <project>` to see the board")
+        raise StateError("No READY task to dispatch (or the ready ones wait on a trusted BUILD_PASS of the current source); run `craftctl next <project>`")
     # A pending repair blocks everything else: nothing downstream is worth running on a broken build.
     ready.sort(key=lambda t: (0 if ":REPAIR:" in t["id"] else 1, t["id"]))
     return ready[0]
+
+
+def _dispatchable_now(store: Store, pid: str, task: dict) -> bool:
+    """QA/game tasks are not worth a worker until the user's trusted build passed on the source as it is now;
+    a worker running the game itself costs money and cannot produce accepted evidence (server-smoke can)."""
+    if task["role"] != "qa" and not task["id"].endswith(":GAME"):
+        return True
+    from .evidence import levels_for_current_source
+    try:
+        return "BUILD_PASS" in levels_for_current_source(store, pid, Path(store.project(pid)["root"]))
+    except StateError:
+        return False
 
 
 def build_envelope(store: Store, pid: str, task: dict) -> TaskEnvelope:
@@ -179,6 +191,10 @@ def orchestrate(store: Store, pid: str, *, max_runs: int = 5, max_cost_usd: floa
         out = dispatch(store, pid, provider=provider)
         runs.append({k: out.get(k) for k in ("run", "task", "role", "task_state", "cost_usd", "duration_s", "error")})
         cost += float(out.get("cost_usd") or 0.0)
+        if out["task_state"] == "DONE" and ":REPAIR:" in out["task"]:
+            reason = (f"repair {out['task']} DONE by the debugger; confirm with the trusted build: "
+                      f"craftctl request-build {pid}; craftctl decide <id> grant; craftctl build {pid} --approval-id <id>")
+            break
         if out["task_state"] in HUMAN_NEEDED:
             rep = out.get("repair") or {}
             if rep.get("task") and not rep.get("exhausted"):

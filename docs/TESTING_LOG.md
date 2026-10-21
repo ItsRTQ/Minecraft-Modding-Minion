@@ -153,6 +153,14 @@ First `craftctl dispatch` against a real `claude -p`. Project `wrap_test3`, ad-h
 | D8 | Med | build | H3 check rejected `wrap_test3` ("older generator v1") although it ships the wrapper: it was generated after the wrapper landed but before `generator_version` existed. The check now keys on the real incompatibility (wrapper files absent), not the version number. | FIXED |
 | D4 | Low | packet | Task board in the handoff packet showed `BUILD [debugger]` for projects planned before U6; cosmetic, old data. | WONTFIX |
 
+## Host run 5 — 2026-10-21 · RTQ · Windows · repair loop (`claude-feature/r5-repair-loop`)
+
+Fault `wrong-mapping` injected on `wrap_test3` → trusted build failed in 6.8 s → `REPAIR:1` opened → `orchestrate`: **debugger fixed it unaided (82.9 s, $0.62, `DONE`)**. v1 criterion 4: 1 of 3 faults repaired autonomously.
+
+| ID | Sev | Area | Finding | Status |
+|---|---|---|---|---|
+| E1 | High | orchestrate | After the repair `orchestrate` went on to the `GAME` (qa) task: 353 s and **$2.11** for a worker that ran `runServer` itself and whose `SERVER_BOOT_PASS` claim the controller cannot accept by design. Now: a repair `DONE` stops the loop (next step is the user's trusted build), and `GAME`/qa tasks are not dispatchable until a `BUILD_PASS` exists for the current source. | FIXED |
+
 ## Not yet tested
 
 - MCP server **as connected by Claude Code** (only the hand-driven stdio run in Round 3; needs a restart after A1).
