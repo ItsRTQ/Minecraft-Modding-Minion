@@ -136,8 +136,8 @@ class ClaudeCodeCommand(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
         ws = Path(tmp.name) / "ws"; ws.mkdir()
         captured = {}
-        def fake_run(cmd, *, cwd, log, timeout, env):
-            captured.update(cmd=cmd, cwd=cwd, env=env, timeout=timeout)
+        def fake_run(cmd, *, cwd, log, timeout, env, stdin_text=None):
+            captured.update(cmd=cmd, cwd=cwd, env=env, timeout=timeout, stdin=stdin_text)
             for i, a in enumerate(cmd):
                 if a == "--settings": captured["settings"] = json.loads(Path(cmd[i + 1]).read_text())
                 if a == "--agents": captured["agents"] = json.loads(Path(cmd[i + 1]).read_text())
@@ -154,7 +154,8 @@ class ClaudeCodeCommand(unittest.TestCase):
         for flag in ("--agents", "--settings", "--mcp-config", "--strict-mcp-config", "--max-turns", "--output-format", "--permission-mode"):
             self.assertIn(flag, cmd)
         self.assertEqual(captured["cwd"], ws)
-        self.assertIn("Output contract (mandatory)", cmd[2])
+        self.assertNotIn("Output contract", " ".join(cmd), "prompt must travel via stdin, not the command line")
+        self.assertIn("Output contract (mandatory)", captured["stdin"])
         deny = " ".join(captured["settings"]["permissions"]["deny"])
         self.assertIn("craftctl decide", deny); self.assertIn("craftctl dispatch", deny)
         self.assertIn("guard.py", captured["settings"]["hooks"]["PreToolUse"][0]["hooks"][0]["command"])
@@ -162,6 +163,30 @@ class ClaudeCodeCommand(unittest.TestCase):
         self.assertIn("CRAFTCTL_HOME", captured["env"])
         self.assertEqual((res.session_id, res.cost_usd, res.turns, res.errors), ("s1", 0.02, 3, []))
         self.assertEqual(res.handoff["status"], "DONE")
+
+    def test_parse_envelope_survives_header_after_output_and_noise_before(self):
+        # Reproduces host run F3ooCkRVv_dq: JSON first, then the (buffered) command header holding the prompt,
+        # whose example handoff block is NOT valid JSON. Also stderr noise before the envelope.
+        from mod_orchestra.provider import parse_claude_json, HANDOFF_INSTRUCTIONS
+        envelope = {"result": reply(GOOD), "session_id": "s", "total_cost_usd": 0.94, "num_turns": 7, "permission_denials": []}
+        raw = "warning: something\n" + json.dumps(envelope) + "\n$ claude -p --agent coder " + HANDOFF_INSTRUCTIONS + "\n"
+        out = parse_claude_json(raw)
+        self.assertEqual(out["session_id"], "s")
+        handoff, errs = extract_handoff(out["result"])
+        self.assertEqual(errs, []); self.assertEqual(handoff["status"], "DONE")
+        self.assertIsNone(parse_claude_json("no json here {not: json}"))
+
+    def test_broker_header_precedes_child_output_and_stdin_is_fed(self):
+        import os, stat
+        if os.name == "nt":
+            self.skipTest("POSIX shell script")
+        from mod_orchestra.broker import run_logged
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        d = Path(tmp.name); sh = d / "echo.sh"; sh.write_text("#!/bin/sh\ncat\n"); sh.chmod(sh.stat().st_mode | stat.S_IEXEC)
+        r = run_logged([str(sh), "x" * 500], cwd=d, log=d / "log", timeout=10, stdin_text="PROMPT-VIA-STDIN")
+        lines = (d / "log").read_text().splitlines()
+        self.assertTrue(lines[0].startswith("$ "), "header first"); self.assertLess(len(lines[0]), 300, "long args truncated")
+        self.assertEqual(lines[1], "PROMPT-VIA-STDIN"); self.assertEqual(r["exit_code"], 0)
 
     def test_missing_binary_is_a_clear_error(self):
         with patch.object(pmod.shutil, "which", return_value=None), patch.dict("os.environ", {}, clear=False):

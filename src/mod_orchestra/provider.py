@@ -123,6 +123,20 @@ def extract_handoff(text: str) -> tuple[dict | None, list[str]]:
     return obj, validate_handoff(obj)
 
 
+def parse_claude_json(raw: str) -> dict | None:
+    """Find the `--output-format json` envelope in a log that may also hold a command header, stderr
+    noise before it, and anything after it. First complete JSON object wins; nothing is assumed about order."""
+    decoder = json.JSONDecoder()
+    for line_start in (m.start() for m in re.finditer(r"(?m)^\s*\{", raw)):
+        try:
+            obj, _ = decoder.raw_decode(raw, line_start + raw[line_start:].index("{"))
+        except (ValueError, json.JSONDecodeError):
+            continue
+        if isinstance(obj, dict) and ("result" in obj or "session_id" in obj or "is_error" in obj):
+            return obj
+    return None
+
+
 class AgentProvider:
     name = "abstract"
 
@@ -173,7 +187,9 @@ def _settings_for_run(guard: Path) -> dict:
     base.setdefault("permissions", {}).setdefault("allow", [])
     # Headless runs cannot answer prompts: allow the build/test commands a worker legitimately needs.
     for rule in ("Bash(./gradlew *)", "Bash(gradlew.bat *)", "Bash(sha256sum *)", "Bash(unzip *)", "Bash(ls*)", "Bash(cat *)",
+                 "Bash(python *)", "Bash(python3 *)", "Bash(git status*)", "Bash(git diff*)", "Bash(mkdir *)",
                  "PowerShell(./gradlew *)", "PowerShell(.\\\\gradlew.bat *)", "PowerShell(gradlew.bat *)", "PowerShell(Get-FileHash *)",
+                 "PowerShell(python *)", "PowerShell(python3 *)", "PowerShell(git status*)", "PowerShell(git diff*)",
                  "Read", "Edit", "Write", "Grep", "Glob", "mcp__minecraft-orchestra__*"):
         if rule not in base["permissions"]["allow"]:
             base["permissions"]["allow"].append(rule)
@@ -210,30 +226,33 @@ class ClaudeCodeProvider(AgentProvider):
             tmp = Path(td)
             agents, settings, mcp = self._materialize(tmp)
             (tmp / "prompt.md").write_text(prompt, encoding="utf8")
-            cmd = [self.binary, "-p", prompt, "--agent", envelope.role, "--agents", str(agents),
+            cmd = [self.binary, "-p", "--agent", envelope.role, "--agents", str(agents),
                    "--settings", str(settings), "--mcp-config", str(mcp), "--strict-mcp-config",
                    "--permission-mode", "acceptEdits", "--max-turns", str(self.max_turns), "--output-format", "json"]
             env = controlled_env({"CRAFTCTL_HOME": str(HOME), "CLAUDE_PROJECT_DIR": str(envelope.workspace)})
             for passthrough in ("HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME"):
                 if passthrough in os.environ:
                     env[passthrough] = os.environ[passthrough]   # claude login/session lives under the user's home
-            record = run_logged(cmd, cwd=envelope.workspace, log=log_path, timeout=self.timeout, env=env)
+            record = run_logged(cmd, cwd=envelope.workspace, log=log_path, timeout=self.timeout, env=env, stdin_text=prompt)
         raw = log_path.read_text(encoding="utf8", errors="replace")
-        body = raw.split("\n", 1)[1] if raw.startswith("$ ") else raw
+        out = parse_claude_json(raw)
         session_id = cost = turns = None
-        text = body
-        try:
-            start = body.index("{"); end = body.rindex("}") + 1
-            out = json.loads(body[start:end])
-            text = out.get("result", "") if isinstance(out, dict) else body
-            if isinstance(out, dict):
-                session_id, cost, turns = out.get("session_id"), out.get("total_cost_usd"), out.get("num_turns")
-                if out.get("is_error"):
-                    return RunResult(record["exit_code"] or 1, record["duration_s"], log_path, raw, None,
-                                     [f"claude reported is_error: {str(text)[:300]}"], session_id, cost, turns, record["killed"])
-        except (ValueError, json.JSONDecodeError):
-            pass
+        if out is None:
+            text, errors_prefix = raw, ["claude did not print a JSON result envelope (see worker log)"]
+        else:
+            text, errors_prefix = str(out.get("result") or ""), []
+            session_id, cost, turns = out.get("session_id"), out.get("total_cost_usd"), out.get("num_turns")
+            denials = out.get("permission_denials") or []
+            if denials:
+                with log_path.open("a", encoding="utf8") as f:
+                    f.write("\n[craftctl] permission denials during run:\n")
+                    for d in denials:
+                        f.write(f"  - {d.get('tool_name')}: {json.dumps(d.get('tool_input', {}))[:300]}\n")
+            if out.get("is_error"):
+                return RunResult(record["exit_code"] or 1, record["duration_s"], log_path, raw, None,
+                                 [f"claude reported is_error: {text[:300]}"], session_id, cost, turns, record["killed"])
         handoff, errors = extract_handoff(text)
+        errors = errors_prefix + errors if handoff is None else errors
         if record["killed"]:
             errors.append(f"worker killed after {self.timeout}s timeout")
         return RunResult(record["exit_code"], record["duration_s"], log_path, raw, handoff, errors, session_id, cost, turns, record["killed"])
