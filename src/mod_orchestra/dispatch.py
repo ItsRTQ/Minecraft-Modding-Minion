@@ -186,8 +186,8 @@ def orchestrate(store: Store, pid: str, *, max_runs: int = 5, max_cost_usd: floa
         if time.time() - started > max_seconds:
             reason = f"max_seconds ({max_seconds}) reached"; break
         store.refresh_ready(pid)
-        if not any(t["state"] == "READY" and t["role"] in DISPATCHABLE_ROLES for t in store.tasks(pid)):
-            reason = "no READY tasks"; break
+        if not any(t["state"] == "READY" and t["role"] in DISPATCHABLE_ROLES and _dispatchable_now(store, pid, t) for t in store.tasks(pid)):
+            reason = "no READY tasks (or they wait on a trusted BUILD_PASS of the current source)"; break
         out = dispatch(store, pid, provider=provider)
         runs.append({k: out.get(k) for k in ("run", "task", "role", "task_state", "cost_usd", "duration_s", "error")})
         cost += float(out.get("cost_usd") or 0.0)
