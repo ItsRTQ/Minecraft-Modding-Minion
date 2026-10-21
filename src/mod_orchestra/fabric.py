@@ -315,12 +315,22 @@ def workspace_generation_info(path: Path) -> dict:
             "current": GENERATOR_VERSION, "outdated": version < GENERATOR_VERSION}
 
 
+RUNTIME_DIRS = ("run/", "build/", ".gradle/", ".mod-orchestra/", "bin/", "out/")
+
+
+def is_runtime_path(relative: str) -> bool:
+    """Directories the game, Gradle or the controller write to at runtime: never part of the source manifest."""
+    rel = relative.replace("\\", "/").lstrip("./")
+    return any(rel.startswith(d) for d in RUNTIME_DIRS)
+
+
 def current_hashes(manifest: dict) -> dict[str, str]:
-    """Generation hashes overlaid with every accepted revision, in order."""
+    """Generation hashes overlaid with every accepted revision, in order; runtime paths are ignored even if an
+    older revision recorded them (host run 5: a worker reported run/eula.txt as changed)."""
     files = dict(manifest["files"])
     for rev in manifest.get("revisions", []):
         files.update(rev["files"])
-    return files
+    return {k: v for k, v in files.items() if not is_runtime_path(k)}
 
 
 def accept_changes(path: Path, *, run_id: str, actor: str, changed: list[str]) -> dict:
@@ -332,6 +342,8 @@ def accept_changes(path: Path, *, run_id: str, actor: str, changed: list[str]) -
     files, skipped = {}, []
     for relative in changed:
         relative = relative.replace("\\", "/").lstrip("./")
+        if is_runtime_path(relative):
+            skipped.append(relative); continue
         try:
             file_path = safe_inside(path, relative)
         except InputError:

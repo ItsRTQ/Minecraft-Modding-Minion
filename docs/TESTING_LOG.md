@@ -155,10 +155,11 @@ First `craftctl dispatch` against a real `claude -p`. Project `wrap_test3`, ad-h
 
 ## Host run 5 — 2026-10-21 · RTQ · Windows · repair loop (`claude-feature/r5-repair-loop`)
 
-Fault `wrong-mapping` injected on `wrap_test3` → trusted build failed in 6.8 s → `REPAIR:1` opened → `orchestrate`: **debugger fixed it unaided (82.9 s, $0.62, `DONE`)**. v1 criterion 4: 1 of 3 faults repaired autonomously.
+Fault `wrong-mapping` injected on `wrap_test3` → trusted build failed in 6.8 s → `REPAIR:1` opened → `orchestrate`: **debugger fixed it unaided (82.9 s, $0.62, `DONE`)**. Then `missing-import` (REPAIR:2, 74 s, $0.61, DONE, one run, loop stopped for the trusted build) and `bad-loot-json`: trusted build passed, `server-smoke` booted the dedicated server in 26.8 s, read `Couldn't parse element minecraft:loot_table/wrap_test3:blocks/ruby_ore - Unknown registry key`, opened REPAIR:3; debugger fixed it (60 s, $0.41). **v1 criterion 4: 3 of 3 faults repaired autonomously** (confirming trusted build/smoke for fault 3 pending).
 
 | ID | Sev | Area | Finding | Status |
 |---|---|---|---|---|
+| E2 | High | manifest | The qa worker reported `run/eula.txt` and `run/server.properties` as changed; they were accepted into the manifest. The server rewrites both on every boot, so the next `request-build` refused with CHANGED. Runtime dirs (`run/`, `build/`, `.gradle/`, `.mod-orchestra/`) are now never accepted and ignored in validation even if an old revision recorded them. | FIXED |
 | E1 | High | orchestrate | After the repair `orchestrate` went on to the `GAME` (qa) task: 353 s and **$2.11** for a worker that ran `runServer` itself and whose `SERVER_BOOT_PASS` claim the controller cannot accept by design. Now: a repair `DONE` stops the loop (next step is the user's trusted build), and `GAME`/qa tasks are not dispatchable until a `BUILD_PASS` exists for the current source. | FIXED |
 
 ## Not yet tested

@@ -285,6 +285,18 @@ class ManifestRevisions(unittest.TestCase):
         v = validate_generated(self.root)
         self.assertEqual(v["status"], "FAIL"); self.assertIn("CHANGED: src/main/java/com/x/m/ModMain.java", v["problems"])
 
+    def test_runtime_paths_are_never_accepted_and_old_entries_are_ignored(self):
+        # host run 5 (E2): qa reported run/eula.txt and run/server.properties; the server rewrites them on every boot.
+        from mod_orchestra.fabric import accept_changes, validate_generated
+        import json as _json
+        (self.root / "run").mkdir(); (self.root / "run/eula.txt").write_text("eula=true")
+        out = accept_changes(self.root, run_id="r", actor="a", changed=["run/eula.txt", "build/libs/x.jar"])
+        self.assertEqual(out["accepted"], []); self.assertEqual(out["unchanged_or_missing"], ["run/eula.txt", "build/libs/x.jar"])
+        mf = self.root / ".mod-orchestra/generation-manifest.json"; m = _json.loads(mf.read_text())
+        m.setdefault("revisions", []).append({"run": "old", "actor": "a", "at": 0, "files": {"run/server.properties": "0" * 64}})
+        mf.write_text(_json.dumps(m))
+        self.assertEqual(validate_generated(self.root)["status"], "PASS")
+
     def test_path_escape_in_changed_files_is_ignored(self):
         from mod_orchestra.fabric import accept_changes
         out = accept_changes(self.root, run_id="r", actor="a", changed=["../../etc/passwd", "/etc/passwd"])
