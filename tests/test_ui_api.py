@@ -35,10 +35,17 @@ class UiApi(unittest.TestCase):
             t = real_token(n); cls.token_holder.setdefault("t", t); return t
         cls.p4 = patch.object(ui.secrets, "token_urlsafe", capture); cls.p4.start()
         cls.thread = threading.Thread(target=ui.serve, args=(cls.store, cls.port), daemon=True); cls.thread.start()
-        for _ in range(50):
-            if "t" in cls.token_holder: break
-            time.sleep(0.05)
-        time.sleep(0.2)
+        deadline = time.time() + 15  # slow CI runners: wait until the server actually accepts connections
+        while time.time() < deadline:
+            if "t" in cls.token_holder:
+                try:
+                    with socket.create_connection(("127.0.0.1", cls.port), timeout=0.5):
+                        break
+                except OSError:
+                    pass
+            time.sleep(0.1)
+        else:
+            raise RuntimeError("UI server did not start in time")
         workflow.new_project(cls.store, name="U", mod_id="u_mod", package="com.x.u", idea="items: gem")
         workflow.plan_project(cls.store, "u_mod"); workflow.approve_spec(cls.store, "u_mod")
 
