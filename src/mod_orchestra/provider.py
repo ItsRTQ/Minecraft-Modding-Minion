@@ -86,8 +86,8 @@ def validate_handoff(obj: object) -> list[str]:
                  for c in obj.get("checks_run", []))
         if not ok:
             problems.append("evidence.level BUILD_PASS requires a gradle command with exit_code 0 in checks_run")
-    if obj["status"] == "DONE" and obj["needs_user"]:
-        problems.append("status DONE cannot have needs_user entries; use WAITING_USER")
+    # DONE + needs_user is legitimate: the worker's part is finished and the user's next steps
+    # (request-build/decide/build/evidence) follow. WAITING_USER means the worker itself is blocked.
     return problems
 
 
@@ -103,6 +103,8 @@ Finish your reply with exactly one fenced block tagged `handoff` containing a JS
  "needs_user": ["<exact craftctl command the user must run, if any>"],
  "next_agent": "<role or none>"}
 ```
+Status: DONE = your part is complete (list the user's next craftctl steps under needs_user);
+WAITING_USER = you cannot continue until the user acts; BLOCKED = missing information; FAILED = you could not do it.
 Rules: you are running with the project workspace as your current directory. Only claim BUILD_PASS if you ran
 `./gradlew build` (or `gradlew.bat build`) here and it exited 0. Never claim client/server/in-game results.
 Never run `craftctl approve-spec|request-build|decide|build|evidence|delete|release|new`; list them under

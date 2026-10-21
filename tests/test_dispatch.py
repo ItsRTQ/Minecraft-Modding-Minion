@@ -38,8 +38,9 @@ class HandoffSchema(unittest.TestCase):
         errs = validate_handoff(GOOD | {"checks_run": []})
         self.assertTrue(any("BUILD_PASS requires" in e for e in errs))
 
-    def test_done_with_needs_user_is_contradictory(self):
-        self.assertTrue(any("cannot have needs_user" in e for e in validate_handoff(GOOD | {"needs_user": ["craftctl build x"]})))
+    def test_done_may_list_the_users_next_steps(self):
+        # host run bOAtZ3sP-qm9: a coder finishes and names the trusted-build commands for the user. Legitimate.
+        self.assertEqual(validate_handoff(GOOD | {"needs_user": ["craftctl request-build x", "craftctl build x"]}), [])
 
     def test_extract_takes_last_block_and_reports_bad_json(self):
         text = "```handoff\n{bad\n```\n" + reply(GOOD)

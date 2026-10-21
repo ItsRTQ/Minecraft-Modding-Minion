@@ -67,6 +67,8 @@ def parser() -> argparse.ArgumentParser:
     a.add_argument("project"); a.add_argument("--max-runs", type=int, default=5); a.add_argument("--max-cost-usd", type=float, default=5.0)
     a.add_argument("--max-seconds", type=int, default=3600)
     a.add_argument("--provider", choices=["claude-code", "fake"], default="claude-code"); a.add_argument("--fake-reply-file", default=None)
+    a = sub.add_parser("run", help="Show one agent run in full: handoff, error, and the end of its log")
+    a.add_argument("run_id"); a.add_argument("--lines", type=int, default=60)
     a = sub.add_parser("runs", help="List agent runs for a project")
     a.add_argument("project")
     a = sub.add_parser("delete", help="USER-ONLY: remove a project from the Footprint (and its workspace with --workspace)")
@@ -176,6 +178,17 @@ def dispatch(args: argparse.Namespace) -> object:
             reply = Path(args.fake_reply_file).read_text(encoding="utf8") if args.fake_reply_file else ""
             provider = FakeProvider(reply)
         return orchestrate(store, args.project, max_runs=args.max_runs, max_cost_usd=args.max_cost_usd, max_seconds=args.max_seconds, provider=provider)
+    if args.command == "run":
+        from .redact import redact
+        for p in store.projects():
+            for r in store.runs(p["id"]):
+                if r["id"] == args.run_id:
+                    tail = ""
+                    lp = Path(r["log_path"]) if r.get("log_path") else None
+                    if lp and lp.is_file():
+                        tail = redact("\n".join(lp.read_text(encoding="utf8", errors="replace").splitlines()[-args.lines:]))
+                    return r | {"log_tail": tail}
+        raise StateError(f"Run not found: {args.run_id}")
     if args.command == "runs":
         return [{k: v for k, v in r.items() if k != "handoff"} | {"handoff_status": (r["handoff"] or {}).get("status")} for r in store.runs(args.project)]
     if args.command == "delete":
