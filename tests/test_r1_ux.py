@@ -29,6 +29,14 @@ class OutdatedWorkspace(Base):  # H3
         m = json.loads((self.root / ".mod-orchestra/generation-manifest.json").read_text())
         self.assertEqual(m["generator_version"], GENERATOR_VERSION)
 
+    def test_missing_version_but_wrapper_present_is_fine(self):
+        # host run 4 (D8): workspaces generated between the wrapper and the version marker have no
+        # generator_version but DO ship the wrapper; they must stay buildable.
+        workflow.generate_project(self.store, "u_mod")
+        mf = self.root / ".mod-orchestra/generation-manifest.json"
+        m = json.loads(mf.read_text()); m.pop("generator_version"); mf.write_text(json.dumps(m))
+        self.assertEqual(build_mod.request_build(self.store, "u_mod")["kind"], "execute_gradle_build")
+
     def test_old_workspace_gets_specific_message(self):
         workflow.generate_project(self.store, "u_mod")
         mf = self.root / ".mod-orchestra/generation-manifest.json"
