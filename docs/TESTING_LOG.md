@@ -138,7 +138,9 @@ A3 and was stopped; it left no file changes but did open a terminal tab ("write 
 First `craftctl dispatch` against a real `claude -p`. Project `wrap_test3`, ad-hoc task `SAPPHIRE` (coder).
 
 - Run 1 `F3ooCkRVv_dq`: worker ran 155 s, exit 0, $0.94, produced a valid handoff; **controller rejected it** (D1).
-- Run 2 `N3Lv9o_C4GRT` after the fix: 76 s, 16 turns, $0.76. Worker wrote `ModMain.java`, `en_us.json`, `models/item/sapphire.json`, `textures/item/sapphire.png`, validated JSON/PNG, called `orchestra_validate_source` over MCP (`--mcp-config` works headless), could not build (D2), and reported honestly: `status WAITING_USER`, `evidence STATIC`, `needs_user` = request-build / decide / build. **Criterion 3 (controller dispatches agents; gates hold) observed end to end.**
+- Runs 2–4 (`N3Lv9o_C4GRT` 76 s $0.76 WAITING_USER; `bOAtZ3sP-qm9` 64 s $0.49 rejected by D5; `kgk-WNuFojfD` 72 s $0.44 DONE with real BUILD_PASS). Total agent cost for the sapphire task ≈ $2.63 across 4 runs, 3 of them lost to controller bugs D1/D5/D6.
+- Closing: `accept-changes N3Lv9o_C4GRT` → `validate PASS (revisions 1)` → `request-build` → `decide` → `build` exit 0 in 8.4 s through the new process broker (first SEC-002 run on Windows) → **BUILD_PASS #2, JAR sha256 `7debfd3d…69e7f2`**. v1 criterion 3 observed end to end; criterion 5 observed to build level (in-game pending).
+- Run 2 `N3Lv9o_C4GRT` detail: 76 s, 16 turns, $0.76. Worker wrote `ModMain.java`, `en_us.json`, `models/item/sapphire.json`, `textures/item/sapphire.png`, validated JSON/PNG, called `orchestra_validate_source` over MCP (`--mcp-config` works headless), could not build (D2), and reported honestly: `status WAITING_USER`, `evidence STATIC`, `needs_user` = request-build / decide / build. **Criterion 3 (controller dispatches agents; gates hold) observed end to end.**
 
 | ID | Sev | Area | Finding | Status |
 |---|---|---|---|---|
