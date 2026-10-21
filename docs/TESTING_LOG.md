@@ -145,6 +145,8 @@ First `craftctl dispatch` against a real `claude -p`. Project `wrap_test3`, ad-h
 | D1 | High | provider/broker | Log header was written to Python's buffer while the child wrote to the fd, so the header (carrying the whole prompt) landed after the JSON envelope; the parser spanned to the prompt's example handoff block and failed. Prompt now via stdin, header flushed + truncated, envelope found with `raw_decode`. | FIXED |
 | D2 | Med | provider | Worker's `./gradlew.bat build` was denied: allow list had `./gradlew` and `gradlew.bat` but not `./gradlew.bat`. Added (both shells). | FIXED |
 | D3 | High | manifest | After an agent edit, `validate` reported CHANGED and `request-build` refused, so agent work could not be built through the controller (blocks v1 criterion 5). Added manifest revisions attributed to runs; unreported edits still fail. | FIXED |
+| D5 | Med | handoff schema | Run `bOAtZ3sP-qm9` (64 s, $0.49): coder reported `DONE` + `needs_user` (the trusted-build commands); controller rejected it as contradictory. Rule was wrong: a finished coder always has user steps. DONE+needs_user allowed; semantics stated in the prompt. | FIXED |
+| D6 | Med | manifest | Run `kgk-WNuFojfD` (72 s, 11 turns, $0.44): `DONE` with real `BUILD_PASS` (gradle exit 0 + jar inspection) but `changed_files: []` because an earlier run wrote the files; acceptance only looked at the current run, so validate stayed FAIL. Now a task's edits are the union of all its runs' reports; `craftctl accept-changes <run>` (USER-ONLY) for manual acceptance. | FIXED |
 | D4 | Low | packet | Task board in the handoff packet showed `BUILD [debugger]` for projects planned before U6; cosmetic, old data. | WONTFIX |
 
 ## Not yet tested

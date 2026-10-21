@@ -289,3 +289,33 @@ class ManifestRevisions(unittest.TestCase):
         from mod_orchestra.fabric import accept_changes
         out = accept_changes(self.root, run_id="r", actor="a", changed=["../../etc/passwd", "/etc/passwd"])
         self.assertEqual(out["accepted"], [])
+
+    def test_task_edits_are_the_union_of_its_runs(self):
+        # host run kgk-WNuFojfD: an earlier run wrote the files, the final run only verified (changed_files: []).
+        from mod_orchestra.fabric import validate_generated
+        self.java.write_text(self.java.read_text() + "\n// sapphire\n")
+        self.store.add_task("m_mod", "m_mod:S", "coder", "s")
+        first = GOOD | {"task": "m_mod:S", "status": "WAITING_USER", "needs_user": ["x"], "changed_files": ["src/main/java/com/x/m/ModMain.java"],
+                        "evidence": {"level": "STATIC", "pointer": "x"}}
+        with patch("mod_orchestra.dispatch.accept_changes", side_effect=lambda *a, **k: {"accepted": [], "unchanged_or_missing": []}):
+            dispatch(self.store, "m_mod", task_id="m_mod:S", provider=FakeProvider(reply(first)))  # simulate pre-fix: nothing accepted
+        self.assertEqual(validate_generated(self.root)["status"], "FAIL")
+        self.store.requeue("m_mod:S", "again")
+        out = dispatch(self.store, "m_mod", task_id="m_mod:S", provider=FakeProvider(reply(GOOD | {"task": "m_mod:S", "changed_files": []})))
+        self.assertEqual(out["task_state"], "DONE")
+        self.assertEqual(out["handoff"]["accepted_changes"]["accepted"], ["src/main/java/com/x/m/ModMain.java"])
+        self.assertEqual(validate_generated(self.root)["status"], "PASS")
+
+    def test_user_can_accept_a_runs_changes_manually(self):
+        from mod_orchestra.dispatch import accept_run_changes
+        from mod_orchestra.fabric import validate_generated
+        self.java.write_text(self.java.read_text() + "\n// manual\n")
+        self.store.add_task("m_mod", "m_mod:U", "coder", "u")
+        h = GOOD | {"task": "m_mod:U", "status": "FAILED", "risks": ["controller bug"], "changed_files": ["src/main/java/com/x/m/ModMain.java"]}
+        out = dispatch(self.store, "m_mod", task_id="m_mod:U", provider=FakeProvider(reply(h)))
+        self.assertEqual(out["task_state"], "FAILED"); self.assertEqual(validate_generated(self.root)["status"], "FAIL")
+        acc = accept_run_changes(self.store, out["run"])
+        self.assertEqual(acc["accepted"], ["src/main/java/com/x/m/ModMain.java"])
+        self.assertEqual(validate_generated(self.root)["status"], "PASS")
+        with self.assertRaisesRegex(StateError, "Run not found"):
+            accept_run_changes(self.store, "nope")

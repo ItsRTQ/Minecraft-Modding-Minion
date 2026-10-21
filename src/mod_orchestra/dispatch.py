@@ -55,10 +55,16 @@ def apply_outcome(store: Store, pid: str, task: dict, lease: dict, run: dict, re
     h = redact_obj(result.handoff)
     status = h["status"]
     accepted = None
-    if status in ("DONE", "WAITING_USER") and h.get("changed_files"):
+    if status in ("DONE", "WAITING_USER"):
+        # A task's edits are the union of what all its runs reported (an earlier run may have written the
+        # files and a later one only verified them). Hashes are taken from the files as they are now.
+        reported = set(h.get("changed_files") or [])
+        for prev in store.runs(pid):
+            if prev["task_id"] == task["id"] and prev["handoff"]:
+                reported.update(prev["handoff"].get("changed_files") or [])
         root = Path(store.project(pid)["root"])
-        if (root / ".mod-orchestra/generation-manifest.json").is_file():
-            accepted = accept_changes(root, run_id=run["id"], actor=f"agent:{task['role']}", changed=h["changed_files"])
+        if reported and (root / ".mod-orchestra/generation-manifest.json").is_file():
+            accepted = accept_changes(root, run_id=run["id"], actor=f"agent:{task['role']}", changed=sorted(reported))
             store.add_event(pid, "controller", "CHANGES_ACCEPTED", {"run": run["id"], **accepted})
             h = h | {"accepted_changes": accepted}
     if status == "DONE":
@@ -163,3 +169,18 @@ def orchestrate(store: Store, pid: str, *, max_runs: int = 5, max_cost_usd: floa
     store.add_event(pid, "controller", "ORCHESTRATE_STOPPED", {"reason": reason, "runs": len(runs), "cost_usd": round(cost, 4)})
     return {"project": pid, "runs": runs, "total_cost_usd": round(cost, 4), "elapsed_s": round(time.time() - started, 1),
             "stopped_because": reason, "stale_runs_reconciled": stale}
+
+
+def accept_run_changes(store: Store, run_id: str) -> dict:
+    """USER-ONLY: accept the files a given run reported as changed, after reviewing its handoff."""
+    for p in store.projects():
+        for r in store.runs(p["id"]):
+            if r["id"] == run_id:
+                files = (r["handoff"] or {}).get("changed_files") or []
+                if not files:
+                    raise StateError(f"Run {run_id} reported no changed files")
+                root = Path(p["root"])
+                out = accept_changes(root, run_id=run_id, actor="user", changed=files)
+                store.add_event(p["id"], "user", "CHANGES_ACCEPTED", {"run": run_id, **out})
+                return out | {"project": p["id"], "task": r["task_id"]}
+    raise StateError(f"Run not found: {run_id}")

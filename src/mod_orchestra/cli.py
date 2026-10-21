@@ -67,6 +67,8 @@ def parser() -> argparse.ArgumentParser:
     a.add_argument("project"); a.add_argument("--max-runs", type=int, default=5); a.add_argument("--max-cost-usd", type=float, default=5.0)
     a.add_argument("--max-seconds", type=int, default=3600)
     a.add_argument("--provider", choices=["claude-code", "fake"], default="claude-code"); a.add_argument("--fake-reply-file", default=None)
+    a = sub.add_parser("accept-changes", help="USER-ONLY: accept the files a run reported as changed into the manifest (after reviewing `craftctl run <id>`)")
+    a.add_argument("run_id")
     a = sub.add_parser("run", help="Show one agent run in full: handoff, error, and the end of its log")
     a.add_argument("run_id"); a.add_argument("--lines", type=int, default=60)
     a = sub.add_parser("runs", help="List agent runs for a project")
@@ -178,6 +180,9 @@ def dispatch(args: argparse.Namespace) -> object:
             reply = Path(args.fake_reply_file).read_text(encoding="utf8") if args.fake_reply_file else ""
             provider = FakeProvider(reply)
         return orchestrate(store, args.project, max_runs=args.max_runs, max_cost_usd=args.max_cost_usd, max_seconds=args.max_seconds, provider=provider)
+    if args.command == "accept-changes":
+        from .dispatch import accept_run_changes
+        return accept_run_changes(store, args.run_id)
     if args.command == "run":
         from .redact import redact
         for p in store.projects():

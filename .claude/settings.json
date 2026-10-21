@@ -60,7 +60,9 @@
       "PowerShell(craftctl add-task*)",
       "PowerShell(craftctl dispatch*)",
       "Bash(craftctl orchestrate*)",
-      "PowerShell(craftctl orchestrate*)"
+      "PowerShell(craftctl orchestrate*)",
+      "Bash(craftctl accept-changes*)",
+      "PowerShell(craftctl accept-changes*)"
     ]
   },
   "hooks": {
