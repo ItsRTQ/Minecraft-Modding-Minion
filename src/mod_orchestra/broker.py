@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 import os
+import re
 import signal
 import subprocess
 import time
@@ -86,3 +87,49 @@ def run_logged(cmd: list[str], *, cwd: Path, log: Path, timeout: int = DEFAULT_T
             f.write(f"\n[craftctl] timeout after {timeout}s; process tree killed\n".encode())
     return {"pid": proc.pid, "exit_code": code, "killed": killed, "timeout_s": timeout,
             "duration_s": round(time.time() - started, 1), "cmd": cmd}
+
+
+def run_watch(cmd: list[str], *, cwd: Path, log: Path, timeout: int, ready: "re.Pattern[str]",
+              stop_input: str | None = None, env: dict[str, str] | None = None, grace: int = 60) -> dict:
+    """Run a long-lived process, tail its log until `ready` matches (or timeout), then ask it to stop
+    via stdin (e.g. a Minecraft server's `stop`) and wait `grace` seconds before killing the tree."""
+    env = env or controlled_env()
+    popen_kwargs: dict = {"creationflags": getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)} if os.name == "nt" else {"start_new_session": True}
+    log.parent.mkdir(parents=True, exist_ok=True)
+    started = time.time()
+    matched = False
+    with log.open("wb") as f:
+        f.write(f"$ {' '.join(cmd)}\n".encode()); f.flush()
+        proc = subprocess.Popen(cmd, cwd=str(cwd), stdout=f, stderr=subprocess.STDOUT, env=env, stdin=subprocess.PIPE, **popen_kwargs)
+        pos = 0
+        while time.time() - started < timeout and proc.poll() is None:
+            time.sleep(1.0)
+            with log.open("rb") as r:
+                r.seek(pos); chunk = r.read(); pos += len(chunk)
+            if chunk and ready.search(chunk.decode("utf-8", "replace")):
+                matched = True
+                break
+        exited_early = proc.poll() is not None and not matched
+        if proc.poll() is None:
+            if stop_input is not None:
+                try:
+                    proc.stdin.write(stop_input.encode()); proc.stdin.flush()
+                except (BrokenPipeError, OSError):
+                    pass
+            try:
+                proc.wait(timeout=grace)
+            except subprocess.TimeoutExpired:
+                _kill_tree(proc)
+                try:
+                    proc.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    pass
+        try:
+            proc.stdin.close()
+        except Exception:
+            pass
+        code = proc.returncode
+        if not matched:
+            f.write(f"\n[craftctl] {'process exited before the ready marker' if exited_early else f'ready marker not seen within {timeout}s'}\n".encode())
+    return {"pid": proc.pid, "exit_code": code, "ready": matched, "exited_early": exited_early,
+            "duration_s": round(time.time() - started, 1), "timeout_s": timeout, "cmd": cmd}

@@ -32,10 +32,13 @@ class EvidenceFlow(unittest.TestCase):
         with self.assertRaisesRegex(StateError, "needs a prior BUILD_PASS"):
             record_evidence(self.store, "e_mod", "CLIENT_BOOT_PASS", actor="user")
 
-    def test_controller_cannot_record_game_levels(self):
-        for level in ("CLIENT_BOOT_PASS", "SERVER_BOOT_PASS", "CONTENT_VERIFIED"):
+    def test_controller_cannot_record_client_or_content_levels(self):
+        for level in ("CLIENT_BOOT_PASS", "CONTENT_VERIFIED"):
             with self.assertRaisesRegex(StateError, "only be recorded by the user"):
                 record_evidence(self.store, "e_mod", level, actor="controller")
+        # SERVER_BOOT_PASS may be recorded by the controller (server-smoke observed the log) but never by a worker
+        with self.assertRaisesRegex(StateError, "never by a worker"):
+            record_evidence(self.store, "e_mod", "SERVER_BOOT_PASS", actor="agent:qa")
 
     def test_manual_build_pass_hashes_jar_and_unlocks_game_levels(self):
         jar = self.fake_jar()

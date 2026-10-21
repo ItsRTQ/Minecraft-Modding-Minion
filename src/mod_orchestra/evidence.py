@@ -15,7 +15,7 @@ from .state import Store, StateError
 from .fabric import validate_generated
 
 LEVELS = ("BUILD_PASS", "CLIENT_BOOT_PASS", "SERVER_BOOT_PASS", "CONTENT_VERIFIED")
-USER_ONLY_LEVELS = ("CLIENT_BOOT_PASS", "SERVER_BOOT_PASS", "CONTENT_VERIFIED")
+USER_ONLY_LEVELS = ("CLIENT_BOOT_PASS", "CONTENT_VERIFIED")  # SERVER_BOOT_PASS may come from craftctl server-smoke (controller observed the log)
 GAME_LEVELS = frozenset(USER_ONLY_LEVELS)
 # Project statuses in which evidence may be attached (source must exist and be unchanged).
 EVIDENCE_STATUSES = ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED")
@@ -63,7 +63,9 @@ def record_evidence(store: Store, pid: str, level: str, *, actor: str, note: str
     if level not in LEVELS:
         raise StateError(f"Unknown evidence level {level!r}; expected one of {', '.join(LEVELS)}")
     if actor != "user" and level in USER_ONLY_LEVELS:
-        raise StateError(f"{level} can only be recorded by the user; the controller never observes the game")
+        raise StateError(f"{level} can only be recorded by the user; the controller never observes the game client")
+    if level == "SERVER_BOOT_PASS" and actor not in ("user", "controller"):
+        raise StateError("SERVER_BOOT_PASS is recorded by the user or by craftctl server-smoke, never by a worker")
     proj = store.project(pid)
     if proj["status"] not in EVIDENCE_STATUSES:
         raise StateError(f"Evidence cannot be attached in status {proj['status']}")

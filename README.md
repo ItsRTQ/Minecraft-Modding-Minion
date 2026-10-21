@@ -73,7 +73,9 @@ craftctl build crystal_frontier --approval-id <approval-id>
 craftctl logs crystal_frontier
 craftctl add-task crystal_frontier --id SAPPHIRE --role coder --title "Add a sapphire item"   # USER-ONLY
 craftctl dispatch crystal_frontier --task crystal_frontier:SAPPHIRE   # USER-ONLY: runs ONE Claude Code worker
-craftctl orchestrate crystal_frontier --max-runs 3   # USER-ONLY: keep dispatching until you are needed
+craftctl orchestrate crystal_frontier --max-runs 3   # USER-ONLY: keep dispatching until you are needed; failed builds open REPAIR tasks for the debugger automatically
+craftctl request-smoke crystal_frontier && craftctl decide <id> grant && craftctl server-smoke crystal_frontier --approval-id <id>   # dedicated server boot, records SERVER_BOOT_PASS
+craftctl break crystal_frontier --fault wrong-mapping   # USER-ONLY test fixture for the repair loop
 craftctl runs crystal_frontier
 craftctl requeue crystal_frontier:SAPPHIRE   # USER-ONLY: FAILED/WAITING_USER -> READY
 craftctl evidence crystal_frontier CLIENT_BOOT_PASS --note "Loading N mods: - crystal_frontier"   # USER-ONLY
