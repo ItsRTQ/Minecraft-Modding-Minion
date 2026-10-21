@@ -26,7 +26,8 @@
 | SHA-256 file manifest and static JSON/resource existence validation | **Implemented, tested** |
 | One-use, explicitly authorized Gradle build invocation | **Implemented; not exercised against Minecraft here** |
 | Restricted MCP interface (read-only tools plus approved source generation) | **Implemented, protocol smoke-tested** |
-| 12 subagents + 12 skills (one per role in `capabilities.py`), deny rules and a PreToolUse guard | **Included; not yet exercised by a real Claude Code session (R2 proof pending)** |
+| 12 subagents + 12 skills (one per role in `capabilities.py`), deny rules and a PreToolUse guard | **Included and exercised by a real Claude Code session** |
+| Controller-driven dispatch (`craftctl dispatch`): one bounded Claude Code worker per task, schema-validated handoff, runs recorded | **Built and unit-tested with a fake provider; not yet proven against a real `claude -p` run** |
 | GeckoLib mob modeling, Blockbench MCP, fully automatic worlds | **Planned / not integrated** |
 | Real Minecraft GameTest, gameplay and multiplayer proof | **Not integrated** |
 | Windows installer/managed JDK/Gradle provisioning | **Planned** |
@@ -70,6 +71,11 @@ craftctl approvals crystal_frontier
 craftctl decide <approval-id> grant
 craftctl build crystal_frontier --approval-id <approval-id>
 craftctl logs crystal_frontier
+craftctl add-task crystal_frontier --id SAPPHIRE --role coder --title "Add a sapphire item"   # USER-ONLY
+craftctl dispatch crystal_frontier --task crystal_frontier:SAPPHIRE   # USER-ONLY: runs ONE Claude Code worker
+craftctl orchestrate crystal_frontier --max-runs 3   # USER-ONLY: keep dispatching until you are needed
+craftctl runs crystal_frontier
+craftctl requeue crystal_frontier:SAPPHIRE   # USER-ONLY: FAILED/WAITING_USER -> READY
 craftctl evidence crystal_frontier CLIENT_BOOT_PASS --note "Loading N mods: - crystal_frontier"   # USER-ONLY
 craftctl release crystal_frontier:SCAFFOLD      # USER-ONLY: break a stuck lease
 craftctl delete crystal_frontier --yes --workspace   # USER-ONLY
@@ -112,7 +118,7 @@ Tests check intake, generated JSON/PNG/file integrity, safe workspace paths, tas
 
 ## Project status, development and contributions
 
-The master architectural plan from the research review is in `docs/MASTER_PLAN_v2.md`; the forward execution plan is `docs/DEVELOPMENT_PATH.md` (`docs/ROADMAP.md` is kept as history). The origin audit includes [Universal Modder](https://github.com/rehan-remade/universal-modder), Fabric's [official example mod](https://github.com/FabricMC/fabric-example-mod), [GeckoLib](https://github.com/bernie-g/geckolib) and Blockbench MCP candidates. **These projects are not bundled or executed**; provider adoption requires license and safety review.
+The master architectural plan from the research review is in `docs/MASTER_PLAN_v2.md`; the forward execution plan is `docs/DEVELOPMENT_PATH.md` (`docs/ROADMAP.md` is kept as history). **What "done" means is fixed in `docs/V1_DEFINITION.md`**; anything outside it lives in `docs/V2_BACKLOG.md`. The origin audit includes [Universal Modder](https://github.com/rehan-remade/universal-modder), Fabric's [official example mod](https://github.com/FabricMC/fabric-example-mod), [GeckoLib](https://github.com/bernie-g/geckolib) and Blockbench MCP candidates. **These projects are not bundled or executed**; provider adoption requires license and safety review.
 
 All ordinary Python dependencies are standard-library modules. `pip install -e .` uses `setuptools` packaging; users need a working Python packaging environment. Local state/credentials are not included in the Git repo or ZIP.
 

@@ -25,8 +25,8 @@ Status legend: OPEN · FIXED(branch) · WONTFIX
 | U3 | Low | validation | Single-char identifiers rejected (regex `{1,39}` → min 2) but the message says "starting with a letter". Fix message (or allow 1 char). | FIXED (`claude-feature/round1-fixes`) |
 | U4 | Low | validation | Invalid-identifier error echoes the full offending string (tested 300 chars). Truncate to ~40. | FIXED (`claude-feature/round1-fixes`) |
 | U5 | Low | diagnose | `diagnose` with no build log returns `lines_reviewed: 1, classifications: []` instead of saying there is no log. | FIXED (`claude-feature/round1-fixes`) |
-| U6 | Low | planner | `:BUILD` task is assigned role `debugger`. Arguably `coder`/`release`; debugger should own the failure path. Design question. | OPEN |
-| U7 | Med | UI clarity | UI exposes plan/approve/generate/request-build/grant/deny/build but **no validate, logs or diagnose views**. After a failed build the user cannot see why from the UI. | OPEN |
+| U6 | Low | planner | `:BUILD` task is assigned role `debugger`. Arguably `coder`/`release`; debugger should own the failure path. Design question. | FIXED (`claude-feature/r2-dispatch`: BUILD → coder; debugger owns BUILD_FAILED) |
+| U7 | Med | UI clarity | UI exposes plan/approve/generate/request-build/grant/deny/build but **no validate, logs or diagnose views**. After a failed build the user cannot see why from the UI. | FIXED (`claude-feature/r2-dispatch`: Verification panel — validate/build log/diagnose; Evidence panel; Agent runs feed with handoff, needs_user and worker log; dispatch + requeue from the UI). Browser rendering not yet checked by RTQ. |
 | U8 | Low | UI/CLI clarity | Blocking-question message says "Update the idea in a new project" — there is no edit path, so the user must pick a new mod id. Either allow re-interpreting the idea on an unapproved project or explain the constraint. | OPEN |
 
 ### Verified OK
@@ -49,7 +49,7 @@ every tool, forbidden names, malformed frames, schema violations, path traversal
 | M1 | Low | protocol | `initialize` always answered `2025-03-26` regardless of the client's requested version. Now echoes a supported requested version, else the newest supported. | FIXED (`claude-feature/pilot-testing-r2`) |
 | M2 | Low | tools | `orchestra_validate_source` before generation leaked a raw `FileNotFoundError` with the absolute workspace path. Now a clean `StateError`. | FIXED (`claude-feature/pilot-testing-r2`) |
 | M3 | Low | tools | Argument types were not checked against `inputSchema` (`project: 123` was looked up as `"123"`). Now enforced for string properties. | FIXED (`claude-feature/pilot-testing-r2`) |
-| M4 | **High** | repo | README, CLAUDE.md and ROADMAP claim `.mcp.json` and `.claude/agents/*.md` (11 roles) ship in the repo. **Neither was ever committed.** `.mcp.json` added in round 2; 12 agents, settings deny rules and a PreToolUse guard added in `claude-feature/r2-agents`. Also found there: `skills/` lived outside `.claude/skills/`, so Claude Code never discovered them (moved). | FIXED (files) — real Claude Code session still pending (R2 proof) |
+| M4 | **High** | repo | README, CLAUDE.md and ROADMAP claim `.mcp.json` and `.claude/agents/*.md` (11 roles) ship in the repo. **Neither was ever committed.** `.mcp.json` added in round 2; 12 agents, settings deny rules and a PreToolUse guard added in `claude-feature/r2-agents`; fixed and exercised in round 3. | FIXED |
 | M5 | Low | tools | `orchestra_knowledge_search` returned absolute install paths. Now `repo:<relative>` / `home:<relative>`. | FIXED (`claude-feature/pilot-testing-r2`) |
 | M6 | Low | design | `resources/list` and `prompts/list` return Method not found. Fine for now; skills/knowledge could be exposed as Resources later. | OPEN (design) |
 | M7 | Low | design | Server is a hand-rolled JSON-RPC loop. Works, but any spec drift is on us. Evaluate the official Python SDK once a real Claude Code session confirms the current server connects. | OPEN (design) |
@@ -132,6 +132,26 @@ A3 and was stopped; it left no file changes but did open a terminal tab ("write 
 - Guard (`.claude/hooks/guard.py`) exercised with hook payloads: blocks all eight USER-ONLY commands in both spellings (`craftctl …`, `python -m mod_orchestra.cli …`), for `Bash` and `PowerShell` payloads, including when prefixed by `cd … &&`; blocks `git push`, `git reset --hard`, `git clean -fd`; allows `craftctl doctor/status`, `./gradlew build`, `git status`; researcher `Write` only under `knowledge/`. Live check: a Bash call containing `craftctl decide x grant` was refused by the running hook with the USER-ONLY message (after A3 was fixed).
 - MCP server over stdio via the module entry point (see A1). The `coder`, `coordinator`, `debugger`, `designer`, `interpreter`, `planner`, `qa`, `researcher`, `scrum-master` subagents load and `coder` runs with its skill preloaded.
 - Session environment: `git fetch` over SSH fails (`Permission denied (publickey)`) inside the tool shell, so feature branches from a session must be pushed by the user.
+
+## Host run 4 — 2026-10-21 · RTQ · Windows / Claude Code native · controller-driven dispatch (`claude-feature/r2-dispatch`)
+
+First `craftctl dispatch` against a real `claude -p`. Project `wrap_test3`, ad-hoc task `SAPPHIRE` (coder).
+
+- Run 1 `F3ooCkRVv_dq`: worker ran 155 s, exit 0, $0.94, produced a valid handoff; **controller rejected it** (D1).
+- Runs 2–4 (`N3Lv9o_C4GRT` 76 s $0.76 WAITING_USER; `bOAtZ3sP-qm9` 64 s $0.49 rejected by D5; `kgk-WNuFojfD` 72 s $0.44 DONE with real BUILD_PASS). Total agent cost for the sapphire task ≈ $2.63 across 4 runs, 3 of them lost to controller bugs D1/D5/D6.
+- Closing: `accept-changes N3Lv9o_C4GRT` → `validate PASS (revisions 1)` → `request-build` → `decide` → `build` exit 0 in 8.4 s through the new process broker (first SEC-002 run on Windows) → **BUILD_PASS #2, JAR sha256 `7debfd3d…69e7f2`**. v1 criterion 3 observed end to end. Criterion 5 closed in-game: `CLIENT_BOOT_PASS` (56 mods, `wrap_test3 1.0.0`) and `CONTENT_VERIFIED` (Sapphire in Ingredients next to Ruby) recorded by the owner.
+- Run 2 `N3Lv9o_C4GRT` detail: 76 s, 16 turns, $0.76. Worker wrote `ModMain.java`, `en_us.json`, `models/item/sapphire.json`, `textures/item/sapphire.png`, validated JSON/PNG, called `orchestra_validate_source` over MCP (`--mcp-config` works headless), could not build (D2), and reported honestly: `status WAITING_USER`, `evidence STATIC`, `needs_user` = request-build / decide / build. **Criterion 3 (controller dispatches agents; gates hold) observed end to end.**
+
+| ID | Sev | Area | Finding | Status |
+|---|---|---|---|---|
+| D1 | High | provider/broker | Log header was written to Python's buffer while the child wrote to the fd, so the header (carrying the whole prompt) landed after the JSON envelope; the parser spanned to the prompt's example handoff block and failed. Prompt now via stdin, header flushed + truncated, envelope found with `raw_decode`. | FIXED |
+| D2 | Med | provider | Worker's `./gradlew.bat build` was denied: allow list had `./gradlew` and `gradlew.bat` but not `./gradlew.bat`. Added (both shells). | FIXED |
+| D3 | High | manifest | After an agent edit, `validate` reported CHANGED and `request-build` refused, so agent work could not be built through the controller (blocks v1 criterion 5). Added manifest revisions attributed to runs; unreported edits still fail. | FIXED |
+| D5 | Med | handoff schema | Run `bOAtZ3sP-qm9` (64 s, $0.49): coder reported `DONE` + `needs_user` (the trusted-build commands); controller rejected it as contradictory. Rule was wrong: a finished coder always has user steps. DONE+needs_user allowed; semantics stated in the prompt. | FIXED |
+| D6 | Med | manifest | Run `kgk-WNuFojfD` (72 s, 11 turns, $0.44): `DONE` with real `BUILD_PASS` (gradle exit 0 + jar inspection) but `changed_files: []` because an earlier run wrote the files; acceptance only looked at the current run, so validate stayed FAIL. Now a task's edits are the union of all its runs' reports; `craftctl accept-changes <run>` (USER-ONLY) for manual acceptance. | FIXED |
+| D7 | High | build/evidence | `request-build` only accepted `SOURCE_GENERATED_UNVERIFIED`, so a project that had already been built could never be rebuilt after an agent revision ("Only a generated starter may be built"). Now any generated status is buildable; an accepted revision resets the project to `SOURCE_GENERATED_UNVERIFIED` (`VERIFICATION_RESET`) and evidence levels count only when observed on the current manifest. | FIXED |
+| D8 | Med | build | H3 check rejected `wrap_test3` ("older generator v1") although it ships the wrapper: it was generated after the wrapper landed but before `generator_version` existed. The check now keys on the real incompatibility (wrapper files absent), not the version number. | FIXED |
+| D4 | Low | packet | Task board in the handoff packet showed `BUILD [debugger]` for projects planned before U6; cosmetic, old data. | WONTFIX |
 
 ## Not yet tested
 

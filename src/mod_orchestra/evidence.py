@@ -44,10 +44,16 @@ def find_built_jar(root: Path, mod_id: str) -> Path | None:
     return jars[-1] if jars else None
 
 
+def levels_for_current_source(store: Store, pid: str, root: Path) -> set[str]:
+    """Evidence counts only if it was observed on the source as it is now (same manifest hash)."""
+    digest = manifest_digest(root)
+    return {e["level"] for e in store.evidence(pid) if e["manifest_sha256"] == digest}
+
+
 def derive_status(current: str, levels: set[str]) -> str:
     if GAME_LEVELS <= levels and "BUILD_PASS" in levels:
         return "GAME_VERIFIED"
-    if "BUILD_PASS" in levels and current in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED"):
+    if "BUILD_PASS" in levels and current in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
         return "BUILD_PASSED_GAME_UNTESTED"
     return current
 
@@ -83,7 +89,7 @@ def record_evidence(store: Store, pid: str, level: str, *, actor: str, note: str
     row = store.add_evidence(pid, level, actor, note, artifact_sha256=artifact,
                              manifest_sha256=manifest_hash,
                              payload=dict(payload or {}, jar=str(jar) if jar else None))
-    levels = {e["level"] for e in store.evidence(pid)}
+    levels = levels_for_current_source(store, pid, root)
     new_status = derive_status(proj["status"], levels)
     if new_status != proj["status"]:
         store.update_project(pid, status=new_status)

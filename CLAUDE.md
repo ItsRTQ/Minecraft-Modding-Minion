@@ -53,6 +53,10 @@ Subagents: `.claude/agents/<role>.md` (12, one per role in `capabilities.py`), e
 
 Return a concise summary with `task`, `scope`, `changed_files`, `evidence`, `risks`, `unknowns`, `needs_approval`, `next_agent`. Never claim game-tested when no Minecraft runtime was launched.
 
+## Scope control
+
+`docs/V1_DEFINITION.md` is the contract. Every feature branch names the v1 criterion it advances (`[v1:#N]` in the commit message); work that advances none goes to `docs/V2_BACKLOG.md`. Bugs are always fixed; unplanned features are not built before v1.
+
 ## References
 
 Read `docs/ARCHITECTURE.md`, `docs/SECURITY.md`, `docs/ROADMAP.md`, `docs/SETUP.md`, `knowledge/fabric/profile-1.21.1.md`, and the versioned master plan as needed.

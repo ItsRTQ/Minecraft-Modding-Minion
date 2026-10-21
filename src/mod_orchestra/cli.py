@@ -53,6 +53,26 @@ def parser() -> argparse.ArgumentParser:
     a = sub.add_parser("decide", help="USER-ONLY: grant or deny a specific operation")
     a.add_argument("approval_id")
     a.add_argument("decision", choices=["grant", "deny"])
+    a = sub.add_parser("dispatch", help="Run ONE bounded agent worker on a READY task (uses the user's installed Claude Code)")
+    a.add_argument("project"); a.add_argument("--task", default=None, help="Task id; default: first READY task")
+    a.add_argument("--provider", choices=["claude-code", "fake"], default="claude-code")
+    a.add_argument("--fake-reply-file", default=None, help="With --provider fake: file whose content is the worker's reply")
+    a = sub.add_parser("requeue", help="USER-ONLY: return a FAILED/WAITING_USER/BLOCKED task to READY")
+    a.add_argument("task_id"); a.add_argument("--reason", default="requeued by user")
+    a = sub.add_parser("add-task", help="USER-ONLY: add an ad-hoc task to a project board")
+    a.add_argument("project"); a.add_argument("--id", required=True, help="Short task suffix, e.g. SAPPHIRE -> <project>:SAPPHIRE")
+    a.add_argument("--role", required=True, choices=sorted(__import__("mod_orchestra.capabilities", fromlist=["CAPABILITIES"]).CAPABILITIES))
+    a.add_argument("--title", required=True); a.add_argument("--after", nargs="*", default=None, help="Task ids this one depends on")
+    a = sub.add_parser("orchestrate", help="USER-ONLY: dispatch READY tasks one after another until you are needed or a budget is hit")
+    a.add_argument("project"); a.add_argument("--max-runs", type=int, default=5); a.add_argument("--max-cost-usd", type=float, default=5.0)
+    a.add_argument("--max-seconds", type=int, default=3600)
+    a.add_argument("--provider", choices=["claude-code", "fake"], default="claude-code"); a.add_argument("--fake-reply-file", default=None)
+    a = sub.add_parser("accept-changes", help="USER-ONLY: accept the files a run reported as changed into the manifest (after reviewing `craftctl run <id>`)")
+    a.add_argument("run_id")
+    a = sub.add_parser("run", help="Show one agent run in full: handoff, error, and the end of its log")
+    a.add_argument("run_id"); a.add_argument("--lines", type=int, default=60)
+    a = sub.add_parser("runs", help="List agent runs for a project")
+    a.add_argument("project")
     a = sub.add_parser("delete", help="USER-ONLY: remove a project from the Footprint (and its workspace with --workspace)")
     a.add_argument("project"); a.add_argument("--yes", action="store_true", help="Required; confirms the deletion")
     a.add_argument("--workspace", action="store_true", help="Also delete the generated directory (only inside the projects root)")
@@ -139,6 +159,43 @@ def dispatch(args: argparse.Namespace) -> object:
         return {"status": args.decision.upper(), "id": args.approval_id}
     if args.command == "build":
         return build_project(store, args.project, args.approval_id)
+    if args.command == "dispatch":
+        from .dispatch import dispatch
+        from .provider import FakeProvider
+        provider = None
+        if args.provider == "fake":
+            reply = Path(args.fake_reply_file).read_text(encoding="utf8") if args.fake_reply_file else ""
+            provider = FakeProvider(reply)
+        return dispatch(store, args.project, task_id=args.task, provider=provider)
+    if args.command == "requeue":
+        return store.requeue(args.task_id, args.reason)
+    if args.command == "add-task":
+        tid = f"{args.project}:{args.id.upper()}"
+        return store.add_task(args.project, tid, args.role, args.title, after=args.after)
+    if args.command == "orchestrate":
+        from .dispatch import orchestrate
+        from .provider import FakeProvider
+        provider = None
+        if args.provider == "fake":
+            reply = Path(args.fake_reply_file).read_text(encoding="utf8") if args.fake_reply_file else ""
+            provider = FakeProvider(reply)
+        return orchestrate(store, args.project, max_runs=args.max_runs, max_cost_usd=args.max_cost_usd, max_seconds=args.max_seconds, provider=provider)
+    if args.command == "accept-changes":
+        from .dispatch import accept_run_changes
+        return accept_run_changes(store, args.run_id)
+    if args.command == "run":
+        from .redact import redact
+        for p in store.projects():
+            for r in store.runs(p["id"]):
+                if r["id"] == args.run_id:
+                    tail = ""
+                    lp = Path(r["log_path"]) if r.get("log_path") else None
+                    if lp and lp.is_file():
+                        tail = redact("\n".join(lp.read_text(encoding="utf8", errors="replace").splitlines()[-args.lines:]))
+                    return r | {"log_tail": tail}
+        raise StateError(f"Run not found: {args.run_id}")
+    if args.command == "runs":
+        return [{k: v for k, v in r.items() if k != "handoff"} | {"handoff_status": (r["handoff"] or {}).get("status")} for r in store.runs(args.project)]
     if args.command == "delete":
         if not args.yes:
             raise StateError("Refusing to delete without --yes")
