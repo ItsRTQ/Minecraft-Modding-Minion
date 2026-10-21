@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 
 from .capabilities import CAPABILITIES, handoff
+from .fabric import accept_changes
 from .provider import AgentProvider, ClaudeCodeProvider, FakeProvider, TaskEnvelope, RunResult
 from .redact import redact_obj
 from .state import Store, StateError
@@ -53,6 +54,13 @@ def apply_outcome(store: Store, pid: str, task: dict, lease: dict, run: dict, re
         return {"task_state": "FAILED", "error": error}
     h = redact_obj(result.handoff)
     status = h["status"]
+    accepted = None
+    if status in ("DONE", "WAITING_USER") and h.get("changed_files"):
+        root = Path(store.project(pid)["root"])
+        if (root / ".mod-orchestra/generation-manifest.json").is_file():
+            accepted = accept_changes(root, run_id=run["id"], actor=f"agent:{task['role']}", changed=h["changed_files"])
+            store.add_event(pid, "controller", "CHANGES_ACCEPTED", {"run": run["id"], **accepted})
+            h = h | {"accepted_changes": accepted}
     if status == "DONE":
         evidence = [{"kind": "WORKER_HANDOFF", "value": f"run:{run['id']}"},
                     {"kind": h["evidence"]["level"], "value": str(h["evidence"].get("pointer") or log)}]

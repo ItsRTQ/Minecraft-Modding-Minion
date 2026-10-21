@@ -133,6 +133,20 @@ A3 and was stopped; it left no file changes but did open a terminal tab ("write 
 - MCP server over stdio via the module entry point (see A1). The `coder`, `coordinator`, `debugger`, `designer`, `interpreter`, `planner`, `qa`, `researcher`, `scrum-master` subagents load and `coder` runs with its skill preloaded.
 - Session environment: `git fetch` over SSH fails (`Permission denied (publickey)`) inside the tool shell, so feature branches from a session must be pushed by the user.
 
+## Host run 4 — 2026-10-21 · RTQ · Windows / Claude Code native · controller-driven dispatch (`claude-feature/r2-dispatch`)
+
+First `craftctl dispatch` against a real `claude -p`. Project `wrap_test3`, ad-hoc task `SAPPHIRE` (coder).
+
+- Run 1 `F3ooCkRVv_dq`: worker ran 155 s, exit 0, $0.94, produced a valid handoff; **controller rejected it** (D1).
+- Run 2 `N3Lv9o_C4GRT` after the fix: 76 s, 16 turns, $0.76. Worker wrote `ModMain.java`, `en_us.json`, `models/item/sapphire.json`, `textures/item/sapphire.png`, validated JSON/PNG, called `orchestra_validate_source` over MCP (`--mcp-config` works headless), could not build (D2), and reported honestly: `status WAITING_USER`, `evidence STATIC`, `needs_user` = request-build / decide / build. **Criterion 3 (controller dispatches agents; gates hold) observed end to end.**
+
+| ID | Sev | Area | Finding | Status |
+|---|---|---|---|---|
+| D1 | High | provider/broker | Log header was written to Python's buffer while the child wrote to the fd, so the header (carrying the whole prompt) landed after the JSON envelope; the parser spanned to the prompt's example handoff block and failed. Prompt now via stdin, header flushed + truncated, envelope found with `raw_decode`. | FIXED |
+| D2 | Med | provider | Worker's `./gradlew.bat build` was denied: allow list had `./gradlew` and `gradlew.bat` but not `./gradlew.bat`. Added (both shells). | FIXED |
+| D3 | High | manifest | After an agent edit, `validate` reported CHANGED and `request-build` refused, so agent work could not be built through the controller (blocks v1 criterion 5). Added manifest revisions attributed to runs; unreported edits still fail. | FIXED |
+| D4 | Low | packet | Task board in the handoff packet showed `BUILD [debugger]` for projects planned before U6; cosmetic, old data. | WONTFIX |
+
 ## Not yet tested
 
 - MCP server **as connected by Claude Code** (only the hand-driven stdio run in Round 3; needs a restart after A1).

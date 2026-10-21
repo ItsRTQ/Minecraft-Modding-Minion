@@ -242,3 +242,49 @@ class Orchestrate(unittest.TestCase):
         self.assertEqual(reconcile_stale_runs(self.store, "o_mod"), [run["id"]])
         self.assertEqual(self.store.runs("o_mod")[0]["state"], "FAILED")
         self.assertEqual(reconcile_stale_runs(self.store, "o_mod"), [])
+
+
+class ManifestRevisions(unittest.TestCase):
+    """A worker's reported changes become a manifest revision; unreported changes stay CHANGED."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        base = Path(self.tmp.name); self.store = Store(base / "state.sqlite")
+        p = patch.object(workflow, "PROJECTS", base / "projects"); p.start(); self.addCleanup(p.stop)
+        (base / "projects").mkdir()
+        proj = workflow.new_project(self.store, name="M", mod_id="m_mod", package="com.x.m", idea="items: gem")
+        workflow.plan_project(self.store, "m_mod"); workflow.approve_spec(self.store, "m_mod"); workflow.generate_project(self.store, "m_mod")
+        self.root = Path(proj["root"]); self.java = self.root / "src/main/java/com/x/m/ModMain.java"
+
+    def test_reported_edit_is_accepted_and_build_can_be_requested(self):
+        from mod_orchestra import build as build_mod
+        from mod_orchestra.fabric import validate_generated
+        self.java.write_text(self.java.read_text() + "\n// sapphire\n")
+        new = self.root / "src/main/resources/assets/m_mod/models/item/sapphire.json"; new.parent.mkdir(parents=True, exist_ok=True); new.write_text("{}")
+        self.assertEqual(validate_generated(self.root)["status"], "FAIL")
+        self.store.add_task("m_mod", "m_mod:SAPPHIRE", "coder", "add sapphire")
+        h = GOOD | {"task": "m_mod:SAPPHIRE", "status": "WAITING_USER", "needs_user": ["craftctl request-build m_mod"],
+                    "changed_files": ["src/main/java/com/x/m/ModMain.java", "src/main/resources/assets/m_mod/models/item/sapphire.json", "does/not/exist.txt"],
+                    "evidence": {"level": "STATIC", "pointer": "x"}}
+        out = dispatch(self.store, "m_mod", task_id="m_mod:SAPPHIRE", provider=FakeProvider(reply(h)))
+        self.assertEqual(out["task_state"], "WAITING_USER")
+        acc = out["handoff"]["accepted_changes"]
+        self.assertEqual(acc["accepted"], ["src/main/java/com/x/m/ModMain.java", "src/main/resources/assets/m_mod/models/item/sapphire.json"])
+        self.assertEqual(acc["unchanged_or_missing"], ["does/not/exist.txt"])
+        v = validate_generated(self.root)
+        self.assertEqual((v["status"], v["revisions"]), ("PASS", 1))
+        self.assertEqual(build_mod.request_build(self.store, "m_mod")["kind"], "execute_gradle_build")
+        self.assertIn("CHANGES_ACCEPTED", [e["kind"] for e in self.store.events("m_mod")])
+
+    def test_unreported_edit_stays_changed(self):
+        from mod_orchestra.fabric import validate_generated
+        self.java.write_text(self.java.read_text() + "\n// sneaky\n")
+        self.store.add_task("m_mod", "m_mod:X", "coder", "x")
+        h = GOOD | {"task": "m_mod:X", "changed_files": ["build.gradle"]}  # claims a file it did not touch, hides the real one
+        dispatch(self.store, "m_mod", task_id="m_mod:X", provider=FakeProvider(reply(h)))
+        v = validate_generated(self.root)
+        self.assertEqual(v["status"], "FAIL"); self.assertIn("CHANGED: src/main/java/com/x/m/ModMain.java", v["problems"])
+
+    def test_path_escape_in_changed_files_is_ignored(self):
+        from mod_orchestra.fabric import accept_changes
+        out = accept_changes(self.root, run_id="r", actor="a", changed=["../../etc/passwd", "/etc/passwd"])
+        self.assertEqual(out["accepted"], [])

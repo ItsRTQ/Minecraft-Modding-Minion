@@ -186,7 +186,7 @@ def _settings_for_run(guard: Path) -> dict:
     base = json.loads((RESOURCES / "settings.json").read_text(encoding="utf8"))
     base.setdefault("permissions", {}).setdefault("allow", [])
     # Headless runs cannot answer prompts: allow the build/test commands a worker legitimately needs.
-    for rule in ("Bash(./gradlew *)", "Bash(gradlew.bat *)", "Bash(sha256sum *)", "Bash(unzip *)", "Bash(ls*)", "Bash(cat *)",
+    for rule in ("Bash(./gradlew *)", "Bash(./gradlew.bat *)", "Bash(gradlew.bat *)", "Bash(.\\\\gradlew.bat *)", "Bash(sha256sum *)", "Bash(unzip *)", "Bash(ls*)", "Bash(cat *)",
                  "Bash(python *)", "Bash(python3 *)", "Bash(git status*)", "Bash(git diff*)", "Bash(mkdir *)",
                  "PowerShell(./gradlew *)", "PowerShell(.\\\\gradlew.bat *)", "PowerShell(gradlew.bat *)", "PowerShell(Get-FileHash *)",
                  "PowerShell(python *)", "PowerShell(python3 *)", "PowerShell(git status*)", "PowerShell(git diff*)",
