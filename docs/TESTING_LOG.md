@@ -155,7 +155,7 @@ First `craftctl dispatch` against a real `claude -p`. Project `wrap_test3`, ad-h
 
 ## Host run 5 — 2026-10-21 · RTQ · Windows · repair loop (`claude-feature/r5-repair-loop`)
 
-Fault `wrong-mapping` injected on `wrap_test3` → trusted build failed in 6.8 s → `REPAIR:1` opened → `orchestrate`: **debugger fixed it unaided (82.9 s, $0.62, `DONE`)**. Then `missing-import` (REPAIR:2, 74 s, $0.61, DONE, one run, loop stopped for the trusted build) and `bad-loot-json`: trusted build passed, `server-smoke` booted the dedicated server in 26.8 s, read `Couldn't parse element minecraft:loot_table/wrap_test3:blocks/ruby_ore - Unknown registry key`, opened REPAIR:3; debugger fixed it (60 s, $0.41). **v1 criterion 4: 3 of 3 faults repaired autonomously** (confirming trusted build/smoke for fault 3 pending).
+Fault `wrong-mapping` injected on `wrap_test3` → trusted build failed in 6.8 s → `REPAIR:1` opened → `orchestrate`: **debugger fixed it unaided (82.9 s, $0.62, `DONE`)**. Then `missing-import` (REPAIR:2, 74 s, $0.61, DONE, one run, loop stopped for the trusted build) and `bad-loot-json`: trusted build passed, `server-smoke` booted the dedicated server in 26.8 s, read `Couldn't parse element minecraft:loot_table/wrap_test3:blocks/ruby_ore - Unknown registry key`, opened REPAIR:3; debugger fixed it (60 s, $0.41). Fault 3 confirmed: trusted build passed and a second `server-smoke` booted clean (`wrap_test3 1.0.0` among 44 mods, `Done (1.484s)!`, `stop` sent, clean shutdown, no mod errors) → `SERVER_BOOT_PASS` recorded by the controller. **v1 criterion 4: 3 of 3 faults repaired autonomously; total debugger cost $1.64.** `broker.run_watch` verified on Windows.
 
 | ID | Sev | Area | Finding | Status |
 |---|---|---|---|---|
