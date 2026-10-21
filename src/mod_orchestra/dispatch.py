@@ -33,14 +33,20 @@ def pick_task(store: Store, pid: str, task_id: str | None) -> dict:
     ready = [t for t in tasks if t["state"] == "READY" and t["role"] in DISPATCHABLE_ROLES]
     if not ready:
         raise StateError("No READY task to dispatch; run `craftctl next <project>` to see the board")
+    # A pending repair blocks everything else: nothing downstream is worth running on a broken build.
+    ready.sort(key=lambda t: (0 if ":REPAIR:" in t["id"] else 1, t["id"]))
     return ready[0]
 
 
 def build_envelope(store: Store, pid: str, task: dict) -> TaskEnvelope:
     proj = store.project(pid)
     packet = handoff(store, pid, task["id"])
+    extra = ""
+    if ":REPAIR:" in task["id"]:
+        from .repair import repair_context
+        extra = repair_context(store, pid)
     return TaskEnvelope(project_id=pid, task_id=task["id"], role=task["role"], title=task["title"],
-                        workspace=Path(proj["root"]), packet=packet)
+                        workspace=Path(proj["root"]), packet=packet, extra_instructions=extra)
 
 
 def apply_outcome(store: Store, pid: str, task: dict, lease: dict, run: dict, result: RunResult) -> dict:
@@ -85,7 +91,16 @@ def apply_outcome(store: Store, pid: str, task: dict, lease: dict, run: dict, re
         task_state = "FAILED"
     store.finish_run(run["id"], state=task_state, exit_code=result.exit_code, duration_s=result.duration_s, log_path=log,
                      session_id=result.session_id, cost_usd=result.cost_usd, turns=result.turns, handoff=h, error=None)
-    return {"task_state": task_state, "handoff": h}
+    outcome = {"task_state": task_state, "handoff": h}
+    # A worker that observed a failing gradle build (its own or the project's) hands the failure to the repair loop.
+    if h.get("evidence", {}).get("level") == "BUILD_FAILED" or (status == "FAILED" and ":REPAIR:" in task["id"]):
+        from .repair import open_repair_task
+        try:
+            outcome["repair"] = open_repair_task(store, pid, reason=f"worker {run['id']} ({task['role']}) reported build failure",
+                                                 source=f"run:{run['id']}")
+        except StateError as exc:
+            outcome["repair"] = {"exhausted": True, "error": str(exc)}
+    return outcome
 
 
 def provider_from_env() -> AgentProvider:
@@ -165,8 +180,13 @@ def orchestrate(store: Store, pid: str, *, max_runs: int = 5, max_cost_usd: floa
         runs.append({k: out.get(k) for k in ("run", "task", "role", "task_state", "cost_usd", "duration_s", "error")})
         cost += float(out.get("cost_usd") or 0.0)
         if out["task_state"] in HUMAN_NEEDED:
+            rep = out.get("repair") or {}
+            if rep.get("task") and not rep.get("exhausted"):
+                continue  # the controller opened a repair task; keep going, the debugger is next
             needs = (out.get("handoff") or {}).get("needs_user") or []
             reason = f"{out['task_state']} on {out['task']}" + (": " + "; ".join(needs) if needs else "")
+            if rep.get("exhausted"):
+                reason = "repair loop exhausted: " + rep.get("error", "")
             break
     store.add_event(pid, "controller", "ORCHESTRATE_STOPPED", {"reason": reason, "runs": len(runs), "cost_usd": round(cost, 4)})
     return {"project": pid, "runs": runs, "total_cost_usd": round(cost, 4), "elapsed_s": round(time.time() - started, 1),

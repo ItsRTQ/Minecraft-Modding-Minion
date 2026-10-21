@@ -1,0 +1,177 @@
+"""R5 repair loop (v1 criterion 4), fault fixtures, and dedicated-server smoke."""
+import json
+import os
+import re
+import stat
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from mod_orchestra import build as build_mod, smoke as smoke_mod, workflow
+from mod_orchestra.dispatch import dispatch, orchestrate
+from mod_orchestra.faults import inject_fault, FAULTS
+from mod_orchestra.provider import FakeProvider
+from mod_orchestra.repair import open_repair_task, MAX_ATTEMPTS
+from mod_orchestra.state import Store, StateError
+
+GOOD = {"task": "t", "status": "DONE", "scope": "s", "changed_files": [], "checks_run": [{"command": "./gradlew build", "exit_code": 0}],
+        "evidence": {"level": "BUILD_PASS", "pointer": "jar"}, "risks": [], "unknowns": [], "needs_user": [], "next_agent": "none"}
+
+
+def reply(obj):
+    return "```handoff\n" + json.dumps(obj) + "\n```\n"
+
+
+class Base(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        base = Path(self.tmp.name); self.store = Store(base / "state.sqlite")
+        p = patch.object(workflow, "PROJECTS", base / "projects"); p.start(); self.addCleanup(p.stop)
+        (base / "projects").mkdir()
+        proj = workflow.new_project(self.store, name="R", mod_id="r_mod", package="com.x.r", idea="items: gem; blocks: ore")
+        workflow.plan_project(self.store, "r_mod"); workflow.approve_spec(self.store, "r_mod"); workflow.generate_project(self.store, "r_mod")
+        self.root = Path(proj["root"])
+
+    def fake_gradle(self, exit_code):
+        f = Path(self.tmp.name) / f"gradle{exit_code}.sh"
+        f.write_text(f"#!/bin/sh\nmkdir -p build/libs; echo j > build/libs/r_mod-1.0.0.jar; echo 'error: cannot find symbol'; exit {exit_code}\n")
+        f.chmod(f.stat().st_mode | stat.S_IEXEC); return f
+
+    def tasks(self):
+        return {t["id"]: t for t in self.store.tasks("r_mod")}
+
+
+@unittest.skipIf(os.name == "nt", "POSIX shell fixtures")
+class RepairLoop(Base):
+    def controller_build(self, exit_code):
+        a = build_mod.request_build(self.store, "r_mod"); self.store.decide_approval(a["id"], True)
+        with patch.object(build_mod, "_gradle_launcher", return_value=self.fake_gradle(exit_code)):
+            return build_mod.build_project(self.store, "r_mod", a["id"])
+
+    def test_failed_controller_build_opens_repair_task_for_debugger(self):
+        out = self.controller_build(1)
+        self.assertEqual(out["status"], "BUILD_FAILED")
+        self.assertEqual(out["repair"]["task"], "r_mod:REPAIR:1")
+        t = self.tasks()["r_mod:REPAIR:1"]
+        self.assertEqual((t["role"], t["state"]), ("debugger", "READY"))
+        self.assertIn("REPAIR_OPENED", [e["kind"] for e in self.store.events("r_mod")])
+
+    def test_repair_packet_carries_diagnosis_and_log(self):
+        self.controller_build(1)
+        fake = FakeProvider(reply(GOOD | {"task": "r_mod:REPAIR:1"}))
+        dispatch(self.store, "r_mod", task_id="r_mod:REPAIR:1", provider=fake)
+        extra = fake.envelopes[0].extra_instructions
+        self.assertIn("Build failure diagnosis", extra); self.assertIn("cannot find symbol", extra); self.assertIn("Repair contract", extra)
+
+    def test_debugger_done_closes_episode_and_rebuild_is_possible(self):
+        self.controller_build(1)
+        out = dispatch(self.store, "r_mod", task_id="r_mod:REPAIR:1", provider=FakeProvider(reply(GOOD | {"task": "r_mod:REPAIR:1", "changed_files": ["build.gradle"]})))
+        self.assertEqual(out["task_state"], "DONE")
+        self.assertEqual(self.controller_build(0)["status"], "BUILD_PASS")
+        self.assertEqual(self.store.project("r_mod")["status"], "BUILD_PASSED_GAME_UNTESTED")
+
+    def test_worker_reporting_build_failed_opens_next_repair_until_exhausted(self):
+        self.controller_build(1)
+        for n in range(1, MAX_ATTEMPTS + 1):
+            out = dispatch(self.store, "r_mod", task_id=f"r_mod:REPAIR:{n}",
+                           provider=FakeProvider(reply(GOOD | {"task": f"r_mod:REPAIR:{n}", "status": "FAILED", "risks": ["still broken"],
+                                                               "evidence": {"level": "BUILD_FAILED", "pointer": "log"}, "checks_run": [{"command": "./gradlew build", "exit_code": 1}]})))
+            self.assertEqual(out["task_state"], "FAILED")
+            if n < MAX_ATTEMPTS:
+                self.assertEqual(out["repair"]["task"], f"r_mod:REPAIR:{n + 1}")
+            else:
+                self.assertTrue(out["repair"]["exhausted"])
+        self.assertIn("REPAIR_EXHAUSTED", [e["kind"] for e in self.store.events("r_mod")])
+        self.assertEqual(sum(1 for t in self.tasks() if ":REPAIR:" in t), MAX_ATTEMPTS)
+
+    def test_orchestrate_runs_the_repair_without_a_human_and_stops_when_exhausted(self):
+        self.controller_build(1)
+        calls = {"n": 0}
+        class FlakyDebugger(FakeProvider):
+            def run(self, envelope, log_path):
+                calls["n"] += 1
+                ok = calls["n"] >= 2  # first repair attempt fails, second succeeds
+                self.reply = reply(GOOD | {"task": envelope.task_id} if ok else
+                                   GOOD | {"task": envelope.task_id, "status": "FAILED", "evidence": {"level": "BUILD_FAILED", "pointer": "x"},
+                                           "checks_run": [{"command": "./gradlew build", "exit_code": 1}], "risks": ["nope"]})
+                return super().run(envelope, log_path)
+        out = orchestrate(self.store, "r_mod", max_runs=6, provider=FlakyDebugger(""))
+        states = [r["task_state"] for r in out["runs"]]
+        self.assertEqual(states[:2], ["FAILED", "DONE"], states)
+        self.assertEqual(self.tasks()["r_mod:REPAIR:2"]["state"], "DONE")
+
+
+@unittest.skipIf(os.name == "nt", "POSIX shell fixtures")
+class Faults(Base):
+    def test_each_fault_lands_and_keeps_manifest_valid(self):
+        from mod_orchestra.fabric import validate_generated
+        for name in FAULTS:
+            out = inject_fault(self.store, "r_mod", name)
+            self.assertTrue(out["file"]); self.assertEqual(validate_generated(self.root)["status"], "PASS", name)
+        java = (self.root / "src/main/java/com/x/r/ModMain.java").read_text()
+        self.assertNotIn("import net.minecraft.world.item.Item;", java); self.assertIn("new ResourceLocation(", java)
+        loot = json.loads((self.root / "src/main/resources/data/r_mod/loot_table/blocks/ore.json").read_text())
+        self.assertEqual(loot["pools"][0]["entries"][0]["name"], "r_mod:this_item_does_not_exist")
+        self.assertEqual(self.store.project("r_mod")["status"], "SOURCE_GENERATED_UNVERIFIED")
+
+    def test_unknown_fault_rejected(self):
+        with self.assertRaisesRegex(StateError, "Unknown fault"):
+            inject_fault(self.store, "r_mod", "nope")
+
+
+@unittest.skipIf(os.name == "nt", "POSIX shell fixtures")
+class ServerSmoke(Base):
+    def fake_server(self, lines, exit_code=0):
+        f = Path(self.tmp.name) / "server.sh"
+        body = "\n".join(f"echo '{l}'" for l in lines)
+        f.write_text(f"#!/bin/sh\n{body}\nread cmd\necho \"got $cmd\"\nexit {exit_code}\n")
+        f.chmod(f.stat().st_mode | stat.S_IEXEC); return f
+
+    def build_pass(self):
+        from mod_orchestra.evidence import record_evidence
+        jar = self.root / "build/libs/r_mod-1.0.0.jar"; jar.parent.mkdir(parents=True, exist_ok=True); jar.write_bytes(b"j")
+        record_evidence(self.store, "r_mod", "BUILD_PASS", actor="user", jar=jar)
+
+    def test_smoke_requires_build_pass_and_approval(self):
+        with self.assertRaisesRegex(StateError, "needs a BUILD_PASS"):
+            smoke_mod.request_smoke(self.store, "r_mod")
+        self.build_pass()
+        a = smoke_mod.request_smoke(self.store, "r_mod")
+        self.assertEqual(a["kind"], "run_dedicated_server_smoke"); self.assertIn("EULA", a["description"])
+        with self.assertRaisesRegex(StateError, "approved server smoke"):
+            smoke_mod.server_smoke(self.store, "r_mod", a["id"])
+
+    def test_boot_pass_records_server_evidence_and_stops_server(self):
+        self.build_pass()
+        a = smoke_mod.request_smoke(self.store, "r_mod"); self.store.decide_approval(a["id"], True)
+        srv = self.fake_server(["[main/INFO] (FabricLoader) Loading 3 mods:", "\t- r_mod 1.0.0", "[Server thread/INFO] (Minecraft) Done (1.2s)! For help, type \"help\""])
+        with patch.object(smoke_mod, "_gradle_launcher", return_value=srv):
+            out = smoke_mod.server_smoke(self.store, "r_mod", a["id"])
+        self.assertEqual(out["status"], "SERVER_BOOT_PASS"); self.assertTrue(out["ready"]); self.assertTrue(out["mod_loaded"])
+        self.assertIn("got stop", Path(out["log"]).read_text())
+        self.assertIn("SERVER_BOOT_PASS", [e["level"] for e in self.store.evidence("r_mod")])
+        self.assertTrue((self.root / "run" / "eula.txt").is_file())
+
+    def test_mod_error_in_log_opens_repair(self):
+        self.build_pass()
+        a = smoke_mod.request_smoke(self.store, "r_mod"); self.store.decide_approval(a["id"], True)
+        srv = self.fake_server(["\t- r_mod 1.0.0", "[Server thread/ERROR] (Minecraft) Failed to load loot table r_mod:blocks/ore: Unknown item r_mod:this_item_does_not_exist",
+                                "[Server thread/INFO] (Minecraft) Done (1.2s)! For help, type \"help\""])
+        with patch.object(smoke_mod, "_gradle_launcher", return_value=srv):
+            out = smoke_mod.server_smoke(self.store, "r_mod", a["id"])
+        self.assertEqual(out["status"], "SERVER_BOOT_FAILED"); self.assertEqual(len(out["mod_errors"]), 1)
+        self.assertEqual(out["repair"]["task"], "r_mod:REPAIR:1")
+        self.assertNotIn("SERVER_BOOT_PASS", [e["level"] for e in self.store.evidence("r_mod")])
+
+    def test_server_crash_before_done_opens_repair(self):
+        self.build_pass()
+        a = smoke_mod.request_smoke(self.store, "r_mod"); self.store.decide_approval(a["id"], True)
+        f = Path(self.tmp.name) / "crash.sh"; f.write_text("#!/bin/sh\necho '\t- r_mod 1.0.0'\necho 'java.lang.RuntimeException: boom in r_mod'\nexit 1\n"); f.chmod(0o755)
+        with patch.object(smoke_mod, "_gradle_launcher", return_value=f):
+            out = smoke_mod.server_smoke(self.store, "r_mod", a["id"])
+        self.assertEqual(out["status"], "SERVER_BOOT_FAILED"); self.assertFalse(out["ready"]); self.assertEqual(out["repair"]["task"], "r_mod:REPAIR:1")
+
+
+if __name__ == "__main__":
+    unittest.main()

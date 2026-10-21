@@ -67,6 +67,12 @@ def parser() -> argparse.ArgumentParser:
     a.add_argument("project"); a.add_argument("--max-runs", type=int, default=5); a.add_argument("--max-cost-usd", type=float, default=5.0)
     a.add_argument("--max-seconds", type=int, default=3600)
     a.add_argument("--provider", choices=["claude-code", "fake"], default="claude-code"); a.add_argument("--fake-reply-file", default=None)
+    a = sub.add_parser("request-smoke", help="USER-ONLY: request a one-use approval to run the dedicated server with the built mod")
+    a.add_argument("project")
+    a = sub.add_parser("server-smoke", help="USER-ONLY: run the dedicated server smoke (needs a granted approval); records SERVER_BOOT_PASS or opens a repair task")
+    a.add_argument("project"); a.add_argument("--approval-id", required=True)
+    a = sub.add_parser("break", help="USER-ONLY test fixture: inject a known fault (missing-import | wrong-mapping | bad-loot-json) so the repair loop can be exercised")
+    a.add_argument("project"); a.add_argument("--fault", required=True, choices=["missing-import", "wrong-mapping", "bad-loot-json"])
     a = sub.add_parser("accept-changes", help="USER-ONLY: accept the files a run reported as changed into the manifest (after reviewing `craftctl run <id>`)")
     a.add_argument("run_id")
     a = sub.add_parser("run", help="Show one agent run in full: handoff, error, and the end of its log")
@@ -180,6 +186,15 @@ def dispatch(args: argparse.Namespace) -> object:
             reply = Path(args.fake_reply_file).read_text(encoding="utf8") if args.fake_reply_file else ""
             provider = FakeProvider(reply)
         return orchestrate(store, args.project, max_runs=args.max_runs, max_cost_usd=args.max_cost_usd, max_seconds=args.max_seconds, provider=provider)
+    if args.command == "request-smoke":
+        from .smoke import request_smoke
+        return request_smoke(store, args.project)
+    if args.command == "server-smoke":
+        from .smoke import server_smoke
+        return server_smoke(store, args.project, args.approval_id)
+    if args.command == "break":
+        from .faults import inject_fault
+        return inject_fault(store, args.project, args.fault)
     if args.command == "accept-changes":
         from .dispatch import accept_run_changes
         return accept_run_changes(store, args.run_id)
