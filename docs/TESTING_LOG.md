@@ -162,6 +162,15 @@ Fault `wrong-mapping` injected on `wrap_test3` → trusted build failed in 6.8 s
 | E2 | High | manifest | The qa worker reported `run/eula.txt` and `run/server.properties` as changed; they were accepted into the manifest. The server rewrites both on every boot, so the next `request-build` refused with CHANGED. Runtime dirs (`run/`, `build/`, `.gradle/`, `.mod-orchestra/`) are now never accepted and ignored in validation even if an old revision recorded them. | FIXED |
 | E1 | High | orchestrate | After the repair `orchestrate` went on to the `GAME` (qa) task: 353 s and **$2.11** for a worker that ran `runServer` itself and whose `SERVER_BOOT_PASS` claim the controller cannot accept by design. Now: a repair `DONE` stops the loop (next step is the user's trusted build), and `GAME`/qa tasks are not dispatchable until a `BUILD_PASS` exists for the current source. | FIXED |
 
+## Host run 6 — 2026-10-22 · RTQ · Windows · static content (`claude-feature/v1-static-content`)
+
+Project `crystal_test` (2 items, 2 blocks, tab, 3 recipes, ore drop): trusted build passed; `server-smoke` booted clean with `crystal_test 1.0.0` loaded and the datapack counting **1293 recipes / 1402 advancements** (vanilla 1290 / 1399 + the mod's 3 + 3), `SERVER_BOOT_PASS` by the controller; client verified by the owner → first project at **`GAME_VERIFIED`** with all four levels on one manifest.
+
+| ID | Sev | Area | Finding | Status |
+|---|---|---|---|---|
+| F1 | Low | smoke | `server.properties` written by the smoke set `level-type=minecraft:flat` without `generator-settings`; vanilla logs `[main/ERROR] No key layers in MapLike[{}]` and falls back. Not a mod error (smoke still passed) but noise in a log that should be clean. Removed. | FIXED |
+| F2 | Low | UX | `runClient` had to be run from the right workspace by hand; running it elsewhere shows another project's mod. Added `craftctl run-client <project>` (USER-ONLY) which launches the isolated client from anywhere and prints the exact `evidence` commands. | FIXED |
+
 ## Not yet tested
 
 - MCP server **as connected by Claude Code** (only the hand-driven stdio run in Round 3; needs a restart after A1).

@@ -87,6 +87,8 @@ def parser() -> argparse.ArgumentParser:
     a.add_argument("project")
     a = sub.add_parser("server-smoke", help="USER-ONLY: run the dedicated server smoke (needs a granted approval); records SERVER_BOOT_PASS or opens a repair task")
     a.add_argument("project"); a.add_argument("--approval-id", required=True)
+    a = sub.add_parser("run-client", help="USER-ONLY: launch the game client for a project from anywhere (its isolated run/ dir); blocks until you close the game")
+    a.add_argument("project")
     a = sub.add_parser("break", help="USER-ONLY test fixture: inject a known fault (missing-import | wrong-mapping | bad-loot-json) so the repair loop can be exercised")
     a.add_argument("project"); a.add_argument("--fault", required=True, choices=["missing-import", "wrong-mapping", "bad-loot-json"])
     a = sub.add_parser("accept-changes", help="USER-ONLY: accept the files a run reported as changed into the manifest (after reviewing `craftctl run <id>`)")
@@ -223,6 +225,9 @@ def dispatch(args: argparse.Namespace) -> object:
     if args.command == "server-smoke":
         from .smoke import server_smoke
         return server_smoke(store, args.project, args.approval_id)
+    if args.command == "run-client":
+        from .smoke import run_client
+        return run_client(store, args.project)
     if args.command == "break":
         from .faults import inject_fault
         return inject_fault(store, args.project, args.fault)

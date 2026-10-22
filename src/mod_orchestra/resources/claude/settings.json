@@ -76,7 +76,9 @@
       "PowerShell(craftctl add-recipe*)",
       "PowerShell(craftctl remove-recipe*)",
       "PowerShell(craftctl add-drop*)",
-      "PowerShell(craftctl set-tab*)"
+      "PowerShell(craftctl set-tab*)",
+      "Bash(craftctl run-client*)",
+      "PowerShell(craftctl run-client*)"
     ]
   },
   "hooks": {
