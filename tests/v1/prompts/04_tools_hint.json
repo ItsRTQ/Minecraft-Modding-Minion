@@ -1,0 +1,10 @@
+{
+  "name": "04_tools_hint",
+  "idea": "An emerald mod with emerald dust and a recipe that turns 4 emeralds into 1 emerald dust, plus smelting emerald ore in a furnace.",
+  "expect": {
+    "min_items": 1,
+    "recipes_min": 2,
+    "max_questions": 1,
+    "vanilla_ingredient": "minecraft:emerald"
+  }
+}

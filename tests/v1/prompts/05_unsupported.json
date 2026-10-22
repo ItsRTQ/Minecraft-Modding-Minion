@@ -1,0 +1,9 @@
+{
+  "name": "05_unsupported",
+  "idea": "A dragon mod with a dragon boss, a dragon egg item and dragon scale armor",
+  "expect": {
+    "min_items": 1,
+    "max_questions": 3,
+    "unknown_mentions": "dragon"
+  }
+}

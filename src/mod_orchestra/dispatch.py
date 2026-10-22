@@ -57,6 +57,9 @@ def build_envelope(store: Store, pid: str, task: dict) -> TaskEnvelope:
     if ":REPAIR:" in task["id"]:
         from .repair import repair_context
         extra = repair_context(store, pid)
+    elif task["id"].endswith(":SPEC"):
+        from .interpreter import SPEC_INSTRUCTIONS
+        extra = SPEC_INSTRUCTIONS
     return TaskEnvelope(project_id=pid, task_id=task["id"], role=task["role"], title=task["title"],
                         workspace=Path(proj["root"]), packet=packet, extra_instructions=extra)
 
@@ -72,6 +75,19 @@ def apply_outcome(store: Store, pid: str, task: dict, lease: dict, run: dict, re
         return {"task_state": "FAILED", "error": error}
     h = redact_obj(result.handoff)
     status = h["status"]
+    if task["id"].endswith(":SPEC") and status in ("DONE", "WAITING_USER"):
+        from .interpreter import apply_interpretation
+        from .validation import InputError
+        try:
+            interp = apply_interpretation(store, pid, h, run["id"])
+        except (InputError, StateError) as exc:
+            error = f"interpreter proposal rejected: {exc}"
+            store.set_task_state(task["id"], worker, version, "FAILED", error=error[:500])
+            store.finish_run(run["id"], state="FAILED", exit_code=result.exit_code, duration_s=result.duration_s, log_path=log,
+                             session_id=result.session_id, cost_usd=result.cost_usd, turns=result.turns, handoff=h, error=error)
+            return {"task_state": "FAILED", "error": error, "handoff": h}
+        h = h | {"needs_user": interp["needs_user"], "interpretation": interp}
+        status = "WAITING_USER"  # the user answers or approves; the controller, not the worker, closes SPEC via approve-spec
     accepted = None
     if status in ("DONE", "WAITING_USER"):
         # A task's edits are the union of what all its runs reported (an earlier run may have written the
@@ -125,10 +141,15 @@ def provider_from_env() -> AgentProvider:
 
 def dispatch(store: Store, pid: str, *, task_id: str | None = None, provider: AgentProvider | None = None) -> dict:
     proj = store.project(pid)
-    if proj["spec_state"] != "APPROVED":
-        raise StateError("Dispatch requires a user-approved spec (craftctl approve-spec)")
     provider = provider or provider_from_env()
+    if not store.tasks(pid):
+        from .workflow import plan_project
+        plan_project(store, pid)
+    if proj["spec_state"] != "APPROVED" and task_id and not task_id.endswith(":SPEC"):
+        raise StateError("Dispatch requires a user-approved spec (craftctl approve-spec); only the SPEC task may run before approval")
     task = pick_task(store, pid, task_id)
+    if proj["spec_state"] != "APPROVED" and not task["id"].endswith(":SPEC"):
+        raise StateError("Dispatch requires a user-approved spec (craftctl approve-spec); only the SPEC task may run before approval")
     worker = f"agent:{task['role']}"
     lease = store.claim(task["id"], worker, ttl=LEASE_TTL)
     if not lease:
@@ -175,6 +196,9 @@ def orchestrate(store: Store, pid: str, *, max_runs: int = 5, max_cost_usd: floa
     """Coordinator loop: dispatch READY tasks one at a time until the user is needed or a budget is hit.
     Never crosses an approval gate: a WAITING_USER/BLOCKED/FAILED outcome ends the loop."""
     started = time.time()
+    if not store.tasks(pid):
+        from .workflow import plan_project
+        plan_project(store, pid)
     stale = reconcile_stale_runs(store, pid)
     runs, cost = [], 0.0
     reason = "no READY tasks"

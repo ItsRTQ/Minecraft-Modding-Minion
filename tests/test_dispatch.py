@@ -62,9 +62,11 @@ class Dispatch(unittest.TestCase):
     def state(self, tid):
         return next(t for t in self.store.tasks("d_mod") if t["id"] == tid)
 
-    def test_requires_approved_spec(self):
+    def test_requires_approved_spec_except_for_the_spec_task(self):
         with self.assertRaisesRegex(StateError, "user-approved spec"):
-            dispatch(self.store, "d_mod", provider=FakeProvider(reply(GOOD)))
+            dispatch(self.store, "d_mod", task_id="d_mod:SCAFFOLD", provider=FakeProvider(reply(GOOD)))
+        out = dispatch(self.store, "d_mod", task_id="d_mod:SPEC", provider=FakeProvider(reply(GOOD | {"task": "d_mod:SPEC"})))
+        self.assertEqual(out["task_state"], "FAILED"); self.assertIn("no `spec` proposal", out["error"])
 
     def test_done_handoff_completes_task_and_records_run(self):
         workflow.approve_spec(self.store, "d_mod")

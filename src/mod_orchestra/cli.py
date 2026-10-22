@@ -87,6 +87,10 @@ def parser() -> argparse.ArgumentParser:
     a.add_argument("project")
     a = sub.add_parser("server-smoke", help="USER-ONLY: run the dedicated server smoke (needs a granted approval); records SERVER_BOOT_PASS or opens a repair task")
     a.add_argument("project"); a.add_argument("--approval-id", required=True)
+    a = sub.add_parser("interpret-suite", help="USER-ONLY: run the v1 criterion-1 prompts through the real interpreter and score them (creates throwaway projects)")
+    a.add_argument("--limit", type=int, default=None); a.add_argument("--provider", choices=["claude-code", "fake"], default="claude-code"); a.add_argument("--fake-reply-file", default=None)
+    a = sub.add_parser("answer", help="USER-ONLY: answer the interpreter's questions; appends to the idea and reopens the SPEC task")
+    a.add_argument("project"); a.add_argument("text")
     a = sub.add_parser("run-client", help="USER-ONLY: launch the game client for a project from anywhere (its isolated run/ dir); blocks until you close the game")
     a.add_argument("project")
     a = sub.add_parser("break", help="USER-ONLY test fixture: inject a known fault (missing-import | wrong-mapping | bad-loot-json) so the repair loop can be exercised")
@@ -225,6 +229,14 @@ def dispatch(args: argparse.Namespace) -> object:
     if args.command == "server-smoke":
         from .smoke import server_smoke
         return server_smoke(store, args.project, args.approval_id)
+    if args.command == "interpret-suite":
+        from .suite import run_suite
+        from .provider import FakeProvider
+        provider = FakeProvider(Path(args.fake_reply_file).read_text(encoding="utf8") if args.fake_reply_file else "") if args.provider == "fake" else None
+        return run_suite(store, provider=provider, limit=args.limit)
+    if args.command == "answer":
+        from .interpreter import answer
+        return answer(store, args.project, args.text)
     if args.command == "run-client":
         from .smoke import run_client
         return run_client(store, args.project)

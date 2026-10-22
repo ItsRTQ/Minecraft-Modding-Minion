@@ -78,7 +78,11 @@
       "PowerShell(craftctl add-drop*)",
       "PowerShell(craftctl set-tab*)",
       "Bash(craftctl run-client*)",
-      "PowerShell(craftctl run-client*)"
+      "PowerShell(craftctl run-client*)",
+      "Bash(craftctl answer*)",
+      "PowerShell(craftctl answer*)",
+      "Bash(craftctl interpret-suite*)",
+      "PowerShell(craftctl interpret-suite*)"
     ]
   },
   "hooks": {

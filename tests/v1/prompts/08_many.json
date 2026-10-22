@@ -1,0 +1,11 @@
+{
+  "name": "08_many",
+  "idea": "Six gems: topaz, onyx, jade, amber, opal, garnet. Each has an ore. Everything in one tab called Gemstones.",
+  "expect": {
+    "min_items": 6,
+    "min_blocks": 6,
+    "tab": true,
+    "drops_min": 6,
+    "max_questions": 1
+  }
+}

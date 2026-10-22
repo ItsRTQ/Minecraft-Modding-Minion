@@ -66,6 +66,10 @@ def validate_handoff(obj: object) -> list[str]:
             problems.append(f"missing field: {key}")
     if problems:
         return problems
+    if "questions" in obj and not isinstance(obj["questions"], list):
+        problems.append("questions must be a list")
+    if "spec" in obj and not isinstance(obj["spec"], dict):
+        problems.append("spec must be an object")
     if obj["status"] not in HANDOFF_STATUSES:
         problems.append(f"status must be one of {HANDOFF_STATUSES}, got {obj['status']!r}")
     for key in ("changed_files", "checks_run", "risks", "unknowns", "needs_user"):
