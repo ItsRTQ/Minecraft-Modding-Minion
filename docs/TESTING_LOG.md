@@ -164,7 +164,7 @@ Fault `wrong-mapping` injected on `wrap_test3` → trusted build failed in 6.8 s
 
 ## Host run 6 — 2026-10-22 · RTQ · Windows · static content (`claude-feature/v1-static-content`)
 
-Project `crystal_test` (2 items, 2 blocks, tab, 3 recipes, ore drop): trusted build passed; `server-smoke` booted clean with `crystal_test 1.0.0` loaded and the datapack counting **1293 recipes / 1402 advancements** (vanilla 1290 / 1399 + the mod's 3 + 3), `SERVER_BOOT_PASS` by the controller; client verified by the owner → first project at **`GAME_VERIFIED`** with all four levels on one manifest.
+Project `crystal_test` (2 items, 2 blocks, tab, 3 recipes, ore drop): trusted build passed; `server-smoke` booted clean with `crystal_test 1.0.0` loaded and the datapack counting **1293 recipes / 1402 advancements** (vanilla 1290 / 1399 + the mod's 3 + 3), `SERVER_BOOT_PASS` by the controller; client verified by the owner (tab with 4 entries, recipe-book unlock, 9→1 and 1→9 crafting, furnace, ore drops with Fortune, Silk Touch returns the ore — each one tried) → first project at **`GAME_VERIFIED`** with all four levels on one manifest. **v1 criterion 2 observed.**
 
 | ID | Sev | Area | Finding | Status |
 |---|---|---|---|---|
