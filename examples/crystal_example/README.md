@@ -13,4 +13,4 @@ Minecraft 1.21.1 / Fabric Loader 0.19.5 / Loom 1.18.4 / Mojang mappings / compil
 
 No existing Minecraft launcher installation is needed to compile, but network access is needed on initial Gradle resolution.
 
-Your idea: items: sky crystal, lunar gem; blocks: crystal stone
+Your idea: items: sky crystal, lunar gem; blocks: crystal stone, crystal ore; tab: Crystal Example
