@@ -174,6 +174,22 @@ class ServerSmoke(Base):
         self.assertEqual(out["repair"]["task"], "r_mod:REPAIR:1")
         self.assertNotIn("SERVER_BOOT_PASS", [e["level"] for e in self.store.evidence("r_mod")])
 
+    def test_smoke_properties_have_no_flat_preset(self):
+        self.build_pass()
+        a = smoke_mod.request_smoke(self.store, "r_mod"); self.store.decide_approval(a["id"], True)
+        srv = self.fake_server(["\t- r_mod 1.0.0", "[Server thread/INFO] (Minecraft) Done (1.2s)! For help, type \"help\""])
+        with patch.object(smoke_mod, "_gradle_launcher", return_value=srv):
+            smoke_mod.server_smoke(self.store, "r_mod", a["id"])
+        self.assertNotIn("level-type", (self.root / "run" / "server.properties").read_text())
+
+    def test_run_client_reports_mod_loaded_and_next_steps(self):
+        self.build_pass()
+        srv = self.fake_server(["[main/INFO] (FabricLoader) Loading 56 mods:", "\t- r_mod 1.0.0"])
+        with patch.object(smoke_mod, "_gradle_launcher", return_value=srv):
+            out = smoke_mod.run_client(self.store, "r_mod")
+        self.assertTrue(out["mod_loaded"]); self.assertEqual(out["mods_loaded"], 56)
+        self.assertIn("craftctl evidence r_mod CLIENT_BOOT_PASS", out["next"][0])
+
     def test_server_crash_before_done_opens_repair(self):
         self.build_pass()
         a = smoke_mod.request_smoke(self.store, "r_mod"); self.store.decide_approval(a["id"], True)

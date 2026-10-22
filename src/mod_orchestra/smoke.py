@@ -66,7 +66,7 @@ def server_smoke(store: Store, pid: str, approval_id: str) -> dict:
     (run_dir / "eula.txt").write_text("eula=true\n", encoding="utf8")
     props = run_dir / "server.properties"
     if not props.is_file():
-        props.write_text("online-mode=false\nserver-port=25599\nmax-players=1\nview-distance=2\nlevel-type=minecraft\\:flat\n", encoding="utf8")
+        props.write_text("online-mode=false\nserver-port=25599\nmax-players=1\nview-distance=2\n", encoding="utf8")  # no level-type: flat w/o generator-settings logs an ERROR (F1)
     log = smoke_log_path(root)
     rec = run_watch([str(gradle), "--no-daemon", "--console=plain", "runServer"], cwd=root, log=log, timeout=SMOKE_TIMEOUT,
                     ready=READY, stop_input="stop\n")
@@ -88,3 +88,27 @@ def server_smoke(store: Store, pid: str, approval_id: str) -> dict:
         except StateError as exc:
             result["repair"] = {"exhausted": True, "error": str(exc)}
     return result
+
+
+def run_client(store: Store, pid: str) -> dict:
+    """Launch the game client for this project from any directory (no approval: it is the same action as
+    `gradlew runClient` the user already runs by hand, in the project's isolated run/ dir). Blocks until the
+    game closes; the user watches the window, so nothing is recorded automatically."""
+    proj = store.project(pid)
+    root = Path(proj["root"])
+    if proj["status"] not in BUILDABLE_STATUSES:
+        raise StateError("Generate and build first")
+    gradle = _gradle_launcher(root)
+    if gradle is None:
+        raise StateError("No Gradle wrapper in workspace")
+    log = root / ".mod-orchestra" / "logs" / "latest-client.log"
+    from .broker import run_logged
+    rec = run_logged([str(gradle), "--no-daemon", "--console=plain", "runClient"], cwd=root, log=log, timeout=6 * 3600)
+    text = log.read_text(encoding="utf8", errors="replace")
+    loaded = bool(re.search(rf"^\s*- {re.escape(pid)} ", text, re.M))
+    mods = re.search(r"Loading (\d+) mods", text)
+    store.add_event(pid, "user", "CLIENT_RUN", {"exit_code": rec["exit_code"], "duration_s": rec["duration_s"], "mod_loaded": loaded})
+    return {"project": pid, "exit_code": rec["exit_code"], "duration_s": rec["duration_s"], "mod_loaded": loaded,
+            "mods_loaded": int(mods.group(1)) if mods else None, "log": str(log),
+            "next": [f'craftctl evidence {pid} CLIENT_BOOT_PASS --note "Loading {mods.group(1) if mods else "N"} mods: - {pid} 1.0.0"' if loaded else "client did not load the mod; check the log",
+                     f'craftctl evidence {pid} CONTENT_VERIFIED --note "<exactly what you saw>"']}

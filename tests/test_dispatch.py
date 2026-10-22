@@ -124,6 +124,7 @@ class ClaudeCodeCommand(unittest.TestCase):
         agents = _load_agent_definitions()
         self.assertEqual(len(agents), 12)
         self.assertIn("# Preloaded skill: coder", agents["coder"]["prompt"])
+        self.assertIn("# Preloaded skill: recipes", agents["coder"]["prompt"])
         self.assertIn("mcp__minecraft-orchestra__orchestra_generate_source", agents["coder"]["tools"])
         self.assertNotIn("Edit", agents["release"].get("tools", []))
 

@@ -173,10 +173,12 @@ def _load_agent_definitions() -> dict:
             if ":" in line and not line.startswith("---") and not line.startswith("  "):
                 k, _, v = line.partition(":"); fm[k.strip()] = v.strip().strip('"')
         name = fm.get("name") or path.stem
-        skill = RESOURCES / "skills" / name / "SKILL.md"
         prompt = body.strip()
-        if skill.is_file():
-            prompt += "\n\n# Preloaded skill: " + name + "\n" + skill.read_text(encoding="utf8")
+        preload = [l.strip()[2:] for l in head.splitlines() if l.strip().startswith("- ")] or [name]
+        for sk in preload:
+            skill = RESOURCES / "skills" / sk / "SKILL.md"
+            if skill.is_file():
+                prompt += "\n\n# Preloaded skill: " + sk + "\n" + skill.read_text(encoding="utf8")
         entry = {"description": fm.get("description", name), "prompt": prompt}
         if fm.get("tools"):
             entry["tools"] = [t.strip() for t in fm["tools"].split(",") if t.strip()]
