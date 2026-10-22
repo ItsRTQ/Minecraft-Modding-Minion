@@ -4,6 +4,7 @@ description: Turns a user's mod idea into a precise spec and asks at most three 
 tools: Read, Grep, Glob, mcp__minecraft-orchestra__orchestra_project_status, mcp__minecraft-orchestra__orchestra_knowledge_search
 skills:
   - interpreter
+  - recipes
 model: inherit
 ---
 

@@ -67,10 +67,32 @@ def parser() -> argparse.ArgumentParser:
     a.add_argument("project"); a.add_argument("--max-runs", type=int, default=5); a.add_argument("--max-cost-usd", type=float, default=5.0)
     a.add_argument("--max-seconds", type=int, default=3600)
     a.add_argument("--provider", choices=["claude-code", "fake"], default="claude-code"); a.add_argument("--fake-reply-file", default=None)
+    a = sub.add_parser("add-recipe", help="USER-ONLY (before generate): add a recipe to the spec; returns the spec to DRAFT")
+    a.add_argument("project"); a.add_argument("--id", required=True, help="recipe file name, snake_case")
+    a.add_argument("--kind", required=True, choices=["shaped", "shapeless", "smelting", "blasting", "smoking", "campfire_cooking"])
+    a.add_argument("--result", required=True, help="local id (ruby_block) or namespaced (minecraft:diamond)")
+    a.add_argument("--count", type=int, default=1)
+    a.add_argument("--pattern", nargs="*", default=None, help="shaped: 1-3 rows, e.g. --pattern 'RRR' 'RRR' 'RRR' or 'R' ' S' ' S' (use spaces for empty)")
+    a.add_argument("--key", nargs="*", default=None, help="shaped: SYMBOL=ingredient, e.g. R=ruby S=minecraft:stick P='#minecraft:planks'")
+    a.add_argument("--ingredients", nargs="*", default=None, help="shapeless (1-9) or cooking (exactly 1)")
+    a.add_argument("--xp", type=float, default=0.0); a.add_argument("--time", type=int, default=200, help="cooking ticks (200 = 10 s)")
+    a = sub.add_parser("remove-recipe", help="USER-ONLY (before generate)"); a.add_argument("project"); a.add_argument("--id", required=True)
+    a = sub.add_parser("add-drop", help="USER-ONLY (before generate): block drops an item instead of itself (ore-style)")
+    a.add_argument("project"); a.add_argument("--block", required=True); a.add_argument("--item", required=True)
+    a.add_argument("--min", type=int, default=1); a.add_argument("--max", type=int, default=1)
+    a.add_argument("--fortune", action="store_true"); a.add_argument("--silk-touch", action="store_true")
+    a = sub.add_parser("set-tab", help="USER-ONLY (before generate): give the mod its own creative tab")
+    a.add_argument("project"); a.add_argument("--label", default=None, help="omit to remove the tab"); a.add_argument("--icon", default=None, help="local item/block id")
     a = sub.add_parser("request-smoke", help="USER-ONLY: request a one-use approval to run the dedicated server with the built mod")
     a.add_argument("project")
     a = sub.add_parser("server-smoke", help="USER-ONLY: run the dedicated server smoke (needs a granted approval); records SERVER_BOOT_PASS or opens a repair task")
     a.add_argument("project"); a.add_argument("--approval-id", required=True)
+    a = sub.add_parser("interpret-suite", help="USER-ONLY: run the v1 criterion-1 prompts through the real interpreter and score them (creates throwaway projects)")
+    a.add_argument("--limit", type=int, default=None); a.add_argument("--provider", choices=["claude-code", "fake"], default="claude-code"); a.add_argument("--fake-reply-file", default=None)
+    a = sub.add_parser("answer", help="USER-ONLY: answer the interpreter's questions; appends to the idea and reopens the SPEC task")
+    a.add_argument("project"); a.add_argument("text")
+    a = sub.add_parser("run-client", help="USER-ONLY: launch the game client for a project from anywhere (its isolated run/ dir); blocks until you close the game")
+    a.add_argument("project")
     a = sub.add_parser("break", help="USER-ONLY test fixture: inject a known fault (missing-import | wrong-mapping | bad-loot-json) so the repair loop can be exercised")
     a.add_argument("project"); a.add_argument("--fault", required=True, choices=["missing-import", "wrong-mapping", "bad-loot-json"])
     a = sub.add_parser("accept-changes", help="USER-ONLY: accept the files a run reported as changed into the manifest (after reviewing `craftctl run <id>`)")
@@ -186,12 +208,38 @@ def dispatch(args: argparse.Namespace) -> object:
             reply = Path(args.fake_reply_file).read_text(encoding="utf8") if args.fake_reply_file else ""
             provider = FakeProvider(reply)
         return orchestrate(store, args.project, max_runs=args.max_runs, max_cost_usd=args.max_cost_usd, max_seconds=args.max_seconds, provider=provider)
+    if args.command == "add-recipe":
+        from .specedit import add_recipe
+        key = dict(kv.split("=", 1) for kv in (args.key or []))
+        return add_recipe(store, args.project, recipe_id=args.id, kind=args.kind, result=args.result, count=args.count,
+                          pattern=args.pattern, key=key, ingredients=args.ingredients, experience=args.xp, cooking_time=args.time)
+    if args.command == "remove-recipe":
+        from .specedit import remove_recipe
+        return remove_recipe(store, args.project, args.id)
+    if args.command == "add-drop":
+        from .specedit import add_drop
+        return add_drop(store, args.project, block=args.block, item=args.item, count_min=args.min, count_max=args.max,
+                        fortune=args.fortune, silk_touch=args.silk_touch)
+    if args.command == "set-tab":
+        from .specedit import set_tab
+        return set_tab(store, args.project, label=args.label, icon=args.icon)
     if args.command == "request-smoke":
         from .smoke import request_smoke
         return request_smoke(store, args.project)
     if args.command == "server-smoke":
         from .smoke import server_smoke
         return server_smoke(store, args.project, args.approval_id)
+    if args.command == "interpret-suite":
+        from .suite import run_suite
+        from .provider import FakeProvider
+        provider = FakeProvider(Path(args.fake_reply_file).read_text(encoding="utf8") if args.fake_reply_file else "") if args.provider == "fake" else None
+        return run_suite(store, provider=provider, limit=args.limit)
+    if args.command == "answer":
+        from .interpreter import answer
+        return answer(store, args.project, args.text)
+    if args.command == "run-client":
+        from .smoke import run_client
+        return run_client(store, args.project)
     if args.command == "break":
         from .faults import inject_fault
         return inject_fault(store, args.project, args.fault)

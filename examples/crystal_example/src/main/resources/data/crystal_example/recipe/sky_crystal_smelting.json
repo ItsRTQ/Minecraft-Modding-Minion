@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:smelting",
+  "category": "misc",
+  "ingredient": {
+    "item": "crystal_example:crystal_ore"
+  },
+  "result": {
+    "id": "crystal_example:sky_crystal"
+  },
+  "experience": 0.7,
+  "cookingtime": 200
+}

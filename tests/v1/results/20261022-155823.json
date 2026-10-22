@@ -1,0 +1,177 @@
+{
+ "date": "20261022-155823",
+ "passed": 7,
+ "total": 10,
+ "total_cost_usd": 2.5499,
+ "criterion_pass": 10,
+ "note": "host run 7 (RTQ, Windows, real claude -p). All 10 proposals valid and <=3 questions (criterion); 7/10 at the stricter per-prompt max_questions bar.",
+ "results": [
+  {
+   "prompt": "01_simple_en",
+   "pass": true,
+   "fails": [],
+   "questions": 0,
+   "features": [
+    "item:ruby",
+    "block:ruby_ore",
+    "block:ruby_block"
+   ],
+   "recipes": [
+    "ruby_block",
+    "ruby_from_block",
+    "ruby_from_smelting_ruby_ore"
+   ],
+   "drops": 1,
+   "tab": "Ruby",
+   "cost_usd": 0.1689,
+   "duration_s": 25.8
+  },
+  {
+   "prompt": "02_simple_es",
+   "pass": true,
+   "fails": [],
+   "questions": 0,
+   "features": [
+    "item:sapphire",
+    "block:sapphire_ore"
+   ],
+   "recipes": [
+    "sapphire_from_smelting"
+   ],
+   "drops": 1,
+   "tab": "Zafiros",
+   "cost_usd": 0.166,
+   "duration_s": 32.8
+  },
+  {
+   "prompt": "03_vague",
+   "pass": true,
+   "fails": [],
+   "questions": 2,
+   "features": [
+    "item:crystal_shard",
+    "item:crystal",
+    "block:crystal_ore",
+    "block:deepslate_crystal_ore",
+    "block:crystal_block"
+   ],
+   "recipes": 7,
+   "drops": 3,
+   "tab": "Crystals",
+   "cost_usd": 0.2949,
+   "duration_s": 46.1
+  },
+  {
+   "prompt": "04_tools_hint",
+   "pass": false,
+   "fails": [
+    "questions 2 > 1"
+   ],
+   "questions": 2,
+   "note": "asked because vanilla already smelts emerald ore into emerald — legitimate",
+   "features": [
+    "item:emerald_dust"
+   ],
+   "recipes": 3,
+   "drops": 0,
+   "tab": "Emerald Mod",
+   "cost_usd": 0.3759,
+   "duration_s": 61.8
+  },
+  {
+   "prompt": "05_unsupported",
+   "pass": true,
+   "fails": [],
+   "questions": 3,
+   "features": [
+    "item:dragon_egg"
+   ],
+   "recipes": 0,
+   "drops": 0,
+   "tab": "Dragon Mod",
+   "cost_usd": 0.2706,
+   "duration_s": 56.3
+  },
+  {
+   "prompt": "06_mixed_lang",
+   "pass": true,
+   "fails": [],
+   "questions": 0,
+   "features": [
+    "item:moonstone",
+    "item:sunstone",
+    "block:moonstone_block",
+    "block:sunstone_block"
+   ],
+   "recipes": 2,
+   "drops": 2,
+   "tab": "Moonstone y Sunstone",
+   "cost_usd": 0.3146,
+   "duration_s": 47.4
+  },
+  {
+   "prompt": "07_grammar",
+   "pass": false,
+   "fails": [
+    "questions 1 > 0"
+   ],
+   "questions": 1,
+   "note": "asked whether to add recipes nobody mentioned — scope question, instruction tightened",
+   "features": [
+    "item:copper_coin",
+    "item:silver_coin",
+    "block:vault_block"
+   ],
+   "recipes": 0,
+   "drops": 1,
+   "tab": "Coins",
+   "cost_usd": 0.1688,
+   "duration_s": 31.1
+  },
+  {
+   "prompt": "08_many",
+   "pass": true,
+   "fails": [],
+   "questions": 0,
+   "features": 12,
+   "recipes": 6,
+   "drops": 6,
+   "tab": "Gemstones",
+   "cost_usd": 0.2369,
+   "duration_s": 31.7
+  },
+  {
+   "prompt": "09_extend",
+   "pass": false,
+   "fails": [
+    "questions 2 > 1"
+   ],
+   "questions": 2,
+   "note": "correctly noticed there is no existing mod in the workspace — fixture was flawed",
+   "features": [
+    "item:sapphire",
+    "block:sapphire_ore"
+   ],
+   "recipes": 1,
+   "drops": 1,
+   "tab": null,
+   "cost_usd": 0.3227,
+   "duration_s": 49.5
+  },
+  {
+   "prompt": "10_typos_terse",
+   "pass": true,
+   "fails": [],
+   "questions": 1,
+   "features": [
+    "item:obsidian_shard",
+    "block:obsidian_shard_block"
+   ],
+   "recipes": 2,
+   "drops": 1,
+   "tab": "Obsidian Shard",
+   "cost_usd": 0.2305,
+   "duration_s": 30.7
+  }
+ ]
+}

@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "crystal_example:crystal_stone"
+    }
+  ],
+  "result": {
+    "id": "crystal_example:sky_crystal",
+    "count": 9
+  }
+}

@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 AGENTS = ROOT / ".claude/agents"
 SKILLS = ROOT / ".claude/skills"
 GUARD = ROOT / ".claude/hooks/guard.py"
-USER_ONLY = ("approve-spec", "request-build", "decide", "build", "evidence", "delete", "release", "new", "requeue", "add-task", "dispatch", "orchestrate", "accept-changes", "break", "server-smoke", "request-smoke")
+USER_ONLY = ("approve-spec", "request-build", "decide", "build", "evidence", "delete", "release", "new", "requeue", "add-task", "dispatch", "orchestrate", "accept-changes", "break", "server-smoke", "request-smoke", "add-recipe", "remove-recipe", "add-drop", "set-tab", "run-client", "answer", "interpret-suite")
 
 
 def frontmatter(path: Path) -> dict:
@@ -40,14 +40,16 @@ class AgentFiles(unittest.TestCase):
     def test_one_agent_and_one_skill_per_role(self):
         roles = set(CAPABILITIES)
         self.assertEqual({p.stem for p in AGENTS.glob("*.md")}, roles)
-        self.assertEqual({p.parent.name for p in SKILLS.glob("*/SKILL.md")}, roles)
+        self.assertTrue(roles <= {p.parent.name for p in SKILLS.glob("*/SKILL.md")})  # roles + shared skills (recipes)
 
     def test_frontmatter_is_valid_and_preloads_matching_skill(self):
         for path in AGENTS.glob("*.md"):
             fm = frontmatter(path)
             self.assertEqual(fm["name"], path.stem, path)
             self.assertTrue(fm.get("description"), path)
-            self.assertEqual(fm.get("skills"), [path.stem], path)
+            self.assertEqual(fm.get("skills", [])[0], path.stem, path)
+            for sk in fm.get("skills", []):
+                self.assertTrue((SKILLS / sk / "SKILL.md").is_file(), f"{path.name} preloads missing skill {sk}")
             self.assertTrue(fm.get("tools"), path)
 
     def test_no_agent_lists_a_user_only_mcp_tool_or_unknown_mcp_tool(self):

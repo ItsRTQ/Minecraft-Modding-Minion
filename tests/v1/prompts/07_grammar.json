@@ -1,0 +1,10 @@
+{
+  "name": "07_grammar",
+  "idea": "items: copper coin, silver coin; blocks: vault block; tab: Coins",
+  "expect": {
+    "min_items": 2,
+    "min_blocks": 1,
+    "tab": true,
+    "max_questions": 0
+  }
+}

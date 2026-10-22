@@ -66,6 +66,10 @@ def validate_handoff(obj: object) -> list[str]:
             problems.append(f"missing field: {key}")
     if problems:
         return problems
+    if "questions" in obj and not isinstance(obj["questions"], list):
+        problems.append("questions must be a list")
+    if "spec" in obj and not isinstance(obj["spec"], dict):
+        problems.append("spec must be an object")
     if obj["status"] not in HANDOFF_STATUSES:
         problems.append(f"status must be one of {HANDOFF_STATUSES}, got {obj['status']!r}")
     for key in ("changed_files", "checks_run", "risks", "unknowns", "needs_user"):
@@ -173,10 +177,12 @@ def _load_agent_definitions() -> dict:
             if ":" in line and not line.startswith("---") and not line.startswith("  "):
                 k, _, v = line.partition(":"); fm[k.strip()] = v.strip().strip('"')
         name = fm.get("name") or path.stem
-        skill = RESOURCES / "skills" / name / "SKILL.md"
         prompt = body.strip()
-        if skill.is_file():
-            prompt += "\n\n# Preloaded skill: " + name + "\n" + skill.read_text(encoding="utf8")
+        preload = [l.strip()[2:] for l in head.splitlines() if l.strip().startswith("- ")] or [name]
+        for sk in preload:
+            skill = RESOURCES / "skills" / sk / "SKILL.md"
+            if skill.is_file():
+                prompt += "\n\n# Preloaded skill: " + sk + "\n" + skill.read_text(encoding="utf8")
         entry = {"description": fm.get("description", name), "prompt": prompt}
         if fm.get("tools"):
             entry["tools"] = [t.strip() for t in fm["tools"].split(",") if t.strip()]

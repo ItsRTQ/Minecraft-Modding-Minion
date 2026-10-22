@@ -1,6 +1,7 @@
 {
+  "block.crystal_example.crystal_ore": "crystal ore",
   "block.crystal_example.crystal_stone": "crystal stone",
   "item.crystal_example.lunar_gem": "lunar gem",
-  "item.crystal_example.sapphire": "sapphire",
-  "item.crystal_example.sky_crystal": "sky crystal"
+  "item.crystal_example.sky_crystal": "sky crystal",
+  "itemGroup.crystal_example.crystal_example_tab": "Crystal Example"
 }

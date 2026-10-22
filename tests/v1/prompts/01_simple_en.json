@@ -1,0 +1,11 @@
+{
+  "name": "01_simple_en",
+  "idea": "A ruby mod: ruby gem, ruby ore that drops rubies, and a ruby block made of 9 rubies.",
+  "expect": {
+    "min_items": 1,
+    "min_blocks": 2,
+    "recipes_min": 2,
+    "drops_min": 1,
+    "max_questions": 1
+  }
+}

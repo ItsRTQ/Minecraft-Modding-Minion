@@ -1,0 +1,10 @@
+{
+  "name": "06_mixed_lang",
+  "idea": "Un mod con moonstone (piedra lunar) y sunstone, con un bloque decorativo de cada una hecho de 4 piedras.",
+  "expect": {
+    "min_items": 2,
+    "min_blocks": 2,
+    "recipes_min": 2,
+    "max_questions": 1
+  }
+}

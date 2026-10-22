@@ -68,7 +68,21 @@
       "Bash(craftctl request-smoke*)",
       "PowerShell(craftctl break*)",
       "PowerShell(craftctl server-smoke*)",
-      "PowerShell(craftctl request-smoke*)"
+      "PowerShell(craftctl request-smoke*)",
+      "Bash(craftctl add-recipe*)",
+      "Bash(craftctl remove-recipe*)",
+      "Bash(craftctl add-drop*)",
+      "Bash(craftctl set-tab*)",
+      "PowerShell(craftctl add-recipe*)",
+      "PowerShell(craftctl remove-recipe*)",
+      "PowerShell(craftctl add-drop*)",
+      "PowerShell(craftctl set-tab*)",
+      "Bash(craftctl run-client*)",
+      "PowerShell(craftctl run-client*)",
+      "Bash(craftctl answer*)",
+      "PowerShell(craftctl answer*)",
+      "Bash(craftctl interpret-suite*)",
+      "PowerShell(craftctl interpret-suite*)"
     ]
   },
   "hooks": {

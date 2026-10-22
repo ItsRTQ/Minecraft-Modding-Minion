@@ -165,6 +165,17 @@ class Store:
         with self.tx() as con:
             return [dict(row) for row in con.execute("SELECT id,name,root,status,spec_state,created_at FROM projects ORDER BY created_at DESC")]
 
+    def replace_spec(self, pid: str, spec: dict, *, actor: str, reason: str) -> None:
+        """USER-ONLY: rewrite the spec. Any change invalidates a previous approval (spec_state -> DRAFT)."""
+        with self.tx() as con:
+            row = con.execute("SELECT status FROM projects WHERE id=?", (pid,)).fetchone()
+            if row is None:
+                raise StateError("Unknown project")
+            if row["status"] not in ("IDEA", "PLAN_READY"):
+                raise StateError(f"The spec cannot change once source is generated (status {row['status']}); create a new project or add content as agent tasks")
+            con.execute("UPDATE projects SET spec_json=?, spec_state='DRAFT' WHERE id=?", (json.dumps(spec, sort_keys=True), pid))
+            self.event(con, pid, actor, "SPEC_CHANGED", {"reason": reason[:200]})
+
     def update_project(self, pid: str, *, status: str | None = None, spec_state: str | None = None) -> None:
         with self.tx() as con:
             if not con.execute("SELECT 1 FROM projects WHERE id=?", (pid,)).fetchone():

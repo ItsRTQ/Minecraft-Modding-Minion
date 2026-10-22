@@ -14,6 +14,10 @@ from .validation import InputError, project_id
 def new_project(store: Store, *, name: str, mod_id: str, package: str, idea: str, profile: str | None = None) -> dict:
     pid = project_id(mod_id)
     spec = interpret(name=name, mod_id=pid, package=package, idea=idea, profile=profile or PROFILE["id"])
+    if not spec.features:   # free-text idea: nothing the regex grammar could extract; the interpreter agent fills the spec
+        spec = spec.__class__(**{**spec.__dict__, "questions": [
+            "Idea recorded as free text. Run `craftctl dispatch <id> --task <id>:SPEC` (or `craftctl orchestrate <id>`) so the interpreter proposes a spec, "
+            "or rewrite the idea as 'items: a, b; blocks: c; tab: Label'."]})
     root = (PROJECTS / pid).resolve()
     if root.exists() and any(root.iterdir()):
         raise InputError("Workspace already exists; never overwrite an existing project")
@@ -50,13 +54,16 @@ def approve_spec(store: Store, pid: str) -> None:
     project = store.project(pid)
     spec = read_spec(project["spec"])
     if spec.questions:
-        raise StateError("Blocking questions remain. Update the idea in a new project: " + " | ".join(spec.questions))
+        raise StateError("Open questions remain; answer them with: craftctl answer " + pid + ' "<answer>" — ' + " | ".join(spec.questions))
     if project["spec_state"] != "DRAFT":
         raise StateError("Spec is already approved")
     store.update_project(pid, spec_state="APPROVED")
     if not store.tasks(pid):
         plan_project(store, pid)
     tid = pid + ":SPEC"
+    state = next((t["state"] for t in store.tasks(pid) if t["id"] == tid), None)
+    if state in ("WAITING_USER", "FAILED", "BLOCKED"):   # an interpreter pass left it parked; approval closes it
+        store.requeue(tid, "approved by user")
     task = store.claim(tid, "interpreter")
     if task is None or not store.finish(tid, "interpreter", task["version"], [{"kind": "SPEC_REVIEW", "value": hashlib.sha256(json.dumps(spec.to_dict(), sort_keys=True).encode()).hexdigest()}]):
         raise StateError("Failed to complete SPEC task")

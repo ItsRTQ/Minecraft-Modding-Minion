@@ -16,7 +16,7 @@ import zlib
 from pathlib import Path
 from .state import StateError
 from .config import PROFILE, WRAPPER_DIR, WRAPPER_FILES, GENERATOR_VERSION
-from .spec import Spec
+from .spec import Spec, Recipe, Drop, resolve_ingredient, resolve_result
 from .validation import InputError, safe_inside, ensure_new_directory
 
 
@@ -241,6 +241,14 @@ Your idea: {spec.idea}
         "import net.minecraft.world.item.Item;",
         "import net.minecraft.world.level.block.Block;",
         "import net.minecraft.world.level.block.state.BlockBehaviour;",
+    ] + ([
+        "import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;",
+        "import net.minecraft.core.registries.Registries;",
+        "import net.minecraft.network.chat.Component;",
+        "import net.minecraft.resources.ResourceKey;",
+        "import net.minecraft.world.item.CreativeModeTab;",
+        "import net.minecraft.world.item.ItemStack;",
+    ] if spec.tab else []) + [
         "",
         "public class ModMain implements ModInitializer {",
         f'    public static final String MOD_ID = "{spec.mod_id}";',
@@ -257,11 +265,25 @@ Your idea: {spec.idea}
         else:
             lines.append(f'    public static final Block {varname} = Registry.register(BuiltInRegistries.BLOCK, id("{feature.identifier}"), new Block(BlockBehaviour.Properties.of().strength(3.0F)));')
             lines.append(f'    public static final Item {varname}_ITEM = Registry.register(BuiltInRegistries.ITEM, id("{feature.identifier}"), new BlockItem({varname}, new Item.Properties()));')
+    def item_const(feature):
+        return feature.identifier.upper() + ("_ITEM" if feature.kind == "block" else "")
+    if spec.tab:
+        icon = next((f for f in spec.features if f.identifier == spec.tab_icon), spec.features[0])
+        lines += ["",
+                  f'    public static final ResourceKey<CreativeModeTab> TAB_KEY = ResourceKey.create(Registries.CREATIVE_MODE_TAB, id("{tab_id(spec)}"));',
+                  "    public static final CreativeModeTab TAB = FabricItemGroup.builder()",
+                  f"        .icon(() -> new ItemStack({item_const(icon)}))",
+                  f'        .title(Component.translatable("itemGroup.{spec.mod_id}.{tab_id(spec)}"))',
+                  "        .displayItems((params, output) -> {"]
+        for feature in spec.features:
+            lines.append(f"            output.accept({item_const(feature)});")
+        lines += ["        })", "        .build();"]
     lines += ["", "    @Override", "    public void onInitialize() {"]
+    if spec.tab:
+        lines.append("        Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB, TAB_KEY, TAB);")
     for feature in spec.features:
         group = "BUILDING_BLOCKS" if feature.kind == "block" else "INGREDIENTS"
-        suffix = "_ITEM" if feature.kind == "block" else ""
-        lines.append(f"        ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.{group}).register(entries -> entries.accept({feature.identifier.upper()}{suffix}));")
+        lines.append(f"        ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.{group}).register(entries -> entries.accept({item_const(feature)}));")
     lines += ["    }", "}"]
     put(f"{java_dir}/ModMain.java", "\n".join(lines) + "\n")
     put("src/main/resources/fabric.mod.json", json.dumps({
@@ -285,11 +307,84 @@ Your idea: {spec.idea}
             put(f"{res}/models/block/{key}.json", json.dumps({"parent": "block/cube_all", "textures": {"all": f"{spec.mod_id}:block/{key}"}}, indent=2) + "\n")
             put(f"{res}/models/item/{key}.json", json.dumps({"parent": f"{spec.mod_id}:block/{key}"}, indent=2) + "\n")
             put(f"{res}/textures/block/{key}.png", placeholder_png(spec.mod_id + "/" + key))
-            put(f"src/main/resources/data/{spec.mod_id}/loot_table/blocks/{key}.json", json.dumps({"type": "minecraft:block", "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": f"{spec.mod_id}:{key}"}], "conditions": [{"condition": "minecraft:survives_explosion"}]}]}, indent=2) + "\n")
+            drop = next((d for d in spec.drops if d.block == key), None)
+            put(f"src/main/resources/data/{spec.mod_id}/loot_table/blocks/{key}.json", json.dumps(loot_table_json(spec, key, drop), indent=2) + "\n")
+    for recipe in spec.recipes:
+        put(f"src/main/resources/data/{spec.mod_id}/recipe/{recipe.id}.json", json.dumps(recipe_json(spec, recipe), indent=2) + "\n")
+        put(f"src/main/resources/data/{spec.mod_id}/advancement/recipes/{recipe.id}.json", json.dumps(recipe_advancement_json(spec, recipe), indent=2) + "\n")
+    if spec.tab:
+        lang[f"itemGroup.{spec.mod_id}.{tab_id(spec)}"] = spec.tab
     put(f"{res}/lang/en_us.json", json.dumps(lang, indent=2, sort_keys=True) + "\n")
     manifest = {"generator": "mod-orchestra 0.1.0", "generator_version": GENERATOR_VERSION, "status": "GENERATED_UNVERIFIED", "profile": p["id"], "files": written.copy(), "build_verified": False, "runtime_verified": False}
     put(".mod-orchestra/generation-manifest.json", json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     return {"path": str(directory), "files": len(written), "status": "GENERATED_UNVERIFIED", "manifest": str(directory / ".mod-orchestra/generation-manifest.json")}
+
+
+def tab_id(spec: Spec) -> str:
+    return f"{spec.mod_id}_tab"
+
+
+def recipe_json(spec: Spec, r: Recipe) -> dict:
+    """Vanilla 1.21.1 recipe JSON (result as an item stack object with `id`)."""
+    ids = spec.local_ids()
+    result = {"id": resolve_result(ids, spec.mod_id, r.result), "count": r.count}
+    if r.kind == "shaped":
+        out = {"type": "minecraft:crafting_shaped", "category": "misc", "pattern": list(r.pattern),
+               "key": {sym: resolve_ingredient(ids, spec.mod_id, ing) for sym, ing in r.key.items()}, "result": result}
+    elif r.kind == "shapeless":
+        out = {"type": "minecraft:crafting_shapeless", "category": "misc",
+               "ingredients": [resolve_ingredient(ids, spec.mod_id, ing) for ing in r.ingredients], "result": result}
+    else:
+        out = {"type": f"minecraft:{r.kind}", "category": "misc", "ingredient": resolve_ingredient(ids, spec.mod_id, r.ingredients[0]),
+               "result": {"id": result["id"]}, "experience": r.experience, "cookingtime": r.cooking_time}
+    if r.group:
+        out["group"] = r.group
+    return out
+
+
+def _recipe_inputs(spec: Spec, r: Recipe) -> list[str]:
+    ids = spec.local_ids()
+    raw = list(r.key.values()) if r.kind == "shaped" else list(r.ingredients)
+    out = []
+    for ing in raw:
+        obj = resolve_ingredient(ids, spec.mod_id, ing)
+        if "item" in obj and obj["item"] not in out:
+            out.append(obj["item"])
+    return out
+
+
+def recipe_advancement_json(spec: Spec, r: Recipe) -> dict:
+    """Unlock advancement so the recipe shows in the recipe book once the player has any input item."""
+    inputs = _recipe_inputs(spec, r)
+    rid = f"{spec.mod_id}:{r.id}"
+    criteria = {"has_the_recipe": {"trigger": "minecraft:recipe_unlocked", "conditions": {"recipe": rid}}}
+    requirement = ["has_the_recipe"]
+    if inputs:
+        criteria["has_input"] = {"trigger": "minecraft:inventory_changed", "conditions": {"items": [{"items": inputs}]}}
+        requirement.append("has_input")
+    return {"parent": "minecraft:recipes/root", "criteria": criteria, "requirements": [requirement], "rewards": {"recipes": [rid]}}
+
+
+def loot_table_json(spec: Spec, block_key: str, drop: Drop | None) -> dict:
+    """Drop-self by default; with a Drop rule, the vanilla ore shape: silk touch -> block, else item with
+    optional count range, Fortune (ore_drops) and explosion decay."""
+    self_id = f"{spec.mod_id}:{block_key}"
+    if drop is None:
+        return {"type": "minecraft:block", "pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": self_id}],
+                                                      "conditions": [{"condition": "minecraft:survives_explosion"}]}]}
+    item_id = resolve_result(spec.local_ids(), spec.mod_id, drop.item)
+    functions = []
+    if (drop.count_min, drop.count_max) != (1, 1):
+        functions.append({"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": drop.count_min, "max": drop.count_max}})
+    if drop.fortune:
+        functions.append({"function": "minecraft:apply_bonus", "enchantment": "minecraft:fortune", "formula": "minecraft:ore_drops"})
+    functions.append({"function": "minecraft:explosion_decay"})
+    item_entry = {"type": "minecraft:item", "name": item_id, "functions": functions}
+    if not drop.silk_touch:
+        return {"type": "minecraft:block", "pools": [{"rolls": 1, "entries": [item_entry]}]}
+    silk_entry = {"type": "minecraft:item", "name": self_id, "conditions": [{"condition": "minecraft:match_tool", "predicate": {
+        "predicates": {"minecraft:enchantments": [{"enchantments": "minecraft:silk_touch", "levels": {"min": 1}}]}}}]}
+    return {"type": "minecraft:block", "pools": [{"rolls": 1, "entries": [{"type": "minecraft:alternatives", "children": [silk_entry, item_entry]}]}]}
 
 
 def verified_wrapper_file(relative: str, expected_sha256: str) -> bytes:
