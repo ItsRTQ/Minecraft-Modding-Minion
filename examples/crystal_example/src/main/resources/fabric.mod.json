@@ -8,13 +8,17 @@
   "entrypoints": {
     "main": [
       "com.example.crystalexample.ModMain"
+    ],
+    "client": [
+      "com.example.crystalexample.client.ModClient"
     ]
   },
   "depends": {
     "fabricloader": ">=0.19.5",
     "minecraft": "~1.21.1",
     "java": ">=21",
-    "fabric-api": "*"
+    "fabric-api": "*",
+    "geckolib": ">=4.7"
   },
   "license": "ARR"
 }

@@ -82,7 +82,7 @@ jobs:
           CRAFTCTL_HOME: ${{ runner.temp }}/craft
         run: |
           set -euo pipefail
-          craftctl new --name "CI Mod" --id ci_mod --package com.example.cimod --idea "items: ci gem, ci dust; blocks: ci ore" > /dev/null
+          craftctl new --name "CI Mod" --id ci_mod --package com.example.cimod --idea "items: ci gem, ci dust; blocks: ci ore; mobs: ci critter; tab: CI Mod" > /dev/null
           craftctl plan ci_mod > /dev/null
           craftctl approve-spec ci_mod > /dev/null
           craftctl generate ci_mod > /dev/null

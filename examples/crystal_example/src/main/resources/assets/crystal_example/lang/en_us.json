@@ -1,6 +1,8 @@
 {
   "block.crystal_example.crystal_ore": "crystal ore",
   "block.crystal_example.crystal_stone": "crystal stone",
+  "entity.crystal_example.crystal_critter": "Crystal Critter",
+  "item.crystal_example.crystal_critter_spawn_egg": "Crystal Critter Spawn Egg",
   "item.crystal_example.lunar_gem": "lunar gem",
   "item.crystal_example.sky_crystal": "sky crystal",
   "itemGroup.crystal_example.crystal_example_tab": "Crystal Example"
