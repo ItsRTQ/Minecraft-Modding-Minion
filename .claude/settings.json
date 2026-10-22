@@ -62,7 +62,13 @@
       "Bash(craftctl orchestrate*)",
       "PowerShell(craftctl orchestrate*)",
       "Bash(craftctl accept-changes*)",
-      "PowerShell(craftctl accept-changes*)"
+      "PowerShell(craftctl accept-changes*)",
+      "Bash(craftctl break*)",
+      "Bash(craftctl server-smoke*)",
+      "Bash(craftctl request-smoke*)",
+      "PowerShell(craftctl break*)",
+      "PowerShell(craftctl server-smoke*)",
+      "PowerShell(craftctl request-smoke*)"
     ]
   },
   "hooks": {

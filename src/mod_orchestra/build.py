@@ -87,6 +87,11 @@ def build_project(store: Store, pid: str, approval_id: str) -> dict:
         result["evidence"] = {"id": ev["id"], "artifact_sha256": ev["artifact_sha256"]}
     else:
         store.update_project(pid, status="BUILD_FAILED")
+        from .repair import open_repair_task
+        try:
+            result["repair"] = open_repair_task(store, pid, reason=f"craftctl build exit {code}", source="controller-build")
+        except StateError as exc:
+            result["repair"] = {"exhausted": True, "error": str(exc)}
     return result
 
 
