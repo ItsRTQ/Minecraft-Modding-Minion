@@ -119,8 +119,8 @@ class Suite(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
         base = Path(tmp.name); store = Store(base / "state.sqlite")
         prompts = base / "prompts"; prompts.mkdir()
-        (prompts / "a.json").write_text(json.dumps({"name": "a_case", "idea": "crystals please", "expect": {"min_items": 1, "min_blocks": 2, "tab": True, "max_questions": 0}}))
-        (prompts / "b.json").write_text(json.dumps({"name": "b_case", "idea": "dragon boss", "expect": {"min_items": 1, "unknown_mentions": "dragon", "max_questions": 3}}))
+        (prompts / "01.json").write_text(json.dumps({"name": "01_a_case", "idea": "crystals please", "expect": {"min_items": 1, "min_blocks": 2, "tab": True, "max_questions": 0}}))
+        (prompts / "02.json").write_text(json.dumps({"name": "02_b_case", "idea": "dragon boss", "expect": {"min_items": 1, "unknown_mentions": "dragon", "max_questions": 3}}))
         with patch.object(workflow, "PROJECTS", base / "projects"):
             (base / "projects").mkdir()
             class Echo(FakeProvider):

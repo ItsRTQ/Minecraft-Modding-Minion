@@ -40,7 +40,7 @@ def run_suite(store: Store, *, provider: AgentProvider | None = None, prompts_di
     for f in files:
         case = json.loads(f.read_text(encoding="utf8"))
         pid = f"v1q1_{case['name'][:12].replace('-', '_')}_{stamp[-6:]}"
-        workflow.new_project(store, name=f"Suite {case['name']}", mod_id=pid, package=f"com.suite.{case['name'].split('_')[0]}x", idea=case["idea"])
+        workflow.new_project(store, name=f"Suite {case['name']}", mod_id=pid, package=f"com.suite.p{case['name'].split('_')[0]}", idea=case["idea"])
         out = dispatch(store, pid, task_id=f"{pid}:SPEC", provider=provider)
         spec = store.project(pid)["spec"]
         questions = spec.get("questions", [])
