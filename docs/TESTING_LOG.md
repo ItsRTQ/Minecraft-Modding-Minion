@@ -171,6 +171,16 @@ Project `crystal_test` (2 items, 2 blocks, tab, 3 recipes, ore drop): trusted bu
 | F1 | Low | smoke | `server.properties` written by the smoke set `level-type=minecraft:flat` without `generator-settings`; vanilla logs `[main/ERROR] No key layers in MapLike[{}]` and falls back. Not a mod error (smoke still passed) but noise in a log that should be clean. Removed. | FIXED |
 | F2 | Low | UX | `runClient` had to be run from the right workspace by hand; running it elsewhere shows another project's mod. Added `craftctl run-client <project>` (USER-ONLY) which launches the isolated client from anywhere and prints the exact `evidence` commands. | FIXED |
 
+## Host run 7 — 2026-10-22 · RTQ · Windows · interpreter suite (`claude-feature/r3-interpreter`)
+
+`craftctl interpret-suite`: 10 prompts (EN/ES, vague, grammar, unsupported, typos) through the real interpreter. **10/10 valid proposals, 0 controller rejections, every prompt ≤ 3 questions**, $2.55 total, 25–62 s each. Stricter per-prompt bar: 7/10. Results: `tests/v1/results/20261022-155823.json`. **v1 criterion 1 observed.**
+
+| ID | Sev | Area | Finding | Status |
+|---|---|---|---|---|
+| G1 | Low | interpreter | Asked whether to add recipes to a prompt that mentioned none (07). Instruction tightened: never ask about optional additions; omit and note under assumptions. | FIXED (instruction) |
+| G2 | Low | fixtures | 04 asked a legitimate question (vanilla already smelts emerald ore); 09's "extend the existing crystal mod" had no existing mod (that is criterion 5). Expectations/fixture adjusted. | FIXED |
+| G3 | Low | interpreter | "make it cool" (03) produced deepslate variants and blasting recipes — reasonable for that prompt, but the no-scope-widening rule is now explicit. | NOTED |
+
 ## Not yet tested
 
 - MCP server **as connected by Claude Code** (only the hand-driven stdio run in Round 3; needs a restart after A1).

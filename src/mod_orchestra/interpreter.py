@@ -24,8 +24,10 @@ If the idea mentions things the generator cannot build (mobs, biomes, dimensions
 tools with custom durability, GUIs, commands), keep the user's wish in `unknowns` and ask about it only
 if it blocks the rest; never fake it as an item.
 
-Ask at most {MAX_QUESTIONS} questions, and only when the answer changes files: ambiguous counts, missing
-ingredients for a recipe the user implied, or which block an ore should drop from. Prefer sensible vanilla
+Ask at most {MAX_QUESTIONS} questions, and only when the answer changes files the user DID ask for: ambiguous
+counts, missing ingredients for a recipe the user implied, or which block an ore should drop from. Never ask
+whether to ADD something they did not mention (extra recipes, variants, deepslate ores, a tab): if they did
+not ask for it, leave it out and note it once under `assumptions`. A clear idea deserves zero questions. Prefer sensible vanilla
 defaults (ore → 1 gem, Fortune, Silk Touch; 9 gems ↔ 1 block; smelting 0.7 xp / 200 ticks) and state them
 in `assumptions` instead of asking. Write everything in English identifiers (snake_case) even if the user
 wrote in Spanish; keep labels in the user's language.
