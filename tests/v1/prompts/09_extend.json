@@ -1,0 +1,11 @@
+{
+  "name": "09_extend",
+  "idea": "A sapphire mod: sapphire gem and sapphire ore; the ore should smelt into sapphire and drop sapphires when mined. No tab needed.",
+  "expect": {
+    "min_items": 1,
+    "min_blocks": 1,
+    "recipes_min": 1,
+    "drops_min": 1,
+    "max_questions": 1
+  }
+}

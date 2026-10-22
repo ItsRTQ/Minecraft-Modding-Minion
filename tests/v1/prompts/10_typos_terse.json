@@ -1,0 +1,10 @@
+{
+  "name": "10_typos_terse",
+  "idea": "pls mod w/ obsidian shard + shard block (9 shards) thx",
+  "expect": {
+    "min_items": 1,
+    "min_blocks": 1,
+    "recipes_min": 1,
+    "max_questions": 1
+  }
+}

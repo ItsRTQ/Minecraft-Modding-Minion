@@ -1,0 +1,8 @@
+{
+  "name": "03_vague",
+  "idea": "something with crystals, make it cool",
+  "expect": {
+    "min_items": 1,
+    "max_questions": 3
+  }
+}

@@ -50,6 +50,7 @@ The UI prints a **localhost-only URL containing an ephemeral authentication toke
 ### Run through the CLI instead
 
 ```powershell
+craftctl new --name "Crystal Frontier"  # free text works too: the interpreter agent proposes the spec (craftctl dispatch <id> --task <id>:SPEC)
 craftctl new --name "Crystal Frontier" --id crystal_frontier --package com.example.crystalfrontier --idea "items: sky crystal, lunar gem; blocks: crystal stone"
 craftctl add-recipe crystal_frontier --id frontier_block --kind shaped --result frontier_block --pattern CCC CCC CCC --key C=crystal   # USER-ONLY, before generate
 craftctl add-drop crystal_frontier --block crystal_ore --item crystal --min 1 --max 2 --fortune --silk-touch

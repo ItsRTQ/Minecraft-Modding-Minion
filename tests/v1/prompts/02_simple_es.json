@@ -1,0 +1,11 @@
+{
+  "name": "02_simple_es",
+  "idea": "Quiero un mod de zafiros: una gema de zafiro, un mineral que suelte zafiros y una pestaña propia para el mod.",
+  "expect": {
+    "min_items": 1,
+    "min_blocks": 1,
+    "tab": true,
+    "drops_min": 1,
+    "max_questions": 1
+  }
+}
