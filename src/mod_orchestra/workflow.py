@@ -115,7 +115,7 @@ def unavailable_message(store: Store, task_id: str) -> str:
 
 
 def rmtree_long(path: Path) -> None:
-    """shutil.rmtree that survives Windows MAX_PATH (Loom caches nest very deep): use the \\?\ prefix there."""
+    r"""shutil.rmtree that survives Windows MAX_PATH (Loom caches nest very deep): use the \\?\ prefix there."""
     target = str(path)
     if os.name == "nt" and not target.startswith("\\\\?\\"):
         target = "\\\\?\\" + target
