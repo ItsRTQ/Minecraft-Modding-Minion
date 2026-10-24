@@ -190,8 +190,8 @@ scratch workspace (`%LOCALAPPDATA%/Temp/mo-r6/projects/critter_scratch`, 32 file
 exercised it there. **Nothing below is recorded in the Footprint**; `critter_test` as a controller project still
 has to be created, built and smoked by RTQ (commands at the end of this section).
 
-Observed, in order: `python -m unittest discover -s tests` 159 tests, 1 failure (H1), 19 skipped → after H1, 160
-OK. `./gradlew.bat build --no-daemon --console=plain` → `BUILD SUCCESSFUL in 53s` on the first attempt; GeckoLib
+Observed, in order: `python -m unittest discover -s tests` 159 tests, 1 failure (H1), 19 skipped → after H1 and the two new tests, 161
+OK (20 skipped). `./gradlew.bat build --no-daemon --console=plain` → `BUILD SUCCESSFUL in 53s` on the first attempt; GeckoLib
 4.7.3 resolved from Cloudsmith (POM HTTP 200; the same metadata lists 1.21.1 builds up to 4.9.3, pin kept);
 `compileJava`, `jar`, `remapJar` executed; `build/libs/critter_test-1.0.0.jar` SHA-256
 `6ef1c80bccd945c42baa1222b81b56b0c50f0010edc483d21c0af4bd21a7cba7`, 37 entries under `critter_test`/`crittertest`.
