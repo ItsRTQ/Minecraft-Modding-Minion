@@ -1,6 +1,7 @@
 """Coordinator: typed actions, bounded planning, approval and deterministic execution."""
 from __future__ import annotations
 import json
+import os
 import shutil
 import hashlib
 from pathlib import Path
@@ -113,20 +114,29 @@ def unavailable_message(store: Store, task_id: str) -> str:
     return f"Task {task_id} is {info['state']}, not READY"
 
 
+def rmtree_long(path: Path) -> None:
+    """shutil.rmtree that survives Windows MAX_PATH (Loom caches nest very deep): use the \\?\ prefix there."""
+    target = str(path)
+    if os.name == "nt" and not target.startswith("\\\\?\\"):
+        target = "\\\\?\\" + target
+    shutil.rmtree(target)
+
+
 def delete_project(store: Store, pid: str, *, remove_workspace: bool) -> dict:
-    """USER-ONLY. Removes the Footprint rows; the directory only on explicit request and only inside PROJECTS."""
+    """USER-ONLY. Removes the workspace first (only on explicit request and only inside PROJECTS), then the
+    Footprint rows, so a failed directory removal never leaves an orphan directory without its record."""
     project = store.project(pid)
     root = Path(project["root"]).resolve()
-    result = store.delete_project(pid)
-    result["workspace"] = str(root)
-    result["workspace_existed"] = root.is_dir()
-    result["workspace_removed"] = False
-    if remove_workspace and root.is_dir():
+    existed = root.is_dir()
+    removed = False
+    if remove_workspace and existed:
         projects_root = PROJECTS.resolve()
         if projects_root not in root.parents:
             raise StateError(f"Refusing to delete a directory outside {projects_root}: {root}")
-        shutil.rmtree(root)
-        result["workspace_removed"] = True
+        rmtree_long(root)
+        removed = True
+    result = store.delete_project(pid)
+    result.update({"workspace": str(root), "workspace_existed": existed, "workspace_removed": removed})
     return result
 
 
