@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from mod_orchestra import workflow
 from mod_orchestra.config import SUPPORTED_PROFILE
-from mod_orchestra.spec import Mob, interpret, read_spec
+from mod_orchestra.spec import Mob, default_egg_colors, interpret, read_spec
 from mod_orchestra.specedit import add_mob, remove_mob
 from mod_orchestra.state import Store
 from mod_orchestra.validation import InputError
@@ -20,6 +20,18 @@ class SpecMobs(unittest.TestCase):
         s = interpret(name="C", mod_id="c_mod", package="com.x.c", idea=IDEA, profile=SUPPORTED_PROFILE)
         self.assertEqual({(m.identifier, m.behavior) for m in s.mobs}, {("sky_critter", "passive"), ("shadow_stalker", "hostile")})
         self.assertEqual(s.questions, [])
+
+    def test_egg_colors_are_distinct_per_mob_and_deterministic(self):
+        s = interpret(name="C", mod_id="c_mod", package="com.x.c", idea=IDEA, profile=SUPPORTED_PROFILE)
+        colors = {m.identifier: m.egg_colors for m in s.mobs}
+        self.assertNotEqual(colors["sky_critter"], colors["shadow_stalker"])
+        self.assertEqual(colors["sky_critter"], default_egg_colors("sky_critter", "passive"))
+        self.assertTrue(all(0 <= c <= 0xFFFFFF for pair in colors.values() for c in pair))
+        # explicit colours in a stored spec are kept; a missing field falls back to the derived pair
+        raw = s.to_dict(); raw["mobs"][0]["egg_colors"] = [1, 2]; del raw["mobs"][1]["egg_colors"]
+        back = read_spec(raw)
+        self.assertEqual(back.mobs[0].egg_colors, (1, 2))
+        self.assertEqual(back.mobs[1].egg_colors, default_egg_colors(back.mobs[1].identifier, back.mobs[1].behavior))
 
     def test_mob_only_idea_has_no_blocking_question(self):
         s = interpret(name="C", mod_id="c_mod", package="com.x.c", idea="mobs: glow slime", profile=SUPPORTED_PROFILE)
@@ -86,6 +98,13 @@ class Generated(unittest.TestCase):
         self.assertTrue(png.startswith(b"\x89PNG")); self.assertEqual(int.from_bytes(png[16:20], "big"), 64); self.assertEqual(int.from_bytes(png[20:24], "big"), 32)
         loot = json.loads((self.res / "data/c_mod/loot_table/entities/sky_critter.json").read_text())
         self.assertEqual(loot["pools"][0]["entries"][0]["name"], "c_mod:sky_crystal")
+        functions = {f["function"] for f in loot["pools"][0]["entries"][0]["functions"]}
+        self.assertIn("minecraft:enchanted_count_increase", functions)  # 1.21 name; looting_enchant no longer parses
+        self.assertNotIn("minecraft:looting_enchant", functions)
+        for mob in ("sky_critter", "shadow_stalker"):  # without an item model the egg renders as the missing-texture cube
+            self.assertEqual(json.loads((a / f"models/item/{mob}_spawn_egg.json").read_text()), {"parent": "minecraft:item/template_spawn_egg"})
+        legs = [b["cubes"][0]["uv"] for b in geo["minecraft:geometry"][0]["bones"] if b["name"].startswith("leg")]
+        self.assertTrue(all(uv[1] >= 18 for uv in legs), legs)  # legs sit beside the head, below the body's UV island
         lang = json.loads((a / "lang/en_us.json").read_text())
         self.assertEqual(lang["entity.c_mod.sky_critter"], "Sky Critter"); self.assertEqual(lang["item.c_mod.sky_critter_spawn_egg"], "Sky Critter Spawn Egg")
 

@@ -139,7 +139,8 @@ def placeholder_geo(m: Mob) -> dict:
         {"name": "head", "parent": "body", "pivot": [0, 12, -6], "cubes": [cube([-3, 12, -10], [6, 4, 4], [0, 18])]},
     ]
     for i, (x, z) in enumerate([(-3, -4), (3, -4), (-3, 4), (3, 4)]):
-        bones.append({"name": f"leg{i}", "parent": "body", "pivot": [x, 6, z], "cubes": [cube([x - 1, 0, z - 1], [2, 6, 2], [24 + i * 8, 0])]})
+        # 2x6x2 cube = 8x8 UV; row y=18 next to the head (x 0-19) so legs do not share texels with the body (x 0-39, y 0-17)
+        bones.append({"name": f"leg{i}", "parent": "body", "pivot": [x, 6, z], "cubes": [cube([x - 1, 0, z - 1], [2, 6, 2], [20 + i * 8, 18])]})
     return {"format_version": "1.12.0", "minecraft:geometry": [{"description": {"identifier": f"geometry.{m.identifier}",
             "texture_width": 64, "texture_height": 32, "visible_bounds_width": 2, "visible_bounds_height": 1.5, "visible_bounds_offset": [0, 0.75, 0]},
             "bones": bones}]}
@@ -157,7 +158,9 @@ def placeholder_animation(m: Mob) -> dict:
 def entity_loot(spec: Spec, m: Mob) -> dict:
     entries = [{"type": "minecraft:item", "name": resolve_result(spec.local_ids(), spec.mod_id, d),
                 "functions": [{"function": "minecraft:set_count", "count": {"type": "minecraft:uniform", "min": 0, "max": 1}},
-                              {"function": "minecraft:looting_enchant", "count": {"type": "minecraft:uniform", "min": 0, "max": 1}}]} for d in m.drops]
+                              # 1.21 renamed looting_enchant -> enchanted_count_increase (enchantment is required)
+                              {"function": "minecraft:enchanted_count_increase", "enchantment": "minecraft:looting",
+                               "count": {"type": "minecraft:uniform", "min": 0, "max": 1}}]} for d in m.drops]
     return {"type": "minecraft:entity", "pools": [{"rolls": 1, "entries": entries}]} if entries else {"type": "minecraft:entity", "pools": []}
 
 

@@ -1,8 +1,26 @@
 """Conservative deterministic intake; unsupported ideas remain questions, not fake output."""
 from __future__ import annotations
 from dataclasses import dataclass, asdict, field
+import hashlib
 import re
 from .validation import normalize_id, project_id, validate_package, InputError
+
+DEFAULT_EGG_COLORS = (0x8A6DD1, 0xE6D8FF)
+
+
+def default_egg_colors(identifier: str, behavior: str = "passive") -> tuple[int, int]:
+    """Deterministic spawn-egg tint per mob so two eggs in one tab never look alike: hostile mobs get a dark
+    base with a saturated spot colour, passive ones a bright base with a pale spot colour."""
+    digest = hashlib.sha256(identifier.encode()).digest()
+    r, g, b = digest[0], digest[1], digest[2]
+    if behavior == "hostile":
+        base = (r // 4, g // 4, b // 4)
+        spot = (128 + r // 2, 64 + g // 4, 64 + b // 4)
+    else:
+        base = (96 + r // 2, 96 + g // 2, 96 + b // 2)
+        spot = (200 + r // 5, 200 + g // 5, 200 + b // 5)
+    pack = lambda c: (c[0] << 16) | (c[1] << 8) | c[2]
+    return pack(base), pack(spot)
 
 @dataclass(frozen=True)
 class Feature:
@@ -49,7 +67,7 @@ class Mob:
     height: float = 0.9
     attack_damage: float = 3.0         # hostile only
     drops: tuple[str, ...] = ()        # local ids or minecraft:ids dropped on death (1 each)
-    egg_colors: tuple[int, int] = (0x8A6DD1, 0xE6D8FF)
+    egg_colors: tuple[int, int] = DEFAULT_EGG_COLORS
 
 
 @dataclass(frozen=True)
@@ -268,7 +286,8 @@ def interpret(*, name: str, mod_id: str, package: str, idea: str, profile: str) 
             for raw in match.group(1).split(","):
                 label = raw.strip().strip(". ")
                 if label:
-                    mobs.append(Mob(identifier=normalize_id(label, content=True), label=label, behavior=behavior))
+                    ident = normalize_id(label, content=True)
+                    mobs.append(Mob(identifier=ident, label=label, behavior=behavior, egg_colors=default_egg_colors(ident, behavior)))
     if (mobs or found) and not questions:
         pass
     if mobs and not found:
@@ -292,7 +311,9 @@ def read_spec(raw: dict) -> Spec:
         recipes=[Recipe(**{**r, "pattern": tuple(r.get("pattern", ())), "ingredients": tuple(r.get("ingredients", ()))}) for r in raw.get("recipes", [])],
         drops=[Drop(**d) for d in raw.get("drops", [])],
         tab=raw.get("tab"), tab_icon=raw.get("tab_icon"),
-        mobs=[Mob(**{**m, "drops": tuple(m.get("drops", ())), "egg_colors": tuple(m.get("egg_colors", (0x8A6DD1, 0xE6D8FF)))}) for m in raw.get("mobs", [])],
+        mobs=[Mob(**{**m, "drops": tuple(m.get("drops", ())),
+                      "egg_colors": tuple(m.get("egg_colors") or default_egg_colors(m.get("identifier", ""), m.get("behavior", "passive")))})
+              for m in raw.get("mobs", [])],
     )
     validate_spec_content(spec)
     return spec

@@ -339,6 +339,8 @@ Your idea: {spec.idea}
             put(f"{res}/animations/entity/{m.identifier}.animation.json", json.dumps(placeholder_animation(m), indent=2) + "\n")
             put(f"{res}/textures/entity/{m.identifier}.png", placeholder_png(spec.mod_id + "/entity/" + m.identifier, 64, 32))
             put(f"src/main/resources/data/{spec.mod_id}/loot_table/entities/{m.identifier}.json", json.dumps(entity_loot(spec, m), indent=2) + "\n")
+            # vanilla egg model: two tinted layers coloured from the SpawnEggItem constructor
+            put(f"{res}/models/item/{m.identifier}_spawn_egg.json", json.dumps({"parent": "minecraft:item/template_spawn_egg"}, indent=2) + "\n")
             lang[f"entity.{spec.mod_id}.{m.identifier}"] = m.label
             lang[f"item.{spec.mod_id}.{m.identifier}_spawn_egg"] = f"{m.label} Spawn Egg"
     put(f"{res}/lang/en_us.json", json.dumps(lang, indent=2, sort_keys=True) + "\n")

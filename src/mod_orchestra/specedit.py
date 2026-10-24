@@ -5,7 +5,7 @@ same spec fields from the user's words. Every edit returns the spec to DRAFT.
 """
 from __future__ import annotations
 from dataclasses import replace
-from .spec import Drop, Mob, Recipe, read_spec, validate_spec_content
+from .spec import Drop, Mob, Recipe, default_egg_colors, read_spec, validate_spec_content
 from .state import Store
 
 
@@ -49,7 +49,7 @@ def add_mob(store: Store, pid: str, *, identifier: str, label: str, behavior: st
             drops: list[str] | None = None, egg_colors: tuple[int, int] | None = None) -> dict:
     spec = _load(store, pid)
     mob = Mob(identifier=identifier, label=label, behavior=behavior, health=health, speed=speed, width=width, height=height,
-              attack_damage=attack_damage, drops=tuple(drops or ()), egg_colors=tuple(egg_colors or (0x8A6DD1, 0xE6D8FF)))
+              attack_damage=attack_damage, drops=tuple(drops or ()), egg_colors=tuple(egg_colors or default_egg_colors(identifier, behavior)))
     mobs = [m for m in spec.mobs if m.identifier != identifier] + [mob]
     return _save(store, pid, replace(spec, mobs=mobs), f"add mob {identifier}")
 
