@@ -1,0 +1,20 @@
+{
+  "name": "blockbench-mcp-safe-stdio",
+  "version": "0.5.1",
+  "private": true,
+  "type": "module",
+  "description": "Security-first local MCP server for editing Blockbench .bbmodel files (limited, independent implementation)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "blockbench-mcp-safe": "./src/server.mjs"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test",
+    "sums": "node scripts/sums.mjs",
+    "check": "node --check src/server.mjs && node --check src/storage.mjs && node --check src/model.mjs && node --check src/tools.mjs && node --check src/geckolib.mjs && node --check src/png.mjs && node --check src/pose.mjs && node --check src/quality.mjs && node --check src/render.mjs && node --check src/texture-render.mjs && node --check src/live.mjs && node --check plugin/blockbench_mcp_safe_bridge.js"
+  }
+}
