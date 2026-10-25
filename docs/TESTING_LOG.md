@@ -213,6 +213,25 @@ and animates, stalker attacks) is not observed: nobody has entered a world yet.*
 | H7 | Low | env | The session scratchpad path is too long for `fabric.generate` staging on Windows (`FileNotFoundError` on a 260+ char path, the MAX_PATH family of host run 8). Not a product bug: the controller's `~/.minecraft-mod-orchestra/projects/<id>` is short. Noted so nobody generates under `%TEMP%\claude\...`. | NOTED |
 | H8 | Low | hook | Guard false positives widened: a `grep` whose pattern names a USER-ONLY subcommand, and a Python heredoc writing a memory note that mentions one, were both blocked (A8 family). Worked around with the Edit tool. | OPEN (A8) |
 
+### Controller project `critter_test` — same day, after the push
+
+RTQ created `critter_test` with the controller (`new` → `plan` → `approve-spec` → `generate`: 32 files, static
+validation PASS, assets in the `DefaultedEntityGeoModel` layout, two `*_spawn_egg.json`, distinct egg tints
+`0x0D2827/0x9B6867` stalker, `0x99A47D/0xDFE3D3` critter). Session-side in the real workspace: `./gradlew.bat build`
+→ `BUILD SUCCESSFUL in 46s`; `runServer` via `run_watch` → `critter_test 1.0.0` + `geckolib 4.7.3` loaded,
+`Done (4.991s)!` in 25.7 s, clean stop, only the two benign data-fixer lines; `craftctl validate` PASS (31 files).
+Then the trusted path: **`craftctl build` → `BUILD_PASS` by the controller, JAR SHA-256
+`5b453fc211f63473716c3b1d834b9b9c6e49e731a8cde3432ddc13396a2cd579` (identical to the session's build); `server-smoke`
+→ `SERVER_BOOT_PASS` by the controller (H6 filter held: no false repair)**; `run-client` 371 s, exit 0, mod loaded.
+In a creative world RTQ confirmed all five checks: Critters tab shows the sky crystal and both eggs with distinct
+tints; both eggs in Spawn Eggs; the sky critter spawns as the grey quadruped, wanders, legs swing while walking,
+head nods when idle; the shadow stalker approaches and hits; nothing invisible, no missing-texture cube, nothing
+odd in the log. **v1 criterion 6 observed at scaffold level (placeholder model): spawns, moves, animates, hostile
+attacks, spawn eggs work. Still missing for the criterion as written: a Blockbench model + texture (designer
+slice), loot on death (the spec has no drops; `add-mob --drops` exists but was not exercised in-game), and the
+`EVIDENCE.md` with screenshots/clip.** `CLIENT_BOOT_PASS` and `CONTENT_VERIFIED` are RTQ's to record (evidence
+subcommand); the Footprint had only the two controller levels when this was written.
+
 Not done in this round, by design: the Blockbench/designer slice (placeholders stay), natural spawning, sounds.
 `GENERATOR_VERSION` not bumped: existing workspaces still build; only new generations get H2–H5.
 
