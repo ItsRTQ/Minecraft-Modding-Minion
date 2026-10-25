@@ -229,8 +229,11 @@ head nods when idle; the shadow stalker approaches and hits; nothing invisible, 
 odd in the log. **v1 criterion 6 observed at scaffold level (placeholder model): spawns, moves, animates, hostile
 attacks, spawn eggs work. Still missing for the criterion as written: a Blockbench model + texture (designer
 slice), loot on death (the spec has no drops; `add-mob --drops` exists but was not exercised in-game), and the
-`EVIDENCE.md` with screenshots/clip.** `CLIENT_BOOT_PASS` and `CONTENT_VERIFIED` are RTQ's to record (evidence
-subcommand); the Footprint had only the two controller levels when this was written.
+`EVIDENCE.md` with screenshots/clip.** RTQ recorded `CONTENT_VERIFIED` (actor `user`, 20:31: "Critters tab: sky crystal + both eggs
+with distinct colors; shadow stalker approached and hit for 1.5 hearts; sky critter roamed; both use the same
+placeholder model, only the egg colors differ"). `CLIENT_BOOT_PASS` was not recorded, so the project stays at
+`BUILD_PASSED_GAME_UNTESTED`: `derive_status` needs all of `BUILD_PASS`, `CLIENT_BOOT_PASS`, `SERVER_BOOT_PASS`
+and `CONTENT_VERIFIED` on the same manifest to reach `GAME_VERIFIED`. One more evidence command closes it.
 
 Not done in this round, by design: the Blockbench/designer slice (placeholders stay), natural spawning, sounds.
 `GENERATOR_VERSION` not bumped: existing workspaces still build; only new generations get H2–H5.
