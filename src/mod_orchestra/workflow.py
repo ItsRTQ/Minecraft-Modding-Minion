@@ -38,11 +38,16 @@ def plan_project(store: Store, pid: str) -> dict:
         tid = f"{pid}:CONTENT:{index:02d}"
         tasks.append({"id": tid, "role": "designer" if feat.kind == "block" else "coder", "title": f"Generate {feat.kind}: {feat.label}"})
         edges.append((f"{pid}:SCAFFOLD", tid))
+    for mob in spec.mobs:
+        tid = f"{pid}:MODEL:{mob.identifier}"
+        tasks.append({"id": tid, "role": "designer", "title": f"Blockbench/GeckoLib model + idle/walk + texture for mob: {mob.label}"})
+        edges.append((f"{pid}:SCAFFOLD", tid))
+        edges.append((tid, f"{pid}:BUILD"))
     tasks.append({"id": f"{pid}:BUILD", "role": "coder", "title": "Compile with trusted approved Gradle toolchain (debugger takes over on BUILD_FAILED)"})
     tasks.append({"id": f"{pid}:GAME", "role": "qa", "title": "Launch isolated Minecraft test and verify behavior"})
     if spec.features:
         edges.extend((f"{pid}:CONTENT:{i:02d}", f"{pid}:BUILD") for i in range(1, len(spec.features) + 1))
-    else:
+    elif not spec.mobs:
         edges.append((f"{pid}:SCAFFOLD", f"{pid}:BUILD"))
     edges.append((f"{pid}:BUILD", f"{pid}:GAME"))
     store.set_tasks(pid, tasks, edges)

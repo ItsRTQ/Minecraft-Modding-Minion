@@ -59,6 +59,8 @@ class AgentFiles(unittest.TestCase):
         known = {"mcp__minecraft-orchestra__" + t["name"] for t in TOOLS}
         for path in AGENTS.glob("*.md"):
             for tool in [t.strip() for t in frontmatter(path)["tools"].split(",")]:
+                if tool.startswith("mcp__blockbench__"):
+                    continue  # vendored blockbench-mcp-safe server (resources/blockbench-mcp-safe); wildcard allowed
                 if tool.startswith("mcp__"):
                     self.assertIn(tool, known, f"{path.name}: {tool} is not a real MCP tool")
                     for word in ("approve", "decide", "build_project", "evidence", "delete"):

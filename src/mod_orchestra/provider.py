@@ -198,7 +198,7 @@ def _settings_for_run(guard: Path) -> dict:
                  "Bash(python *)", "Bash(python3 *)", "Bash(git status*)", "Bash(git diff*)", "Bash(mkdir *)",
                  "PowerShell(./gradlew *)", "PowerShell(.\\\\gradlew.bat *)", "PowerShell(gradlew.bat *)", "PowerShell(Get-FileHash *)",
                  "PowerShell(python *)", "PowerShell(python3 *)", "PowerShell(git status*)", "PowerShell(git diff*)",
-                 "Read", "Edit", "Write", "Grep", "Glob", "mcp__minecraft-orchestra__*"):
+                 "Read", "Edit", "Write", "Grep", "Glob", "mcp__minecraft-orchestra__*", "mcp__blockbench__*"):
         if rule not in base["permissions"]["allow"]:
             base["permissions"]["allow"].append(rule)
     base["hooks"] = {"PreToolUse": [{"matcher": "Bash|PowerShell|Write|Edit|MultiEdit",
@@ -217,13 +217,16 @@ class ClaudeCodeProvider(AgentProvider):
     def available(self) -> bool:
         return bool(self.binary) and Path(self.binary).exists() if self.binary and os.sep in self.binary else bool(self.binary)
 
-    def _materialize(self, tmp: Path) -> tuple[Path, Path, Path]:
+    def _materialize(self, tmp: Path, envelope: TaskEnvelope | None = None) -> tuple[Path, Path, Path]:
         agents = tmp / "agents.json"; agents.write_text(json.dumps(_load_agent_definitions()), encoding="utf8")
         guard = RESOURCES / "hooks" / "guard.py"
         settings = tmp / "settings.json"; settings.write_text(json.dumps(_settings_for_run(guard), indent=1), encoding="utf8")
+        servers = {"minecraft-orchestra": {"command": "python", "args": ["-m", "mod_orchestra.cli", "mcp"], "env": {"CRAFTCTL_HOME": str(HOME)}}}
+        if envelope is not None and envelope.role == "designer":
+            from .models import blockbench_server_config
+            servers["blockbench"] = blockbench_server_config(envelope.workspace)  # vendored, zero-dependency, Node only
         mcp = tmp / "mcp.json"
-        mcp.write_text(json.dumps({"mcpServers": {"minecraft-orchestra": {
-            "command": "python", "args": ["-m", "mod_orchestra.cli", "mcp"], "env": {"CRAFTCTL_HOME": str(HOME)}}}}), encoding="utf8")
+        mcp.write_text(json.dumps({"mcpServers": servers}), encoding="utf8")
         return agents, settings, mcp
 
     def run(self, envelope: TaskEnvelope, log_path: Path) -> RunResult:
@@ -232,7 +235,7 @@ class ClaudeCodeProvider(AgentProvider):
         prompt = envelope.packet + "\n" + envelope.extra_instructions + HANDOFF_INSTRUCTIONS
         with tempfile.TemporaryDirectory(prefix="craftctl-run-") as td:
             tmp = Path(td)
-            agents, settings, mcp = self._materialize(tmp)
+            agents, settings, mcp = self._materialize(tmp, envelope)
             (tmp / "prompt.md").write_text(prompt, encoding="utf8")
             cmd = [self.binary, "-p", "--agent", envelope.role, "--agents", str(agents),
                    "--settings", str(settings), "--mcp-config", str(mcp), "--strict-mcp-config",
