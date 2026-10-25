@@ -101,3 +101,14 @@ class UserOnlySurface(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeleteOrder(Base):
+    def test_workspace_removal_failure_keeps_the_record(self):
+        # host run 8: rmtree failed on a Windows long path after the DB rows were already gone.
+        workflow.generate_project(self.store, "u_mod")
+        with patch("mod_orchestra.workflow.rmtree_long", side_effect=OSError("MAX_PATH")):
+            with self.assertRaises(OSError):
+                workflow.delete_project(self.store, "u_mod", remove_workspace=True)
+        self.assertEqual(self.store.project("u_mod")["id"], "u_mod", "record must survive a failed directory removal")
+        self.assertTrue(self.root.is_dir())

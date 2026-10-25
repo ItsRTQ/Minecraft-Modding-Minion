@@ -1,18 +1,19 @@
 # Verification evidence — crystal_example
 
-## Current content (regenerated 2026-10-22, v1 criterion 2 slice)
+## Current content (regenerated 2026-10-22, v1 criterion 6 scaffold)
 
 Items `sky_crystal`, `lunar_gem`; blocks `crystal_stone`, `crystal_ore`; creative tab "Crystal Example".
 Recipes: `crystal_stone` (shaped, 9 sky_crystal), `sky_crystal_from_stone` (shapeless, 1 stone → 9 crystal),
 `lunar_gem` (shapeless, sky_crystal + minecraft:ender_pearl), `sky_crystal_smelting` (crystal_ore → sky_crystal, 0.7 xp).
 Drop: `crystal_ore` → 1–2 `sky_crystal`, Fortune, Silk Touch returns the ore.
+Mob: `crystal_critter` (passive, GeckoLib, placeholder 6-bone quadruped, idle + walk, spawn egg, drops sky_crystal). GeckoLib 4.7.3.
 
 | Level | Evidence |
 |---|---|
 | BUILD_PASS | CI: `fabric-build` job compiles this directory on a clean JDK 25 runner on every push. |
 | CLIENT_BOOT_PASS | pending (owner) |
 | SERVER_BOOT_PASS | pending (`craftctl server-smoke` on a controller project with the same spec) |
-| CONTENT_VERIFIED | pending: tab visible with 4 entries; recipes appear in the recipe book after picking up a sky crystal; crafting works; mining crystal_ore drops sky crystal(s); Silk Touch drops the ore. |
+| CONTENT_VERIFIED | pending: tab visible with 5 entries (incl. spawn egg); critter spawns from the egg, wanders, legs animate while walking, dies and drops sky crystal; recipes appear in the recipe book after picking up a sky crystal; crafting works; mining crystal_ore drops sky crystal(s); Silk Touch drops the ore. |
 
 ## History (earlier revisions of this example)
 

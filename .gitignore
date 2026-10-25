@@ -5,3 +5,7 @@ __pycache__/
 build/
 dist/
 .pytest_cache/
+
+# interpreter suite runs are local unless committed on purpose
+tests/v1/results/*
+!tests/v1/results/20261022-155823.json

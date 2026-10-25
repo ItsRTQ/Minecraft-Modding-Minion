@@ -37,11 +37,16 @@ def request_smoke(store: Store, pid: str) -> dict:
         "This accepts the Minecraft EULA (https://aka.ms/MinecraftEULA) in run/eula.txt on your behalf, waits for the server to finish booting, then stops it.")
 
 
+# Logged at ERROR by vanilla for every modded EntityType built without a DataFixer schema entry (Round 4, R6
+# scaffold). Harmless outside an IDE run and present for every Fabric mob mod; never a reason to open a repair.
+BENIGN = re.compile(r"No data fixer registered for \w+$")
+
+
 def _mod_errors(text: str, mod_id: str) -> list[str]:
     hits = []
     for line in text.splitlines():
         low = line.lower()
-        if ("/error]" in low or "/fatal]" in low or "exception" in low) and mod_id in low:
+        if ("/error]" in low or "/fatal]" in low or "exception" in low) and mod_id in low and not BENIGN.search(line.strip()):
             hits.append(line.strip()[:300])
     return hits[:20]
 

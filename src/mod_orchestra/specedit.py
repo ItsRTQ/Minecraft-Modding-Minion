@@ -5,7 +5,7 @@ same spec fields from the user's words. Every edit returns the spec to DRAFT.
 """
 from __future__ import annotations
 from dataclasses import replace
-from .spec import Drop, Recipe, read_spec, validate_spec_content
+from .spec import Drop, Mob, Recipe, default_egg_colors, read_spec, validate_spec_content
 from .state import Store
 
 
@@ -16,7 +16,8 @@ def _load(store: Store, pid: str):
 def _save(store: Store, pid: str, spec, reason: str) -> dict:
     validate_spec_content(spec)
     store.replace_spec(pid, spec.to_dict(), actor="user", reason=reason)
-    return {"project": pid, "spec_state": "DRAFT", "recipes": [r.id for r in spec.recipes], "drops": [d.block for d in spec.drops], "tab": spec.tab}
+    return {"project": pid, "spec_state": "DRAFT", "recipes": [r.id for r in spec.recipes], "drops": [d.block for d in spec.drops], "tab": spec.tab,
+            "mobs": [f"{m.identifier} ({m.behavior})" for m in spec.mobs]}
 
 
 def add_recipe(store: Store, pid: str, *, recipe_id: str, kind: str, result: str, count: int = 1,
@@ -41,6 +42,21 @@ def add_drop(store: Store, pid: str, *, block: str, item: str, count_min: int = 
     drop = Drop(block=block, item=item, count_min=count_min, count_max=count_max, fortune=fortune, silk_touch=silk_touch)
     drops = [d for d in spec.drops if d.block != block] + [drop]
     return _save(store, pid, replace(spec, drops=drops), f"drop {block} -> {item}")
+
+
+def add_mob(store: Store, pid: str, *, identifier: str, label: str, behavior: str = "passive", health: float = 10.0,
+            speed: float = 0.25, width: float = 0.8, height: float = 0.9, attack_damage: float = 3.0,
+            drops: list[str] | None = None, egg_colors: tuple[int, int] | None = None) -> dict:
+    spec = _load(store, pid)
+    mob = Mob(identifier=identifier, label=label, behavior=behavior, health=health, speed=speed, width=width, height=height,
+              attack_damage=attack_damage, drops=tuple(drops or ()), egg_colors=tuple(egg_colors or default_egg_colors(identifier, behavior)))
+    mobs = [m for m in spec.mobs if m.identifier != identifier] + [mob]
+    return _save(store, pid, replace(spec, mobs=mobs), f"add mob {identifier}")
+
+
+def remove_mob(store: Store, pid: str, identifier: str) -> dict:
+    spec = _load(store, pid)
+    return _save(store, pid, replace(spec, mobs=[m for m in spec.mobs if m.identifier != identifier]), f"remove mob {identifier}")
 
 
 def set_tab(store: Store, pid: str, *, label: str | None, icon: str | None) -> dict:
