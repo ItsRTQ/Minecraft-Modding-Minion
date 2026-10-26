@@ -121,7 +121,7 @@ class AddTaskCasing(unittest.TestCase):
         base = Path(tmp.name); store = Store(base / "state.sqlite")
         with patch.object(workflow, "PROJECTS", base / "projects"), patch("mod_orchestra.cli.Store", return_value=store):
             (base / "projects").mkdir()
-            workflow.new_project(store, name="U", mod_id="u_mod", package="com.x.u", idea="items: gem; mobs: sky critter")
+            workflow.new_project(store, name="U", mod_id="u_mod", package="com.x.u", idea="items: gem")
             workflow.plan_project(store, "u_mod")
             out = cli_dispatch(parser().parse_args(["add-task", "u_mod", "--id", "model:sky_critter", "--role", "designer", "--title", "m"]))
         self.assertEqual(out["task"], "u_mod:MODEL:sky_critter")
