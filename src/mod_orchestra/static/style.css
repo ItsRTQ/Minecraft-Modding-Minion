@@ -114,3 +114,4 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
 .glossary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-top:10px}
 .glossary-grid div{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-s);padding:10px 12px;font-size:12px}.glossary-grid b{color:var(--text)}.glossary-grid p{margin:4px 0 0}
 details > summary{list-style:none}details > summary::before{content:"▸ ";color:var(--dim)}details[open] > summary::before{content:"▾ "}
+.needs.past{opacity:.55;border-left-color:var(--dim);background:transparent}.needs.past b{color:var(--dim)}

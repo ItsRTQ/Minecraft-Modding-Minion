@@ -217,6 +217,8 @@ function renderRuns(p) {
   const list = qs("runs-list"); list.replaceChildren();
   const runs = (p.runs_all || []).slice().reverse();
   if (!runs.length) { list.append(el("p", "No agent runs yet.", "muted")); return; }
+  list.append(el("p", "History of what each worker did and asked for. Anything still pending for you is in the Now panel at the top, as buttons.", "muted"));
+  const lastEvidenceAt = Math.max(0, ...(p.evidence || []).map(e => e.created_at));
   for (const r of runs) {
     const card = el("div", null, "run"); const head = el("div", null, "head");
     head.append(el("span", r.state, "state " + r.state), el("b", `${r.role} → ${r.task_id}`), el("small", [r.duration_s != null ? fmtDur(r.duration_s) : "running", r.turns != null ? r.turns + " turns" : null, r.cost_usd != null ? fmtMoney(r.cost_usd) : null, ago(r.created_at)].filter(Boolean).join(" · "), "muted"));
@@ -226,7 +228,11 @@ function renderRuns(p) {
       if (h.scope) card.append(el("div", h.scope, "muted"));
       if (h.changed_files?.length) card.append(el("div", "changed: " + h.changed_files.join(", "), "risk"));
       if (h.evidence) card.append(el("div", "evidence claimed: " + h.evidence.level + (h.evidence.pointer ? " — " + h.evidence.pointer : ""), "risk"));
-      if (h.needs_user?.length) { const n = el("div", null, "needs"); n.append(el("b", "You need to run:")); for (const c of h.needs_user) n.append(codeLine(c)); card.append(n); }
+      if (h.needs_user?.length) {
+        const superseded = (r.finished_at || r.created_at) < lastEvidenceAt || r.task_id.endsWith(":SPEC") && p.spec_state === "APPROVED";
+        const n = el("div", null, "needs" + (superseded ? " past" : "")); n.append(el("b", superseded ? "The worker asked you for (already handled since):" : "The worker asked you for — see Now for the button:"));
+        for (const c of h.needs_user) n.append(codeLine(c)); card.append(n);
+      }
       if (h.risks?.length) card.append(el("div", "risks: " + h.risks.join(" · "), "risk"));
       if (h.questions?.length) card.append(el("div", "questions: " + h.questions.join(" · "), "risk"));
     }
