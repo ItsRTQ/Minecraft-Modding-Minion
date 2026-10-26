@@ -86,11 +86,11 @@
             <form id="addmob-form" class="form">
               <div class="row">
                 <label>Name <input id="am-label" required placeholder="Moon Fox"></label>
-                <label>Identifier <input id="am-id" required pattern="[a-z][a-z0-9_]{1,49}" placeholder="moon_fox"></label>
+                <label>Identifier <input id="am-id" required pattern="[a-z][a-z0-9_]{1,49}" placeholder="moon_fox"><small>The in-game name of the mob: it becomes <code>yourmod:moon_fox</code> in commands like <code>/summon</code>, its spawn egg id, and its file names. Lowercase and underscores; it cannot change later.</small></label>
               </div>
               <div class="row">
-                <label>Behaviour <select id="am-behavior"><option value="passive">passive — wanders, flees nothing</option><option value="hostile">hostile — attacks players</option></select></label>
-                <label>Drops on death <input id="am-drops" placeholder="sky_crystal minecraft:feather (space separated, optional)"></label>
+                <label>Behaviour <select id="am-behavior"><option value="passive">passive — wanders, never attacks</option><option value="neutral">neutral — minds its business, fights back when hurt (wolf / iron golem)</option><option value="hostile">hostile — attacks players on sight</option></select></label>
+                <label>Drops on death <div class="drops-field"><div id="am-drops-summary" class="muted">nothing</div><button type="button" class="secondary" id="am-drops-btn">Choose items…</button></div><small>Pick from the game's items and your mod's, with counts and chance.</small></label>
               </div>
               <label>What should it look like? <textarea id="am-desc" rows="2" placeholder="Small fox with a crescent on its forehead, dark blue fur, bushy tail"></textarea><small>Sent to the designer as its first feedback note.</small></label>
               <div class="actions"><button class="primary" type="submit">Add mob</button><span class="muted" id="am-note"></span></div>
@@ -134,6 +134,14 @@
   </main>
 </div>
 
+<div id="picker" class="lightbox hidden"><div class="picker-inner">
+  <div class="picker-head"><h3 id="picker-title">Drops on death</h3><input id="picker-search" placeholder="Search items and blocks…"></div>
+  <div class="picker-cols">
+    <div class="picker-col"><div class="picker-col-head">Game items <span class="muted" id="picker-count"></span></div><div id="picker-grid" class="picker-grid"></div><div id="picker-note" class="muted"></div></div>
+    <div class="picker-col"><div class="picker-col-head">Drop table</div><div id="picker-table" class="picker-table"></div><div class="muted" style="font-size:12px;margin-top:6px">count = how many per kill (min–max) · chance = probability per kill (1 = always). Looting adds 0–1.</div></div>
+  </div>
+  <div class="actions"><button type="button" id="picker-add" class="secondary">← Add selected to drop table</button><span style="flex:1"></span><button type="button" id="picker-cancel" class="secondary">Cancel</button><button type="button" id="picker-save" class="primary">Save drop table</button></div>
+</div></div>
 <div id="lightbox" class="lightbox hidden"><div class="lightbox-inner"><img id="lightbox-img" alt=""><div id="lightbox-cap" class="muted"></div><button id="lightbox-close" class="secondary">Close</button></div></div>
 <div id="toast" class="toast hidden"></div>
 <script src="/app.js"></script>

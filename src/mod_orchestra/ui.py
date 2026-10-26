@@ -121,6 +121,9 @@ def serve(store: Store, port: int = 8765) -> None:
                     if op == "guidance": return guidance(store, pid)
                     if op == "gallery": return model_gallery(store, pid)
                     if op == "job": return job_status(pid) or {"job": None, "running": False}
+                    if op == "items":
+                        from .catalog import item_catalog
+                        return item_catalog(store, pid)
                     if op == "logs": return {"text": tail_log(store, pid, 200)}
                     if op == "diagnose": return project_diagnose(store, pid)
                     if op == "validate":
@@ -162,6 +165,9 @@ def serve(store: Store, port: int = 8765) -> None:
                         if store.project(pid)["status"] in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
                             return add_mob_after_generation(store, pid, m)
                         return add_mob_spec(store, pid, identifier=m.identifier, label=m.label, behavior=m.behavior, drops=list(m.drops))
+                    if op == "mob-drops":
+                        from .models import set_mob_drops
+                        return set_mob_drops(store, pid, str(payload.get("mob", "")), list(payload.get("drops") or []))
                     if op == "feedback": return give_model_feedback(store, pid, str(payload.get("mob", "")), str(payload.get("text", "")))
                     if op == "decide":
                         store.decide_approval(payload["approval_id"], bool(payload.get("grant", True)))
@@ -195,6 +201,19 @@ def serve(store: Store, port: int = 8765) -> None:
                 self.send_header("Content-Length", str(len(raw)))
                 self.end_headers()
                 self.wfile.write(raw)
+                return
+            if path.startswith("/api/project/") and path.endswith("/vanilla-texture"):
+                qs = parse_qs(urlparse(self.path).query)
+                if self.headers.get("Host") != f"127.0.0.1:{port}" or qs.get("token", [""])[0] != token:
+                    return self.response({"error": "Unauthorized"}, 403)
+                pid = path.strip("/").split("/")[2]
+                try:
+                    from .catalog import vanilla_texture
+                    raw = vanilla_texture(Path(store.project(pid)["root"]), qs.get("kind", ["item"])[0], qs.get("name", [""])[0])
+                except (InputError, StateError) as exc:
+                    return self.response({"error": str(exc)}, 404)
+                self.send_response(200); self.send_header("Content-Type", "image/png"); self.send_header("Cache-Control", "private, max-age=3600")
+                self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Content-Length", str(len(raw))); self.end_headers(); self.wfile.write(raw)
                 return
             if path.startswith("/api/project/") and path.endswith("/file"):
                 # <img src> cannot carry headers: the page passes the token as a query parameter for this one route.

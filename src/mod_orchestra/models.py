@@ -201,3 +201,32 @@ def add_mob_after_generation(store: Store, pid: str, mob: Mob) -> dict:
         con.execute("INSERT OR IGNORE INTO task_instructions(task_id, text) VALUES(?,?)", (task_add, "\n".join(instructions)))
     return {"mob": mob.identifier, "files": written, "accepted": accepted["accepted"], "tasks": [task_add, task_model], "first_mob": first_mob,
             "next": {"action": "dispatch", "payload": {"task": task_add}}}
+
+
+def set_mob_drops(store: Store, pid: str, mob_id: str, drops: list) -> dict:
+    """Replace a mob's death loot. Before generation it edits the spec; after, it also rewrites the
+    (controller-owned) loot table file as a user revision."""
+    from .spec import coerce_mob_drop
+    proj = store.project(pid)
+    spec = read_spec(proj["spec"])
+    mob = next((m for m in spec.mobs if m.identifier == mob_id), None)
+    if mob is None:
+        raise InputError(f"Unknown mob {mob_id!r}")
+    new_mob = _replace(mob, drops=tuple(coerce_mob_drop(d) for d in drops))
+    new_spec = _replace(spec, mobs=[new_mob if m.identifier == mob_id else m for m in spec.mobs])
+    validate_spec_content(new_spec)
+    with store.tx() as con:
+        con.execute("UPDATE projects SET spec_json=? WHERE id=?", (_json.dumps(new_spec.to_dict(), sort_keys=True), pid))
+        store.event(con, pid, "user", "SPEC_CHANGED", {"reason": f"drops of {mob_id}"})
+    out = {"mob": mob_id, "drops": [d.__dict__ for d in new_mob.drops]}
+    if proj["status"] in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
+        ws = Path(proj["root"])
+        loot = ws / "src/main/resources/data" / pid / "loot_table/entities" / f"{mob_id}.json"
+        loot.parent.mkdir(parents=True, exist_ok=True)
+        loot.write_text(_json.dumps(entity_loot(new_spec, new_mob), indent=2) + "\n", encoding="utf8")
+        rel = str(loot.relative_to(ws)).replace("\\", "/")
+        accepted = accept_changes(ws, run_id=f"drops:{mob_id}", actor="user", changed=[rel])
+        from .dispatch import _source_changed, _reopen_build
+        _source_changed(store, pid); _reopen_build(store, pid)
+        out |= {"file": rel, "accepted": accepted["accepted"], "note": "Loot table rewritten; rebuild to apply."}
+    return out

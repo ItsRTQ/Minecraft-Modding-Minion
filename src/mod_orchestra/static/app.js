@@ -201,6 +201,12 @@ function renderGallery(p) {
       }
       card.append(det);
     }
+    const dl = el("div", null, "drops-inline"); dl.append(el("span", "Drops on death:", "muted"));
+    const drops = (m.drops || []).map(d => typeof d === "string" ? { item: d, count_min: 1, count_max: 1, chance: 1 } : d);
+    if (!drops.length) dl.append(el("span", "nothing", "dim"));
+    for (const d of drops) { const chip = el("span", null, "drop-chip"); const img = el("img"); img.src = dropIcon(p.id, d.item); img.alt = ""; chip.append(img, el("span", `${d.item} ×${d.count_min}${d.count_max !== d.count_min ? "–" + d.count_max : ""}${d.chance < 1 ? " @" + Math.round(d.chance * 100) + "%" : ""}`)); dl.append(chip); }
+    dl.append(btn("Edit drops", () => openPicker(p.id, drops, `Drops on death — ${m.label}`, async (table) => { const out = await api(`/api/project/${p.id}/mob-drops`, { mob: m.mob, drops: table }); toast(out.note || "Drops saved.", "ok"); await openProject(p.id); }), "mini secondary"));
+    card.append(dl);
     if (m.feedback.length) { const ul = el("ul", null, "feedback-list"); for (const f of m.feedback) ul.append(el("li", "you: " + f.text)); card.append(el("div", "Feedback sent to the designer:", "muted")); card.append(ul); }
     const fb = el("form", null, "feedback"); const ta = el("textarea"); ta.placeholder = m.placeholder ? "Describe the creature you want (shape, colours, size) — this goes to the designer's first run" : "What should change? e.g. “wings too big, make the body rounder, darker blue”"; fb.append(ta);
     const row = el("div", null, "actions");
@@ -216,14 +222,72 @@ function renderGallery(p) {
   }
 }
 
+// ---------- drop picker ----------
+let pickerState = { catalog: null, selected: new Set(), table: [], onSave: null, pid: null };
+const vanillaIcon = (pid, kind, name) => `/api/project/${encodeURIComponent(pid)}/vanilla-texture?kind=${kind}&name=${encodeURIComponent(name)}&token=${encodeURIComponent(token)}`;
+const modIcon = (pid, kind, name) => fileUrl(pid, `src/main/resources/assets/${pid}/textures/${kind}/${name}.png`);
+function dropIcon(pid, id) {
+  if (id.startsWith("minecraft:")) { const n = id.slice(10); const c = pickerState.catalog; const kind = c && c.vanilla.items.includes(n) ? "item" : "block"; return vanillaIcon(pid, kind, n); }
+  const n = id.includes(":") ? id.split(":")[1] : id; const c = pickerState.catalog; const kind = c && c.mod.blocks.includes(n) && !c.mod.items.includes(n) ? "block" : "item"; return modIcon(pid, kind, n);
+}
+async function openPicker(pid, initial, title, onSave) {
+  pickerState = { catalog: null, selected: new Set(), table: (initial || []).map(d => typeof d === "string" ? { item: d, count_min: 1, count_max: 1, chance: 1 } : { ...d }), onSave, pid };
+  qs("picker-title").textContent = title; qs("picker-search").value = ""; qs("picker").classList.remove("hidden");
+  qs("picker-grid").replaceChildren(el("div", "Loading items…", "muted")); renderDropTable();
+  try { pickerState.catalog = await api(`/api/project/${pid}/items`); } catch (e) { toast(e.message, "bad"); pickerState.catalog = { mod: { items: [], blocks: [] }, vanilla: { items: [], blocks: [] }, note: e.message }; }
+  qs("picker-note").textContent = pickerState.catalog.note || ""; renderPickerGrid();
+}
+function pickerEntries() {
+  const c = pickerState.catalog; if (!c) return [];
+  const q = qs("picker-search").value.trim().toLowerCase();
+  const all = [...c.mod.items.map(n => ({ id: n, kind: "item", mod: true })), ...c.mod.blocks.map(n => ({ id: n, kind: "block", mod: true })),
+               ...c.vanilla.items.map(n => ({ id: "minecraft:" + n, kind: "item" })), ...c.vanilla.blocks.map(n => ({ id: "minecraft:" + n, kind: "block" }))];
+  return q ? all.filter(e => e.id.includes(q)) : all;
+}
+function renderPickerGrid() {
+  const grid = qs("picker-grid"); grid.replaceChildren();
+  const entries = pickerEntries(); qs("picker-count").textContent = `(${entries.length})`;
+  const frag = document.createDocumentFragment();
+  for (const e of entries.slice(0, 400)) {
+    const d = el("div", null, "pick" + (e.mod ? " mod" : "") + (pickerState.selected.has(e.id) ? " sel" : "")); const img = el("img"); img.loading = "lazy"; img.alt = "";
+    img.src = e.mod ? modIcon(pickerState.pid, e.kind, e.id) : vanillaIcon(pickerState.pid, e.kind, e.id.slice(10));
+    d.append(img, el("div", e.mod ? e.id + " (mod)" : e.id.slice(10)));
+    d.onclick = () => { if (pickerState.selected.has(e.id)) pickerState.selected.delete(e.id); else pickerState.selected.add(e.id); d.classList.toggle("sel"); };
+    frag.append(d);
+  }
+  if (entries.length > 400) frag.append(el("div", `${entries.length - 400} more — refine the search`, "muted"));
+  grid.append(frag);
+}
+function renderDropTable() {
+  const t = qs("picker-table"); t.replaceChildren();
+  const head = el("div", null, "drop-head"); for (const h of ["", "item", "min", "max", "chance", ""]) head.append(el("span", h)); t.append(head);
+  if (!pickerState.table.length) t.append(el("div", "Empty — select items on the left and add them.", "muted"));
+  pickerState.table.forEach((d, i) => {
+    const row = el("div", null, "drop-row"); const img = el("img"); img.src = dropIcon(pickerState.pid, d.item); img.alt = "";
+    const num = (key, min, max, step) => { const inp = el("input"); inp.type = "number"; inp.min = min; inp.max = max; inp.step = step; inp.value = d[key]; inp.oninput = () => { d[key] = Number(inp.value); }; return inp; };
+    const x = el("button", "×", "x"); x.type = "button"; x.onclick = () => { pickerState.table.splice(i, 1); renderDropTable(); };
+    row.append(img, el("span", d.item, "mono"), num("count_min", 0, 64, 1), num("count_max", 0, 64, 1), num("chance", 0.01, 1, 0.05), x); t.append(row);
+  });
+}
+qs("picker-search").oninput = renderPickerGrid;
+qs("picker-add").onclick = () => { for (const id of pickerState.selected) if (!pickerState.table.some(d => d.item === id)) pickerState.table.push({ item: id, count_min: 1, count_max: 1, chance: 1 }); pickerState.selected.clear(); renderPickerGrid(); renderDropTable(); };
+qs("picker-cancel").onclick = () => qs("picker").classList.add("hidden");
+qs("picker-save").onclick = async () => {
+  for (const d of pickerState.table) { if (!(d.count_min <= d.count_max)) return toast(`${d.item}: min must be ≤ max`, "bad"); if (!(d.chance > 0 && d.chance <= 1)) return toast(`${d.item}: chance must be between 0 and 1`, "bad"); }
+  try { await pickerState.onSave(pickerState.table.map(d => ({ ...d }))); qs("picker").classList.add("hidden"); } catch (e) { toast(e.message, "bad"); }
+};
+function dropsSummary(drops) { return drops.length ? drops.map(d => `${d.item} ×${d.count_min}${d.count_max !== d.count_min ? "–" + d.count_max : ""}${d.chance < 1 ? " @" + Math.round(d.chance * 100) + "%" : ""}`).join(", ") : "nothing"; }
+
+let addMobDrops = [];
+qs("am-drops-btn").onclick = () => openPicker(selected, addMobDrops, "Drops on death — new mob", async (table) => { addMobDrops = table; qs("am-drops-summary").textContent = dropsSummary(table); });
 qs("addmob-form").onsubmit = async (e) => {
   e.preventDefault(); if (!selected) return;
-  const drops = qs("am-drops").value.trim().split(/\s+/).filter(Boolean);
+  const drops = addMobDrops;
   try {
     const out = await api(`/api/project/${selected}/add-mob`, { identifier: qs("am-id").value.trim(), label: qs("am-label").value.trim(), behavior: qs("am-behavior").value, drops });
     const desc = qs("am-desc").value.trim();
     if (desc) await api(`/api/project/${selected}/feedback`, { mob: qs("am-id").value.trim(), text: desc }).catch(() => {});
-    qs("addmob-form").reset();
+    qs("addmob-form").reset(); addMobDrops = []; qs("am-drops-summary").textContent = "nothing";
     toast(out.tasks ? `Mob added. Files written; the coder registers it (${out.tasks[0]}), then the designer models it.` : "Mob added to the spec (re-approve before generating).", "ok");
     await openProject(selected);
   } catch (err) { toast(err.message, "bad"); }
