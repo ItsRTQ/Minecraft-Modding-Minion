@@ -211,9 +211,9 @@
               </form></div></div>
 <div id="modal-delete" class="lightbox hidden"><div class="modal">
   <div class="modal-head"><h3>Delete project</h3><button type="button" class="secondary mini modal-close">✕</button></div>
-  <p class="muted">Removes this project from the controller: spec, tasks, runs, approvals and evidence. This cannot be undone.</p>
+  <p class="muted">Removes <b id="del-name"></b> (<span id="del-id" class="mono"></span>) from the controller: spec, tasks, runs, approvals and evidence. This cannot be undone.</p>
   <label class="check"><input type="checkbox" id="del-workspace" checked><span>Also delete the workspace folder on disk</span><small id="del-path" class="mono"></small></label>
-  <label>Type the project id to confirm <input id="del-confirm" placeholder="project_id"></label>
+  <label>Type <code>DELETE</code> to confirm <input id="del-confirm" placeholder="DELETE" autocomplete="off"></label>
   <div class="actions"><button type="button" id="del-go" class="danger">Delete</button></div>
 </div></div>
 <div id="picker" class="lightbox hidden"><div class="picker-inner">

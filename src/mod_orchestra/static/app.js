@@ -35,10 +35,10 @@ for (const x of document.querySelectorAll(".modal-close")) x.onclick = () => x.c
 for (const m of document.querySelectorAll(".lightbox")) m.addEventListener("click", (e) => { if (e.target === m && m.id !== "picker") m.classList.add("hidden"); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") for (const m of document.querySelectorAll(".lightbox:not(.hidden)")) if (m.id !== "picker") m.classList.add("hidden"); });
 const closeModal = (id) => qs(id).classList.add("hidden");
-qs("p-delete").onclick = () => { if (!lastProject) return; qs("del-confirm").value = ""; qs("del-path").textContent = lastProject.root || ""; qs("modal-delete").classList.remove("hidden"); qs("del-confirm").focus(); };
+qs("p-delete").onclick = () => { if (!lastProject) return; qs("del-confirm").value = ""; qs("del-name").textContent = lastProject.name; qs("del-id").textContent = lastProject.id; qs("del-path").textContent = lastProject.root || ""; qs("modal-delete").classList.remove("hidden"); qs("del-confirm").focus(); };
 qs("del-go").onclick = async () => {
   if (!lastProject) return;
-  if (qs("del-confirm").value.trim() !== lastProject.id) return toast("Type the exact project id to confirm", "bad");
+  if (qs("del-confirm").value.trim().toUpperCase() !== "DELETE") return toast("Type DELETE to confirm", "bad");
   try {
     const out = await api(`/api/project/${lastProject.id}/delete`, { confirm: lastProject.id, workspace: qs("del-workspace").checked });
     closeModal("modal-delete"); toast(`Deleted ${lastProject.id}${out.workspace_removed ? " and its workspace" : ""}.`, "ok");
