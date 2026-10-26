@@ -182,3 +182,22 @@ class DeleteFromUi(unittest.TestCase):
             self.assertTrue(out["workspace_removed"]); self.assertFalse(root.exists())
             with self.assertRaises(StateError):
                 store.project("d_mod")
+
+
+class DeleteWithRunsAndInstructions(unittest.TestCase):
+    def test_delete_removes_every_dependent_row(self):
+        # host run 11: FOREIGN KEY constraint failed — runs and task_instructions were not deleted.
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); store = Store(base / "state.sqlite")
+        with patch.object(workflow, "PROJECTS", base / "projects"):
+            (base / "projects").mkdir()
+            workflow.new_project(store, name="D", mod_id="d_mod", package="com.x.d", idea="items: gem; mobs: fox")
+            workflow.plan_project(store, "d_mod"); workflow.approve_spec(store, "d_mod"); workflow.generate_project(store, "d_mod")
+            h = {"task": "d_mod:MODEL:fox", "status": "FAILED", "scope": "s", "changed_files": [], "checks_run": [], "evidence": {"level": "NONE", "pointer": "-"}, "risks": ["x"], "unknowns": [], "needs_user": [], "next_agent": "none"}
+            dmod.dispatch(store, "d_mod", task_id="d_mod:MODEL:fox", provider=FakeProvider("```handoff\n" + json.dumps(h) + "\n```"))
+            from mod_orchestra.content import add_feature
+            add_feature(store, "d_mod", kind="item", label="Moon Shard")  # creates a task with task_instructions
+            self.assertTrue(store.runs("d_mod")); self.assertTrue(store.task_instructions("d_mod:ADD_ITEM:moon_shard"))
+            out = workflow.delete_project(store, "d_mod", remove_workspace=True)
+            self.assertGreaterEqual(out["rows"]["runs"], 1); self.assertGreaterEqual(out["rows"]["task_instructions"], 1)
+            self.assertEqual(store.projects(), [])

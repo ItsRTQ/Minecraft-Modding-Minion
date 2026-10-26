@@ -1,5 +1,6 @@
 """Local-only browser GUI with per-process bearer token; no silent shell or network install."""
 from __future__ import annotations
+import sqlite3
 import threading
 import time
 import json
@@ -277,7 +278,7 @@ def serve(store: Store, port: int = 8765) -> None:
                 payload = json.loads(self.rfile.read(size) or b"{}")
                 if not isinstance(payload, dict): raise InputError("JSON object required")
                 self.response(self.handle_api(payload))
-            except (InputError, StateError, ValueError, KeyError, OSError) as exc:
+            except (InputError, StateError, ValueError, KeyError, OSError, sqlite3.Error) as exc:
                 self.response({"error": str(exc)}, 400)
 
     with ThreadingHTTPServer(("127.0.0.1", port), Handler) as server:

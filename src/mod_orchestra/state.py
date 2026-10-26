@@ -265,6 +265,9 @@ class Store:
             if con.execute("SELECT 1 FROM projects WHERE id=?", (pid,)).fetchone() is None:
                 raise StateError(f"Project not found: {pid}")
             counts = {}
+            # every table that references the project or its tasks (schema v1-v4); children first
+            counts["task_instructions"] = con.execute("DELETE FROM task_instructions WHERE task_id IN (SELECT id FROM tasks WHERE project_id=?)", (pid,)).rowcount
+            counts["runs"] = con.execute("DELETE FROM runs WHERE project_id=?", (pid,)).rowcount
             for table in ("evidence", "approvals", "events"):
                 counts[table] = con.execute(f"DELETE FROM {table} WHERE project_id=?", (pid,)).rowcount
             counts["task_edges"] = con.execute(
