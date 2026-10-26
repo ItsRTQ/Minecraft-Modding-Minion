@@ -62,7 +62,12 @@ def build_envelope(store: Store, pid: str, task: dict) -> TaskEnvelope:
         extra = SPEC_INSTRUCTIONS
     elif ":MODEL:" in task["id"]:
         from .models import MODEL_INSTRUCTIONS
-        extra = MODEL_INSTRUCTIONS.replace("<mob>", task["id"].split(":MODEL:")[1])
+        from .feedback import feedback_context
+        mob = task["id"].split(":MODEL:")[1]
+        extra = MODEL_INSTRUCTIONS.replace("<mob>", mob) + feedback_context(store, pid, mob)
+    specific = store.task_instructions(task["id"])
+    if specific:
+        extra = extra + "\n\n## Task-specific instructions\n" + specific
     return TaskEnvelope(project_id=pid, task_id=task["id"], role=task["role"], title=task["title"],
                         workspace=Path(proj["root"]), packet=packet, extra_instructions=extra)
 
@@ -91,6 +96,8 @@ def apply_outcome(store: Store, pid: str, task: dict, lease: dict, run: dict, re
             return {"task_state": "FAILED", "error": error, "handoff": h}
         h = h | {"needs_user": interp["needs_user"], "interpretation": interp}
         status = "WAITING_USER"  # the user answers or approves; the controller, not the worker, closes SPEC via approve-spec
+    if ":ADD_MOB:" in task["id"] and status == "DONE":
+        _reopen_build(store, pid)
     if ":MODEL:" in task["id"] and status == "DONE":
         from .models import install_model
         from .validation import InputError
@@ -105,6 +112,7 @@ def apply_outcome(store: Store, pid: str, task: dict, lease: dict, run: dict, re
             return {"task_state": "FAILED", "error": error, "handoff": h}
         h = h | {"model": installed}
         h["changed_files"] = sorted(set(h.get("changed_files") or []) | set(installed["installed"]))
+        _reopen_build(store, pid)
     accepted = None
     if status in ("DONE", "WAITING_USER"):
         # A task's edits are the union of what all its runs reported (an earlier run may have written the
@@ -152,7 +160,7 @@ def provider_from_env() -> AgentProvider:
     """CRAFTCTL_PROVIDER=fake (+ CRAFTCTL_FAKE_REPLY_FILE) lets the UI/CLI be exercised without Claude Code."""
     if os.environ.get("CRAFTCTL_PROVIDER") == "fake":
         path = os.environ.get("CRAFTCTL_FAKE_REPLY_FILE")
-        return FakeProvider(Path(path).read_text(encoding="utf8") if path else "")
+        return FakeProvider(Path(path).read_text(encoding="utf8") if path and Path(path).is_file() else "")
     return ClaudeCodeProvider()
 
 
@@ -273,3 +281,14 @@ def accept_run_changes(store: Store, run_id: str) -> dict:
                     _source_changed(store, p["id"])
                 return out | {"project": p["id"], "task": r["task_id"]}
     raise StateError(f"Run not found: {run_id}")
+
+
+def _reopen_build(store: Store, pid: str) -> None:
+    """New content after a build: the BUILD and GAME tasks must run again on the new source."""
+    for tid in (f"{pid}:BUILD", f"{pid}:GAME"):
+        t = next((x for x in store.tasks(pid) if x["id"] == tid), None)
+        if t and t["state"] == "DONE":
+            with store.tx() as con:
+                con.execute("UPDATE tasks SET state='BACKLOG',version=version+1,lease_owner=NULL,lease_expiry=NULL WHERE id=?", (tid,))
+                store.event(con, pid, "controller", "TASK_REOPENED", {"task": tid, "reason": "new content"})
+    store.refresh_ready(pid)

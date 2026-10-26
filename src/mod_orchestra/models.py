@@ -110,6 +110,123 @@ def install_model(store: Store, pid: str, mob_id: str, *, run_id: str, actor: st
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ws / info["files"][key], dst)
     changed = [str(t.relative_to(ws)).replace("\\", "/") for t in targets.values()]
+    # Keep this run's previews + texture so the UI can show versions after feedback rounds.
+    history = ws / ".mod-orchestra" / "previews" / run_id
+    history.mkdir(parents=True, exist_ok=True)
+    for png in sorted((ws / MODEL_DIR).glob(f"{mob_id}_*.png")) + [ws / info["files"]["png"]]:
+        shutil.copyfile(png, history / png.name)
     accepted = accept_changes(ws, run_id=run_id, actor=actor, changed=changed)
     store.add_event(pid, "controller", "MODEL_INSTALLED", {"mob": mob_id, "run": run_id, **{k: v for k, v in info.items() if k != "files"}})
     return info | {"installed": changed, "accepted": accepted["accepted"], "source": info["files"]["bbmodel"]}
+
+
+# ---------------------------------------------------------------------------------------------
+# Adding a mob AFTER generation (UI "Add a mob"). The controller writes the mob's own new files
+# deterministically (nothing an agent could have edited), merges lang keys, and hands the only
+# shared-file edits (ModMain/ModClient registrations, GeckoLib dependency if this is the first mob)
+# to a coder task with the exact reference snippets. Then the designer task and a fresh BUILD.
+# ---------------------------------------------------------------------------------------------
+import json as _json
+from dataclasses import replace as _replace
+from .spec import Mob, read_spec, validate_spec_content
+from .geckolib import (entity_java, renderer_java, client_init_java, main_registrations, placeholder_geo, placeholder_animation,
+                       entity_loot, class_name, gradle_dependency_lines, GECKOLIB_VERSION)
+from .fabric import placeholder_png
+
+
+def add_mob_after_generation(store: Store, pid: str, mob: Mob) -> dict:
+    proj = store.project(pid)
+    if proj["status"] not in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
+        raise StateError("Generate the project first; before generation use `craftctl add-mob`")
+    spec = read_spec(proj["spec"])
+    if any(m.identifier == mob.identifier for m in spec.mobs):
+        raise InputError(f"Mob {mob.identifier!r} already exists")
+    new_spec = _replace(spec, mobs=list(spec.mobs) + [mob])
+    validate_spec_content(new_spec)
+    first_mob = not spec.mobs
+    ws = Path(proj["root"])
+    java_dir = ws / "src/main/java" / spec.package.replace(".", "/")
+    res = ws / "src/main/resources"
+    assets = res / "assets" / pid
+    written: list[str] = []
+
+    def put(rel: Path, data: bytes):
+        if rel.exists():
+            raise InputError(f"Refusing to overwrite {rel.relative_to(ws)}")
+        rel.parent.mkdir(parents=True, exist_ok=True); rel.write_bytes(data); written.append(str(rel.relative_to(ws)).replace("\\", "/"))
+
+    put(java_dir / "entity" / f"{class_name(mob)}Entity.java", entity_java(new_spec, mob).encode())
+    put(java_dir / "client" / f"{class_name(mob)}Renderer.java", renderer_java(new_spec, mob).encode())
+    put(assets / "geo/entity" / f"{mob.identifier}.geo.json", (_json.dumps(placeholder_geo(mob), indent=2) + "\n").encode())
+    put(assets / "animations/entity" / f"{mob.identifier}.animation.json", (_json.dumps(placeholder_animation(mob), indent=2) + "\n").encode())
+    put(assets / "textures/entity" / f"{mob.identifier}.png", placeholder_png(pid + "/entity/" + mob.identifier, 64, 32))
+    put(res / "data" / pid / "loot_table/entities" / f"{mob.identifier}.json", (_json.dumps(entity_loot(new_spec, mob), indent=2) + "\n").encode())
+    put(assets / "models/item" / f"{mob.identifier}_spawn_egg.json", (_json.dumps({"parent": "minecraft:item/template_spawn_egg"}, indent=2) + "\n").encode())
+    lang_file = assets / "lang/en_us.json"
+    lang = _json.loads(lang_file.read_text(encoding="utf8")) if lang_file.is_file() else {}
+    lang[f"entity.{pid}.{mob.identifier}"] = mob.label
+    lang[f"item.{pid}.{mob.identifier}_spawn_egg"] = f"{mob.label} Spawn Egg"
+    lang_file.write_text(_json.dumps(lang, indent=2, sort_keys=True) + "\n", encoding="utf8"); written.append(f"src/main/resources/assets/{pid}/lang/en_us.json")
+
+    # spec update (status unchanged; approval stays: adding a mob is an additive, user-initiated change)
+    with store.tx() as con:
+        con.execute("UPDATE projects SET spec_json=? WHERE id=?", (_json.dumps(new_spec.to_dict(), sort_keys=True), pid))
+        store.event(con, pid, "user", "SPEC_CHANGED", {"reason": f"add mob {mob.identifier} after generation"})
+    accepted = accept_changes(ws, run_id=f"add-mob:{mob.identifier}", actor="user", changed=written)
+    from .dispatch import _source_changed
+    _source_changed(store, pid)
+
+    # coder task with the exact registration snippets; MODEL after it; BUILD requeued after MODEL
+    imports, fields, init = main_registrations(_replace(spec, mobs=[mob]))
+    client_lines = [l for l in client_init_java(new_spec).splitlines() if "EntityRendererRegistry.register" in l and class_name(mob) in l]
+    extra = [f"import {i};" for i in imports if class_name(mob) in i or "EntityType" in i or "MobCategory" in i or "SpawnEggItem" in i or "FabricDefaultAttributeRegistry" in i]
+    instructions = ["Register the new mob in the shared files (do not touch anything else):",
+                    f"1. {java_dir.relative_to(ws)}/ModMain.java — add imports:"] + ["   " + l for l in extra] + \
+                   ["   add fields:"] + ["   " + l for l in fields] + ["   in onInitialize():"] + ["   " + l for l in init] + \
+                   [f"   and, if the mod has a creative tab (TAB), add `output.accept({mob.identifier.upper()}_SPAWN_EGG);` to its displayItems.",
+                    f"2. {java_dir.relative_to(ws)}/client/ModClient.java — add inside onInitializeClient():"] + ["   " + l.strip() for l in client_lines]
+    if first_mob:
+        repo_block, dep_line = gradle_dependency_lines()
+        instructions += ["3. This is the mod's first mob: build.gradle needs the GeckoLib repository block and dependency, gradle.properties needs "
+                         f"`geckolib_version={GECKOLIB_VERSION}`, fabric.mod.json needs the client entrypoint `{spec.package}.client.ModClient` "
+                         "and `\"geckolib\": \">=4.7\"` under depends, and src/main/java/.../client/ModClient.java must be created (ClientModInitializer).",
+                         "   repository block:", *("   " + l for l in repo_block.splitlines()), "   dependency line:", "   " + dep_line.strip()]
+    instructions += ["4. Run ./gradlew build (or gradlew.bat build) and report BUILD_PASS only if it exits 0."]
+    task_add = f"{pid}:ADD_MOB:{mob.identifier}"
+    task_model = model_task_id(pid, mob.identifier)
+    store.add_task(pid, task_add, "coder", f"Register new mob {mob.label} in ModMain/ModClient" + (" + GeckoLib dependency" if first_mob else ""))
+    store.add_task(pid, task_model, "designer", f"Blockbench/GeckoLib model + idle/walk + texture for mob: {mob.label}", after=[task_add])
+    store.add_event(pid, "controller", "MOB_ADDED", {"mob": mob.identifier, "files": written, "tasks": [task_add, task_model], "first_mob": first_mob})
+    with store.tx() as con:
+        con.execute("INSERT OR IGNORE INTO task_instructions(task_id, text) VALUES(?,?)", (task_add, "\n".join(instructions)))
+    return {"mob": mob.identifier, "files": written, "accepted": accepted["accepted"], "tasks": [task_add, task_model], "first_mob": first_mob,
+            "next": {"action": "dispatch", "payload": {"task": task_add}}}
+
+
+def set_mob_drops(store: Store, pid: str, mob_id: str, drops: list) -> dict:
+    """Replace a mob's death loot. Before generation it edits the spec; after, it also rewrites the
+    (controller-owned) loot table file as a user revision."""
+    from .spec import coerce_mob_drop
+    proj = store.project(pid)
+    spec = read_spec(proj["spec"])
+    mob = next((m for m in spec.mobs if m.identifier == mob_id), None)
+    if mob is None:
+        raise InputError(f"Unknown mob {mob_id!r}")
+    new_mob = _replace(mob, drops=tuple(coerce_mob_drop(d) for d in drops))
+    new_spec = _replace(spec, mobs=[new_mob if m.identifier == mob_id else m for m in spec.mobs])
+    validate_spec_content(new_spec)
+    with store.tx() as con:
+        con.execute("UPDATE projects SET spec_json=? WHERE id=?", (_json.dumps(new_spec.to_dict(), sort_keys=True), pid))
+        store.event(con, pid, "user", "SPEC_CHANGED", {"reason": f"drops of {mob_id}"})
+    out = {"mob": mob_id, "drops": [d.__dict__ for d in new_mob.drops]}
+    if proj["status"] in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
+        ws = Path(proj["root"])
+        loot = ws / "src/main/resources/data" / pid / "loot_table/entities" / f"{mob_id}.json"
+        loot.parent.mkdir(parents=True, exist_ok=True)
+        loot.write_text(_json.dumps(entity_loot(new_spec, new_mob), indent=2) + "\n", encoding="utf8")
+        rel = str(loot.relative_to(ws)).replace("\\", "/")
+        accepted = accept_changes(ws, run_id=f"drops:{mob_id}", actor="user", changed=[rel])
+        from .dispatch import _source_changed, _reopen_build
+        _source_changed(store, pid); _reopen_build(store, pid)
+        out |= {"file": rel, "accepted": accepted["accepted"], "note": "Loot table rewritten; rebuild to apply."}
+    return out

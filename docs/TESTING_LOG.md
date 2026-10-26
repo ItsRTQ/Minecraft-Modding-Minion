@@ -261,6 +261,16 @@ First autonomous model: `craftctl dispatch critter_test --task critter_test:MODE
 | I2 | Low | manifest | Designer previews (`models/*_rest.png`, `_walk.png`) and its texture script were accepted into the manifest as reported changes. Harmless; consider excluding `models/*_rest.png`-style previews. | NOTED |
 | I3 | Low | model | Designer flagged the bird (~0.4 blocks tall) vs the placeholder hitbox (0.8×0.9). Size/hitbox should derive from the model bounds in slice 3. | OPEN |
 
+## Round 5 — 2026-10-26 · sandbox · UI/UX overhaul (`claude-feature/ui-ux-overhaul`), driven through the API with the fake provider
+
+| ID | Sev | Area | Finding | Status |
+|---|---|---|---|---|
+| J1 | High | generate | A pre-generation interpreter run writes its log to `<workspace>/.mod-orchestra/runs/`, so `generate` saw a non-empty directory and refused. The UI flow (interpret first, generate later) always hit this; the CLI tests never did. `generate` now keeps a controller-owned `.mod-orchestra` and merges it into the staged workspace. | FIXED |
+| J2 | High | plan | The plan was frozen at the first `dispatch`/`plan`; a later interpreter proposal (mobs, content) never got its tasks (`Task not found: …:MODEL:…`). `approve-spec` re-plans while no source exists; `set_tasks(replace=True)` keeps a DONE SPEC task. | FIXED |
+| J3 | Low | fake provider | `CRAFTCTL_FAKE_REPLY_FILE` was read once; now read per run (dev/testing only). | FIXED |
+
+Owner session on the UI (host run 10, 2026-10-26): drops edited through the picker → rebuild → client launched from the UI; feedback, Add-a-mob form, Autopilot; three UX findings fixed during the session (stale needs_user shown as pending; Autopilot buried in Verification; evidence from older sources mixed in). **v1 criterion 7 observed.** `models/sky_critter.bbmodel` opened in Blockbench via the new button: rig, animations and texture load — the last unverified claim of the blockbench-mcp-safe audit is now verified. I3 (hitbox from model bounds) closed as not needed: the owner judged the in-game hitbox adequate.
+
 ## Not yet tested
 
 - MCP server **as connected by Claude Code** (only the hand-driven stdio run in Round 3; needs a restart after A1).

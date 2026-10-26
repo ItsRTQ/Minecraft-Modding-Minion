@@ -58,6 +58,9 @@ CREATE TABLE IF NOT EXISTS runs (
 CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id, created_at);
 ALTER TABLE tasks ADD COLUMN last_error TEXT;
 """),
+    (4, "per-task worker instructions (add-mob after generation)", """
+CREATE TABLE IF NOT EXISTS task_instructions (task_id TEXT PRIMARY KEY, text TEXT NOT NULL);
+"""),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 
@@ -187,16 +190,26 @@ class Store:
                 con.execute("UPDATE projects SET spec_state=? WHERE id=?", (spec_state, pid))
                 self.event(con, pid, "user", "SPEC_STATUS", {"status": spec_state})
 
-    def set_tasks(self, pid: str, tasks: list[dict], edges: list[tuple[str, str]]) -> None:
+    def set_tasks(self, pid: str, tasks: list[dict], edges: list[tuple[str, str]], *, replace: bool = False) -> None:
+        """Create the task graph. With replace=True (only before any source exists) the previous plan is
+        dropped except runs/evidence history; a DONE SPEC task stays DONE so approval is not lost."""
         with self.tx() as con:
-            if con.execute("SELECT 1 FROM tasks WHERE project_id=? LIMIT 1", (pid,)).fetchone():
-                raise StateError("Tasks already planned; spec revision/replanning is not implemented")
+            existing = {r["id"]: dict(r) for r in con.execute("SELECT id,state FROM tasks WHERE project_id=?", (pid,))}
+            if existing and not replace:
+                raise StateError("Tasks already planned; use replan before generation")
+            if existing:
+                con.execute("DELETE FROM task_edges WHERE predecessor IN (SELECT id FROM tasks WHERE project_id=?) OR successor IN (SELECT id FROM tasks WHERE project_id=?)", (pid, pid))
+                con.execute("DELETE FROM tasks WHERE project_id=?", (pid,))
             for t in tasks:
+                state = "READY" if t.get("ready") else "BACKLOG"
+                prev = existing.get(t["id"])
+                if prev and prev["state"] == "DONE" and t["id"].endswith(":SPEC"):
+                    state = "DONE"
                 con.execute("INSERT INTO tasks(id,project_id,role,title,state) VALUES(?,?,?,?,?)",
-                            (t["id"], pid, t["role"], t["title"], "READY" if t.get("ready") else "BACKLOG"))
+                            (t["id"], pid, t["role"], t["title"], state))
             for a, b in edges:
                 con.execute("INSERT INTO task_edges(predecessor,successor) VALUES(?,?)", (a, b))
-            self.event(con, pid, "scrum-master", "TASK_GRAPH_CREATED", {"tasks": len(tasks), "edges": len(edges)})
+            self.event(con, pid, "scrum-master", "TASK_GRAPH_REPLANNED" if existing else "TASK_GRAPH_CREATED", {"tasks": len(tasks), "edges": len(edges)})
 
     def tasks(self, pid: str) -> list[dict]:
         with self.tx() as con:
@@ -220,6 +233,11 @@ class Store:
                         (worker, time.time() + ttl, task_id))
             self.event(con, row["project_id"], worker, "TASK_LEASED", {"task": task_id})
             return dict(con.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone())
+
+    def task_instructions(self, task_id: str) -> str:
+        with self.tx() as con:
+            row = con.execute("SELECT text FROM task_instructions WHERE task_id=?", (task_id,)).fetchone()
+        return row["text"] if row else ""
 
     def lease_info(self, task_id: str) -> dict | None:
         with self.tx() as con:
