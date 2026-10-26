@@ -156,17 +156,17 @@
                 </div>
                 <label>Preset <select id="mt-preset"><option value="iron">like iron (250 uses, speed 6, +2 dmg, armor 2/6/5/2)</option><option value="diamond" selected>like diamond (1561 uses, speed 8, +3 dmg, armor 3/8/6/3, toughness 2)</option><option value="netherite">like netherite (2031 uses, speed 9, +4 dmg, toughness 3, knockback resistance)</option><option value="custom">custom numbers</option></select></label>
                 <div class="row numbers" id="mt-numbers">
-                  <label>Durability <input id="mt-durability" type="number" min="1" max="10000" value="1561"></label>
-                  <label>Mining speed <input id="mt-speed" type="number" min="0.5" max="50" step="0.5" value="8"></label>
-                  <label>Attack bonus <input id="mt-attack" type="number" min="0" max="50" step="0.5" value="3"></label>
-                  <label>Mines up to <select id="mt-level"><option value="wood">wood</option><option value="stone">stone</option><option value="iron">iron</option><option value="diamond" selected>diamond</option><option value="netherite">netherite</option></select></label>
-                  <label>Enchantability <input id="mt-ench" type="number" min="0" max="50" value="10"></label>
-                  <label>Armor defense (H/C/L/B) <input id="mt-defense" value="3 8 6 3" pattern="\d+ \d+ \d+ \d+"></label>
-                  <label>Armor durability ×<input id="mt-adur" type="number" min="1" max="100" value="33"></label>
-                  <label>Toughness <input id="mt-tough" type="number" min="0" max="20" step="0.5" value="2"></label>
-                  <label>Knockback resist. <input id="mt-kb" type="number" min="0" max="1" step="0.05" value="0"></label>
+                  <label>Durability <input id="mt-durability" type="number" min="1" max="10000" value="1561"><small>Uses before a tool breaks. Iron 250 · diamond 1561 · netherite 2031.</small></label>
+                  <label>Mining speed <input id="mt-speed" type="number" min="0.5" max="50" step="0.5" value="8"><small>How fast blocks break. Wood 2 · iron 6 · diamond 8 · netherite 9.</small></label>
+                  <label>Attack bonus <input id="mt-attack" type="number" min="0" max="50" step="0.5" value="3"><small>Extra damage added to every tool of this material. Iron 2 · diamond 3 · netherite 4.</small></label>
+                  <label>Mines up to <select id="mt-level"><option value="wood">wood</option><option value="stone">stone</option><option value="iron">iron</option><option value="diamond" selected>diamond</option><option value="netherite">netherite</option></select><small>Highest block tier that drops when mined: "diamond" means it can mine obsidian.</small></label>
+                  <label>Enchantability <input id="mt-ench" type="number" min="0" max="50" value="10"><small>Chance of better enchantments at the table. Diamond 10 · iron 14 · gold 22.</small></label>
+                  <label>Armor defense (H/C/L/B) <input id="mt-defense" value="3 8 6 3" pattern="\d+ \d+ \d+ \d+"><small>Armor points per piece: helmet, chestplate, leggings, boots. Iron 2 6 5 2 · diamond 3 8 6 3.</small></label>
+                  <label>Armor durability × <input id="mt-adur" type="number" min="1" max="100" value="33"><small>Multiplier for armor hits before breaking. Leather 5 · iron 15 · diamond 33 · netherite 37.</small></label>
+                  <label>Toughness <input id="mt-tough" type="number" min="0" max="20" step="0.5" value="2"><small>Reduces how much strong hits bypass armor. Most 0 · diamond 2 · netherite 3.</small></label>
+                  <label>Knockback resist. <input id="mt-kb" type="number" min="0" max="1" step="0.05" value="0"><small>0–1 per piece; netherite 0.1. Full set at 0.25 ≈ immune to knockback.</small></label>
                 </div>
-                <label><input type="checkbox" id="mt-recipes" checked> Generate the standard crafting recipes (vanilla patterns)</label>
+                <label class="check"><input type="checkbox" id="mt-recipes" checked><span>Generate the standard crafting recipes</span><small>Vanilla patterns: sword = 2 material + stick, pickaxe = 3 material + 2 sticks, helmet = 5 material, …</small></label>
                 <div class="actions"><button class="primary" type="submit">Add set</button></div>
               </form></div></div>
 <div id="modal-food" class="lightbox hidden"><div class="modal"><div class="modal-head"><h3>Add a food</h3><button type="button" class="secondary mini modal-close">✕</button></div><form id="addfood-form" class="form">
@@ -178,8 +178,15 @@
                   <label>Nutrition (0–20) <input id="fd-nutrition" type="number" min="0" max="20" value="4"><small>apple 4 · bread 5 · steak 8 · golden apple 4</small></label>
                   <label>Saturation (0–2) <input id="fd-saturation" type="number" min="0" max="2" step="0.1" value="0.3"><small>apple 0.3 · steak 0.8 · golden apple 1.2</small></label>
                 </div>
-                <label>Effect (optional) <div class="row"><select id="fd-effect"><option value="">none</option><option value="minecraft:regeneration">regeneration</option><option value="minecraft:speed">speed</option><option value="minecraft:strength">strength</option><option value="minecraft:resistance">resistance</option><option value="minecraft:fire_resistance">fire resistance</option><option value="minecraft:night_vision">night vision</option><option value="minecraft:absorption">absorption</option><option value="minecraft:saturation">saturation</option><option value="minecraft:haste">haste</option><option value="minecraft:jump_boost">jump boost</option><option value="minecraft:water_breathing">water breathing</option><option value="minecraft:poison">poison</option><option value="minecraft:nausea">nausea</option></select><input id="fd-duration" type="number" min="1" max="72000" value="200" placeholder="duration (ticks)"><input id="fd-amplifier" type="number" min="0" max="9" value="0" placeholder="level-1"></div><small>duration in ticks (20 = 1 s); amplifier 0 = level I</small></label>
-                <div class="row"><label><input type="checkbox" id="fd-always"> Edible even when full (like golden apple)</label><label><input type="checkbox" id="fd-fast"> Eats fast (like dried kelp)</label></div>
+                <label>Effect when eaten (optional) <select id="fd-effect"><option value="">none</option><option value="minecraft:regeneration">regeneration</option><option value="minecraft:speed">speed</option><option value="minecraft:strength">strength</option><option value="minecraft:resistance">resistance</option><option value="minecraft:fire_resistance">fire resistance</option><option value="minecraft:night_vision">night vision</option><option value="minecraft:absorption">absorption</option><option value="minecraft:saturation">saturation</option><option value="minecraft:haste">haste</option><option value="minecraft:jump_boost">jump boost</option><option value="minecraft:water_breathing">water breathing</option><option value="minecraft:poison">poison</option><option value="minecraft:nausea">nausea</option></select><small>A potion effect applied on eating, like the golden apple's regeneration.</small></label>
+                <div class="row">
+                  <label>Effect duration <input id="fd-duration" type="number" min="1" max="72000" value="200"><small>In ticks: 20 ticks = 1 second, so 200 = 10 s. Golden apple regeneration lasts 100 (5 s).</small></label>
+                  <label>Effect level <input id="fd-amplifier" type="number" min="0" max="9" value="0"><small>0 = level I, 1 = level II… Higher is stronger.</small></label>
+                </div>
+                <div class="row">
+                  <label class="check"><input type="checkbox" id="fd-always"><span>Edible even when full</span><small>Can be eaten at full hunger, like the golden apple.</small></label>
+                  <label class="check"><input type="checkbox" id="fd-fast"><span>Eats fast</span><small>Half the eating time, like dried kelp.</small></label>
+                </div>
                 <div class="actions"><button class="primary" type="submit">Add food</button></div>
               </form></div></div>
 <div id="modal-feat" class="lightbox hidden"><div class="modal"><div class="modal-head"><h3>Add an item or block</h3><button type="button" class="secondary mini modal-close">✕</button></div><form id="addfeature-form" class="form">
