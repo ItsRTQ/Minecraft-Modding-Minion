@@ -93,6 +93,15 @@ def apply_outcome(store: Store, pid: str, task: dict, lease: dict, run: dict, re
             store.set_task_state(task["id"], worker, version, "FAILED", error=error[:500])
             store.finish_run(run["id"], state="FAILED", exit_code=result.exit_code, duration_s=result.duration_s, log_path=log,
                              session_id=result.session_id, cost_usd=result.cost_usd, turns=result.turns, handoff=h, error=error)
+            # Format failures are the worker's, not the user's: retry once automatically with the reason in the packet.
+            prior = sum(1 for r in store.runs(pid) if r["task_id"] == task["id"] and r["state"] == "FAILED")
+            if prior < MAX_AUTO_RETRIES + 1:
+                with store.tx() as con:
+                    con.execute("INSERT OR REPLACE INTO task_instructions(task_id, text) VALUES(?,?)",
+                                (task["id"], f"PREVIOUS ATTEMPT REJECTED BY THE CONTROLLER: {exc}\nFix exactly that. The `spec` object goes INSIDE the ```handoff JSON block."))
+                store.requeue(task["id"], "auto-retry after rejected proposal")
+                store.add_event(pid, "controller", "AUTO_RETRY", {"task": task["id"], "attempt": prior + 1, "reason": str(exc)[:200]})
+                return {"task_state": "FAILED", "error": error, "handoff": h, "auto_retry": {"task": task["id"], "attempt": prior + 1}}
             return {"task_state": "FAILED", "error": error, "handoff": h}
         h = h | {"needs_user": interp["needs_user"], "interpretation": interp}
         status = "WAITING_USER"  # the user answers or approves; the controller, not the worker, closes SPEC via approve-spec
@@ -213,6 +222,7 @@ def reconcile_stale_runs(store: Store, pid: str) -> list[str]:
     return stale
 
 
+MAX_AUTO_RETRIES = 1
 HUMAN_NEEDED = ("WAITING_USER", "BLOCKED", "FAILED")
 
 
@@ -248,6 +258,8 @@ def orchestrate(store: Store, pid: str, *, max_runs: int = 5, max_cost_usd: floa
             rep = out.get("repair") or {}
             if rep.get("task") and not rep.get("exhausted"):
                 continue  # the controller opened a repair task; keep going, the debugger is next
+            if out.get("auto_retry"):
+                continue  # a format failure was requeued with the reason; run it again
             needs = (out.get("handoff") or {}).get("needs_user") or []
             reason = f"{out['task_state']} on {out['task']}" + (": " + "; ".join(needs) if needs else "")
             if rep.get("exhausted"):

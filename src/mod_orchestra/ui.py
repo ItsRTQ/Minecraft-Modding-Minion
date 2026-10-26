@@ -147,6 +147,9 @@ def serve(store: Store, port: int = 8765) -> None:
                     if op == "plan": return plan_project(store, pid)
                     if op == "approve":
                         approve_spec(store, pid)
+                        if payload.get("autopilot"):
+                            start_job(pid, "orchestrate", lambda: orchestrate(store, pid, max_runs=int(payload.get("max_runs", 5)), max_cost_usd=float(payload.get("max_cost_usd", 5.0))))
+                            return {"status": "SPEC_APPROVED", "autopilot": True}
                         return {"status": "SPEC_APPROVED"}
                     if op == "generate": return generate_project(store, pid)
                     if op == "request-build": return request_build(store, pid)

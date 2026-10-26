@@ -152,7 +152,10 @@ function actionButton(p, s) {
   switch (s.action) {
     case "dispatch": return btn(s.who === "agent" ? "Run agent" : "Run", async () => { if (!confirm("Start ONE Claude Code worker for " + (s.payload.task || "the next task") + "?\nUses your installed Claude Code and your session. It cannot approve, decide or build.")) return; await api(`/api/project/${id}/dispatch`, { task: s.payload.task }); toast("Worker started. This page refreshes until it finishes.", "ok"); await openProject(id); }, "primary");
     case "answer": return btn("Answer", async () => { const text = prompt(s.label.replace(/^Answer: /, "")); if (!text) return; await run(() => api(`/api/project/${id}/answer`, { text }), "Answer added. Run the interpreter again from Now."); }, "primary");
-    case "approve": return btn("Approve spec", () => run(() => api(`/api/project/${id}/approve`, {}), "Spec approved."), "primary");
+    case "approve": { const wrap = el("div", null, "actions"); wrap.style.marginTop = "0";
+      wrap.append(btn("Approve spec", () => run(() => api(`/api/project/${id}/approve`, {}), "Spec approved."), "primary"));
+      wrap.append(btn("Approve & continue Autopilot", async () => { const budget = prompt("Autopilot budget in dollars (max 5 runs):", "5"); if (budget == null) return; await api(`/api/project/${id}/approve`, { autopilot: true, max_runs: 5, max_cost_usd: Math.max(0.5, Math.min(50, Number(budget) || 5)) }); toast("Approved. Autopilot running; it stops when it needs you.", "ok"); await openProject(id); }, "secondary"));
+      return wrap; }
     case "generate": return btn("Generate source", () => run(() => api(`/api/project/${id}/generate`, {}), "Source generated (unverified)."), "primary");
     case "request-build": return btn("Request build approval", () => run(() => api(`/api/project/${id}/request-build`, {}), "Approval requested. Grant it in Now."), "primary");
     case "request-smoke": return btn("Request server smoke", () => run(() => api(`/api/project/${id}/request-smoke`, {}), "Approval requested. Grant it in Now."), "primary");
@@ -404,7 +407,7 @@ function renderRuns(p) {
       if (h.questions?.length) card.append(el("div", "questions: " + h.questions.join(" · "), "risk"));
     }
     if (r.error) card.append(el("div", "⚠ " + r.error, "needs"));
-    const lb = btn("Worker log", async () => { const d = await api("/api/run/" + r.id); let box = card.querySelector(".log"); if (!box) { box = el("pre", null, "log"); card.append(box); } box.textContent = d.log_tail || "(empty)"; }, "mini secondary"); card.append(lb);
+    const lb = btn("Worker log", async () => { let box = card.querySelector(".log"); if (box) { const hidden = box.classList.toggle("hidden"); lb.textContent = hidden ? "Worker log" : "Hide log"; return; } const d = await api("/api/run/" + r.id); box = el("pre", null, "log"); box.textContent = d.log_tail || "(empty)"; card.append(box); lb.textContent = "Hide log"; }, "mini secondary"); card.append(lb);
     list.append(card);
   }
 }

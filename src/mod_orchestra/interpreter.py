@@ -62,6 +62,10 @@ ingredient; one drop rule per block, and the block must be one of the features; 
 mob identifiers must not collide with items/blocks (their spawn egg is <id>_spawn_egg); mob health 1-1024, speed 0.05-1.5.
 Also put the questions (if any) under `questions`, as a list of plain sentences addressed to the user.
 Use status WAITING_USER (the user must answer or approve); never DONE. Do not create or edit any files.
+
+HARD REQUIREMENT: the `spec` object MUST be a key INSIDE the ```handoff JSON block. Prose, tables or a
+summary outside the block are ignored by the controller; a handoff without `spec` is rejected and the run
+is wasted. Keep explanations short and put them under `assumptions`/`unknowns`.
 """
 
 
