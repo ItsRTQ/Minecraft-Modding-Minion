@@ -70,6 +70,9 @@ def build_envelope(store: Store, pid: str, task: dict) -> TaskEnvelope:
     elif task["id"].endswith(":SPEC"):
         from .interpreter import SPEC_INSTRUCTIONS
         extra = SPEC_INSTRUCTIONS
+    elif ":SPRITES:" in task["id"]:
+        from .models import SPRITES_INSTRUCTIONS
+        extra = SPRITES_INSTRUCTIONS
     elif ":MODEL:" in task["id"]:
         from .models import MODEL_INSTRUCTIONS
         from .feedback import feedback_context
@@ -117,6 +120,21 @@ def apply_outcome(store: Store, pid: str, task: dict, lease: dict, run: dict, re
         status = "WAITING_USER"  # the user answers or approves; the controller, not the worker, closes SPEC via approve-spec
     if ":ADD_MOB:" in task["id"] and status == "DONE":
         _reopen_build(store, pid)
+    if ":SPRITES:" in task["id"] and status == "DONE":
+        from .models import install_sprites
+        from .validation import InputError
+        ev = next((e for e in store.events(pid, 500) if e["kind"] == "SPRITES_REQUESTED" and e["payload"].get("task") == task["id"]), None)
+        ids = (ev or {}).get("payload", {}).get("items", [])
+        try:
+            sp = install_sprites(store, pid, task["id"], ids, run_id=run["id"], actor=f"agent:{task['role']}")
+        except (InputError, StateError, OSError) as exc:
+            error = f"sprite deliverables rejected: {exc}"
+            store.set_task_state(task["id"], worker, version, "FAILED", error=error[:500])
+            store.finish_run(run["id"], state="FAILED", exit_code=result.exit_code, duration_s=result.duration_s, log_path=log,
+                             session_id=result.session_id, cost_usd=result.cost_usd, turns=result.turns, handoff=h, error=error)
+            return {"task_state": "FAILED", "error": error, "handoff": h}
+        h = h | {"sprites": sp}
+        h["changed_files"] = sorted(set(h.get("changed_files") or []) | set(sp["installed"]))
     if ":MODEL:" in task["id"] and status == "DONE":
         from .models import install_model
         from .validation import InputError

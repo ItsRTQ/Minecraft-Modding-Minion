@@ -21,6 +21,13 @@ from .validation import InputError, normalize_id
 GENERATED_STATUSES = ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED")
 
 
+def latest_contact_sheet(store: Store, pid: str) -> str | None:
+    root = Path(store.project(pid)["root"]) / ".mod-orchestra" / "previews"
+    runs = {r["id"]: r.get("created_at", 0) for r in store.runs(pid)}
+    sheets = sorted(root.glob("*/sprites_contact_sheet.png"), key=lambda p: runs.get(p.parent.name, 0)) if root.is_dir() else []
+    return f".mod-orchestra/previews/{sheets[-1].parent.name}/sprites_contact_sheet.png" if sheets else None
+
+
 def list_features(store: Store, pid: str) -> list[dict]:
     proj = store.project(pid)
     ws = Path(proj["root"]); assets = ws / "src/main/resources/assets" / pid

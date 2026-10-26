@@ -339,6 +339,8 @@ qs("am-id").oninput = () => { qs("am-id").dataset.touched = "1"; };
 async function renderFeatures(p) {
   const list = qs("features-list"); list.replaceChildren();
   let feats = []; try { feats = await api(`/api/project/${p.id}/features`); } catch (e) { list.append(el("p", e.message, "muted")); return; }
+  featureCache = feats;
+  try { const sheet = await api(`/api/project/${p.id}/contact-sheet`); const box = qs("sheet-box"); if (sheet.path) { box.classList.remove("hidden"); qs("sheet-img").src = fileUrl(p.id, sheet.path); qs("sheet-preview").onclick = () => openLightbox(qs("sheet-img").src, "sprites contact sheet"); } else box.classList.add("hidden"); } catch {}
   const generated = ["SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"].includes(p.status);
   if (!feats.length) list.append(el("p", "No items or blocks yet.", "muted"));
   for (const f of feats) {
@@ -405,6 +407,25 @@ qs("addfood-form").onsubmit = async (e) => {
     const out = await api(`/api/project/${selected}/add-food`, { identifier: qs("fd-id").value.trim(), label: qs("fd-label").value.trim(), nutrition: Number(qs("fd-nutrition").value), saturation: Number(qs("fd-saturation").value), effects, always_edible: qs("fd-always").checked, fast: qs("fd-fast").checked, color: qs("fd-color-hex").value });
     qs("addfood-form").reset(); delete qs("fd-id").dataset.touched; closeModal("modal-food");
     toast(out.generated ? `Food added. Files written; the coder registers it (${out.task}) — see Now.` : "Food added to the spec. Re-approve before generating.", "ok");
+    await openProject(selected);
+  } catch (err) { toast(err.message, "bad"); }
+};
+let featureCache = [];
+qs("sprites-btn").onclick = () => {
+  if (!selected) return;
+  const list = qs("sprites-list"); list.replaceChildren();
+  for (const f of featureCache) { if (f.kind === "armor" && !f.identifier.endsWith("_helmet") && false) continue; const l = el("label"); const c = el("input"); c.type = "checkbox"; c.value = f.identifier; c.checked = true; l.append(c, document.createTextNode(` ${f.label} (${f.kind})`)); list.append(l); }
+  qs("sprites-notes").value = ""; qs("modal-sprites").classList.remove("hidden");
+};
+qs("sprites-all").onclick = () => { for (const c of qs("sprites-list").querySelectorAll("input")) c.checked = true; };
+qs("sprites-none").onclick = () => { for (const c of qs("sprites-list").querySelectorAll("input")) c.checked = false; };
+qs("sprites-go").onclick = async () => {
+  const identifiers = [...qs("sprites-list").querySelectorAll("input:checked")].map(c => c.value);
+  if (!identifiers.length) return toast("Pick at least one item", "bad");
+  try {
+    const out = await api(`/api/project/${selected}/sprites`, { identifiers, notes: qs("sprites-notes").value });
+    closeModal("modal-sprites");
+    if (confirm(`Task ${out.task} created for ${identifiers.length} sprite(s). Start the designer now?`)) { await api(`/api/project/${selected}/dispatch`, { task: out.task }); toast("Designer painting… the contact sheet appears in Items when done.", "ok"); }
     await openProject(selected);
   } catch (err) { toast(err.message, "bad"); }
 };

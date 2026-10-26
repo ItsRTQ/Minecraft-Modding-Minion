@@ -109,7 +109,9 @@
               <button type="button" class="primary" data-modal="modal-mat">＋ Tool &amp; armor set</button>
               <button type="button" class="primary" data-modal="modal-food">＋ Food</button>
               <button type="button" class="primary" data-modal="modal-feat">＋ Item or block</button>
+              <button type="button" class="secondary" id="sprites-btn">🎨 Paint icons with the designer</button>
             </div>
+            <div id="sheet-box" class="hidden"><div class="muted" style="margin-top:12px">Latest contact sheet from the designer (click to enlarge):</div><div class="previews"><div class="preview" id="sheet-preview"><img id="sheet-img" alt="contact sheet"><small>sprites_contact_sheet.png</small></div></div></div>
           </div>
         </div>
         <div id="sub-worldgen" class="subpane hidden">
@@ -229,6 +231,14 @@
                 <label>What should it look like? <textarea id="am-desc" rows="2" placeholder="Small fox with a crescent on its forehead, dark blue fur, bushy tail"></textarea><small>Sent to the designer as its first feedback note.</small></label>
                 <div class="actions"><button class="primary" type="submit">Add mob</button><span class="muted" id="am-note"></span></div>
               </form></div></div>
+<div id="modal-sprites" class="lightbox hidden"><div class="modal">
+  <div class="modal-head"><h3>Paint icons with the designer</h3><button type="button" class="secondary mini modal-close">✕</button></div>
+  <p class="muted">A designer agent paints 16×16 pixel-art sprites by script for the items you pick and shows a contact sheet here. The controller only installs sprites that are 16×16, have a transparent background and are not a flat colour. ~$0.5–1 per run. Your own PNG upload always wins if you have art.</p>
+  <div id="sprites-list" class="checks" style="margin-bottom:10px"></div>
+  <div class="actions" style="margin:0 0 10px"><button type="button" class="secondary mini" id="sprites-all">Select all placeholders</button><button type="button" class="secondary mini" id="sprites-none">Clear</button></div>
+  <label>Style notes (optional) <textarea id="sprites-notes" rows="2" placeholder="e.g. deep red rubies with a pink highlight; chunky outlines like vanilla"></textarea></label>
+  <div class="actions"><button type="button" class="primary" id="sprites-go">Create task and run designer</button></div>
+</div></div>
 <div id="modal-delete" class="lightbox hidden"><div class="modal">
   <div class="modal-head"><h3>Delete project</h3><button type="button" class="secondary mini modal-close">✕</button></div>
   <p class="muted">Removes <b id="del-name"></b> (<span id="del-id" class="mono"></span>) from the controller: spec, tasks, runs, approvals and evidence. This cannot be undone.</p>

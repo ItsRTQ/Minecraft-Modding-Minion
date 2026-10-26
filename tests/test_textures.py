@@ -74,3 +74,32 @@ class Generated(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Sprites(Generated):
+    def test_request_validate_install(self):
+        from mod_orchestra.models import request_sprites, install_sprites
+        from mod_orchestra.dispatch import dispatch
+        from mod_orchestra.provider import FakeProvider
+        import json
+        out = request_sprites(self.store, "t_mod", ["gem", "gemsteel_sword", "gem_pie", "ore"], notes="deep red")
+        self.assertEqual(out["task"], "t_mod:SPRITES:1"); self.assertIn("gemsteel_sword", self.store.task_instructions("t_mod:SPRITES:1"))
+        with self.assertRaisesRegex(InputError, "Unknown identifiers"):
+            request_sprites(self.store, "t_mod", ["dragon"])
+        ws = Path(self.store.project("t_mod")["root"]); sp = ws / "models" / "sprites"; sp.mkdir(parents=True)
+        (sp / "gem.png").write_bytes(tinted_item_png("gem", (200, 0, 0), (255, 100, 100)))      # valid
+        (sp / "gemsteel_sword.png").write_bytes(armor_layer_png(1, (1, 1, 1), (2, 2, 2), ("helmet",)))  # 64x32 -> rejected
+        (sp / "gem_pie.png").write_bytes(tinted_item_png("block", (5, 5, 5), (6, 6, 6)))         # opaque item -> rejected
+        (sp / "ore.png").write_bytes(tinted_item_png("block", (90, 90, 90), (120, 120, 120)))    # opaque block -> ok
+        (sp / "contact_sheet.png").write_bytes(tinted_item_png("gem", (1, 1, 1), (2, 2, 2)))
+        h = {"task": "t_mod:SPRITES:1", "status": "DONE", "scope": "s", "changed_files": ["models/sprites/gem.png"], "checks_run": [], "evidence": {"level": "STATIC", "pointer": "models/sprites"}, "risks": [], "unknowns": [], "needs_user": [], "next_agent": "none"}
+        res = dispatch(self.store, "t_mod", task_id="t_mod:SPRITES:1", provider=FakeProvider("```handoff\n" + json.dumps(h) + "\n```"))
+        self.assertEqual(res["task_state"], "DONE", res.get("error"))
+        sp_out = res["handoff"]["sprites"]
+        self.assertEqual(sorted(sp_out["installed"]), ["src/main/resources/assets/t_mod/textures/block/ore.png", "src/main/resources/assets/t_mod/textures/item/gem.png"])
+        self.assertIn("gemsteel_sword", sp_out["rejected"]); self.assertIn("gem_pie", sp_out["rejected"])
+        self.assertTrue(sp_out["contact_sheet"].endswith("sprites_contact_sheet.png"))
+        from mod_orchestra.content import latest_contact_sheet
+        self.assertEqual(latest_contact_sheet(self.store, "t_mod"), sp_out["contact_sheet"])
+        from mod_orchestra.fabric import validate_generated
+        self.assertEqual(validate_generated(ws)["status"], "PASS")

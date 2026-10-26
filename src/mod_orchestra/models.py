@@ -230,3 +230,109 @@ def set_mob_drops(store: Store, pid: str, mob_id: str, drops: list) -> dict:
         _source_changed(store, pid); _reopen_build(store, pid)
         out |= {"file": rel, "accepted": accepted["accepted"], "note": "Loot table rewritten; rebuild to apply."}
     return out
+
+
+# ---------------------------------------------------------------------------------------------
+# SPRITES task: the designer paints 16x16 item/block sprites by script (path A). The controller
+# validates (size, transparency, not flat) and installs them over the tinted placeholders.
+# ---------------------------------------------------------------------------------------------
+SPRITES_INSTRUCTIONS = """
+## Your job on this task (designer — sprites)
+Paint 16x16 pixel-art sprites for the items listed under "Sprites to paint" and write each one to
+`models/sprites/<identifier>.png` (exact names). Use a small Python script with the stdlib only (zlib/struct,
+no PIL) that writes RGBA PNGs; keep the script at `models/sprites/paint.py` so it can be rerun.
+Rules: transparent background (blocks are the exception: fully opaque 16x16 tile); 4–8 colours per sprite; a
+1px darker outline around the shape; a lighter highlight on the top-left; readable silhouette at 1x (a sword
+is a diagonal blade with a guard; a gem is a faceted lozenge; food is a round shape with a stem/leaf).
+Minecraft's own style is 16x16 with soft shading, no anti-aliasing. Then write a contact sheet
+`models/sprites/contact_sheet.png` scaled x8 with every sprite side by side so the user can judge them in the
+UI. Re-read your own PNGs' pixel grids before finishing: a sprite whose silhouette is not readable at 1x
+(blob, no outline, wrong proportions) must be repainted, not reported.
+Report every PNG path in `changed_files`. Do not touch `src/` or `assets/`; the controller installs them.
+"""
+
+
+def request_sprites(store: Store, pid: str, identifiers: list[str], notes: str = "") -> dict:
+    proj = store.project(pid)
+    if proj["status"] not in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
+        raise StateError("Generate the project first")
+    spec = read_spec(proj["spec"])
+    catalogue = {}
+    for f in spec.features:
+        catalogue[f.identifier] = {"kind": f.kind, "label": f.label, "hint": f.shape or ("cube" if f.kind == "block" else "")}
+    for m in spec.materials:
+        for k in m.tools: catalogue[f"{m.identifier}_{k}"] = {"kind": "tool", "label": f"{m.label} {k}", "hint": f"{k}, material colour {m.color or 'any'}"}
+        for k in m.armor: catalogue[f"{m.identifier}_{k}"] = {"kind": "armor", "label": f"{m.label} {k}", "hint": f"{k} icon, material colour {m.color or 'any'}"}
+    for fd in spec.foods:
+        catalogue[fd.identifier] = {"kind": "food", "label": fd.label, "hint": "food"}
+    unknown = [i for i in identifiers if i not in catalogue]
+    if unknown:
+        raise InputError(f"Unknown identifiers: {unknown}")
+    if not identifiers:
+        raise InputError("Pick at least one item")
+    n = sum(1 for t in store.tasks(pid) if ":SPRITES:" in t["id"]) + 1
+    task_id = f"{pid}:SPRITES:{n}"
+    lines = ["Sprites to paint (identifier → what it is):"] + [f"- {i}: {catalogue[i]['label']} ({catalogue[i]['kind']}{', ' + catalogue[i]['hint'] if catalogue[i]['hint'] else ''})" for i in identifiers]
+    if notes.strip():
+        lines += ["", "Style notes from the user:", notes.strip()[:800]]
+    store.add_task(pid, task_id, "designer", f"Paint {len(identifiers)} item sprite(s)")
+    with store.tx() as con:
+        con.execute("INSERT OR IGNORE INTO task_instructions(task_id, text) VALUES(?,?)", (task_id, "\n".join(lines)))
+    store.add_event(pid, "user", "SPRITES_REQUESTED", {"task": task_id, "items": identifiers, "notes": notes[:300]})
+    return {"task": task_id, "items": identifiers, "next": {"action": "dispatch", "payload": {"task": task_id}}}
+
+
+def _png_info(raw: bytes) -> tuple[int, int, bool]:
+    """(width, height, has_alpha_variation) using zlib only."""
+    import zlib as _z, struct as _s
+    if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise InputError("not a PNG")
+    w, h, depth, ctype = _s.unpack(">IIBB", raw[16:26])
+    if depth != 8 or ctype not in (2, 6):
+        raise InputError("PNG must be 8-bit RGB or RGBA")
+    pos, idat = 8, b""
+    while pos < len(raw):
+        ln = _s.unpack(">I", raw[pos:pos + 4])[0]; kind = raw[pos + 4:pos + 8]
+        if kind == b"IDAT": idat += raw[pos + 8:pos + 8 + ln]
+        pos += 12 + ln
+    px = _z.decompress(idat); bpp = 4 if ctype == 6 else 3
+    alphas = set(); colours = set()
+    for y in range(h):
+        row = px[y * (w * bpp + 1) + 1:(y + 1) * (w * bpp + 1)]
+        for x in range(w):
+            p = row[x * bpp:(x + 1) * bpp]
+            colours.add(p[:3]); alphas.add(p[3] if bpp == 4 else 255)
+    return w, h, len(alphas) > 1, len(colours)
+
+
+def install_sprites(store: Store, pid: str, task_id: str, identifiers: list[str], *, run_id: str, actor: str) -> dict:
+    proj = store.project(pid); ws = Path(proj["root"]); spec = read_spec(proj["spec"])
+    blocks = {f.identifier for f in spec.features if f.kind == "block"}
+    installed, rejected = [], {}
+    for ident in identifiers:
+        src = ws / "models" / "sprites" / f"{ident}.png"
+        if not src.is_file():
+            rejected[ident] = "missing"; continue
+        try:
+            w, h, alpha_var, ncol = _png_info(src.read_bytes())
+        except InputError as exc:
+            rejected[ident] = str(exc); continue
+        if (w, h) != (16, 16):
+            rejected[ident] = f"{w}x{h}, need 16x16"; continue
+        if ncol < 2:
+            rejected[ident] = "flat single colour"; continue
+        if ident not in blocks and not alpha_var:
+            rejected[ident] = "no transparency (items need a transparent background)"; continue
+        rel = f"src/main/resources/assets/{pid}/textures/{'block' if ident in blocks else 'item'}/{ident}.png"
+        (ws / rel).parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(src, ws / rel); installed.append(rel)
+    if not installed:
+        raise InputError("no sprite passed validation: " + "; ".join(f"{k}: {v}" for k, v in rejected.items()))
+    accepted = accept_changes(ws, run_id=run_id, actor=actor, changed=installed)
+    sheet = ws / "models" / "sprites" / "contact_sheet.png"
+    history = ws / ".mod-orchestra" / "previews" / run_id; history.mkdir(parents=True, exist_ok=True)
+    if sheet.is_file():
+        shutil.copyfile(sheet, history / "sprites_contact_sheet.png")
+    from .dispatch import _source_changed, _reopen_build
+    _source_changed(store, pid); _reopen_build(store, pid)
+    store.add_event(pid, "controller", "SPRITES_INSTALLED", {"task": task_id, "run": run_id, "installed": installed, "rejected": rejected})
+    return {"installed": installed, "rejected": rejected, "accepted": accepted["accepted"], "contact_sheet": f".mod-orchestra/previews/{run_id}/sprites_contact_sheet.png" if sheet.is_file() else None}
