@@ -142,6 +142,10 @@ function actionButton(p, s) {
     case "server-smoke": return btn("Run server smoke", async () => { await api(`/api/project/${id}/server-smoke`, s.payload); toast("Server starting…", "ok"); await openProject(id); }, "primary");
     case "run-client": return btn("Launch game client", async () => { if (!confirm("Opens Minecraft with only this mod (isolated run/ folder). Close the game when done.")) return; await api(`/api/project/${id}/run-client`, {}); toast("Client launching. Come back here when you close it.", "ok"); await openProject(id); }, "primary");
     case "evidence": return btn("Record evidence", () => { activeTab = "verify"; document.querySelector('[data-tab="verify"]').click(); qs("evidence-note").focus(); });
+    case "orchestrate": return btn("Autopilot", async () => {
+      const budget = prompt("Autopilot budget — max dollars for this session (max 5 runs):", String(s.payload.max_cost_usd));
+      if (budget == null) return; const max_cost_usd = Math.max(0.5, Math.min(50, Number(budget) || 5));
+      await api(`/api/project/${id}/orchestrate`, { max_runs: s.payload.max_runs, max_cost_usd }); toast(`Autopilot running (budget $${max_cost_usd}). It stops when it needs you.`, "ok"); await openProject(id); }, "primary");
     case "requeue": return btn("Requeue", () => run(() => api(`/api/task/${encodeURIComponent(s.payload.task)}/requeue`, {}), "Task back to READY."));
     default: return el("span");
   }
@@ -251,8 +255,11 @@ function renderVerify(p) {
   const lv = qs("levels"); lv.replaceChildren();
   for (const L of ["BUILD_PASS", "SERVER_BOOT_PASS", "CLIENT_BOOT_PASS", "CONTENT_VERIFIED"]) lv.append(el("div", (p.guidance.levels.includes(L) ? "✓ " : "○ ") + L, "level " + (p.guidance.levels.includes(L) ? "on" : "")));
   const list = qs("evidence-list"); list.replaceChildren();
-  if (!p.evidence.length) list.append(el("p", "No evidence recorded yet.", "muted"));
-  for (const e of p.evidence) { const r = el("div", null, "evidence"); r.append(el("span", e.level, "state DONE"), el("span", e.note || ""), el("small", e.actor + " · " + ago(e.created_at) + (e.artifact_sha256 ? " · jar " + e.artifact_sha256.slice(0, 12) : ""))); list.append(r); }
+  const row = (e) => { const r = el("div", null, "evidence"); r.append(el("span", e.level, "state DONE"), el("span", e.note || ""), el("small", e.actor + " · " + ago(e.created_at) + (e.artifact_sha256 ? " · jar " + e.artifact_sha256.slice(0, 12) : ""))); return r; };
+  const cur = p.evidence.filter(e => e.current), old = p.evidence.filter(e => !e.current);
+  if (!cur.length) list.append(el("p", old.length ? "Nothing recorded on the current source yet (the source changed since the earlier evidence below)." : "No evidence recorded yet.", "muted"));
+  for (const e of cur.slice().reverse()) list.append(row(e));
+  if (old.length) { const det = document.createElement("details"); det.append(el("summary", `Earlier sources (${old.length}) — no longer counts; the code changed since`)); for (const e of old.slice().reverse()) det.append(row(e)); list.append(det); }
   qs("evidence-form").onsubmit = async (e) => { e.preventDefault(); try { await api(`/api/project/${p.id}/evidence`, { level: qs("evidence-level").value, note: qs("evidence-note").value }); qs("evidence-note").value = ""; toast("Recorded.", "ok"); await openProject(p.id); } catch (err) { toast(err.message, "bad"); } };
   const acts = qs("verify-actions"); acts.replaceChildren(); qs("validate-box").textContent = ""; qs("build-log").classList.add("hidden"); qs("diagnose-box").replaceChildren();
   const generated = ["SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"].includes(p.status);
@@ -260,7 +267,6 @@ function renderVerify(p) {
   acts.append(btn("Check files unchanged", async () => { const v = await api(`/api/project/${p.id}/validate`); qs("validate-box").textContent = v.status === "PASS" ? `PASS · ${v.checked} files intact · ${v.revisions} accepted revision(s)` : `${v.status} · ${(v.problems || []).join("; ")}`; qs("validate-box").className = v.status === "PASS" ? "ok" : "bad"; }));
   acts.append(btn("Build log", async () => { const r = await api(`/api/project/${p.id}/logs`); const b = qs("build-log"); b.textContent = r.text; b.classList.remove("hidden"); }));
   acts.append(btn("Diagnose last build", async () => { const d = await api(`/api/project/${p.id}/diagnose`); const box = qs("diagnose-box"); box.replaceChildren(); if (d.status === "NO_LOG") { box.append(el("p", d.note, "muted")); return; } if (!d.classifications.length) { box.append(el("p", "No known failure pattern matched.", "muted")); return; } for (const c of d.classifications) { const w = el("div", null, "warning"); w.append(el("b", c.kind), el("div", c.symptom), el("div", c.guidance, "muted")); box.append(w); } }));
-  acts.append(btn("Orchestrate (auto, budget $5 / 5 runs)", async () => { if (!confirm("Dispatch READY tasks one after another until you are needed or the budget is hit?")) return; await api(`/api/project/${p.id}/orchestrate`, { max_runs: 5, max_cost_usd: 5 }); toast("Orchestrating…", "ok"); await openProject(p.id); }, "secondary"));
 }
 
 // ---------- tasks ----------

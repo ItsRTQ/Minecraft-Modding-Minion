@@ -108,6 +108,11 @@ def guidance(store: Store, pid: str) -> dict:
     repairs = [t for t in ready if ":REPAIR:" in t["id"]]
     if repairs:
         step(f"Let the debugger repair the build ({repairs[0]['id']})", "agent", action="dispatch", payload={"task": repairs[0]["id"]}, detail="Autonomous repair loop, max 3 attempts per failure.")
+    agent_ready = [t for t in ready if t["role"] not in ("qa",)]
+    if agent_ready and proj["spec_state"] == "APPROVED" and not any(s["who"] == "user" and s["action"] in ("approve", "answer", "decide") for s in steps):
+        step(f"Autopilot: run the {len(agent_ready)} READY task(s) back to back until you are needed", "agent", action="orchestrate",
+             payload={"max_runs": 5, "max_cost_usd": 5.0},
+             detail="Chains interpreter → coder → designer → debugger automatically. Stops at every gate (approval, question, unrepairable failure) or when the budget is hit.")
     cost = round(sum(float(r.get("cost_usd") or 0) for r in runs), 2)
     last = runs[-1] if runs else None
     happened = (f"Last worker: {last['role']} on {last['task_id']} → {last['state']}" + (f" (${last['cost_usd']:.2f}, {int(last['duration_s'] or 0)} s)" if last.get("cost_usd") else "")) if last else "No agent has run yet."

@@ -149,13 +149,15 @@ def delete_project(store: Store, pid: str, *, remove_workspace: bool) -> dict:
 
 def summary(store: Store, pid: str) -> dict:
     project = store.project(pid)
+    manifest_file = Path(project["root"]) / ".mod-orchestra" / "generation-manifest.json"
+    current_manifest = hashlib.sha256(manifest_file.read_bytes()).hexdigest() if manifest_file.is_file() else None
     tasks = store.tasks(pid)
     return {"id": pid, "name": project["name"], "root": project["root"],
             "status": project["status"], "spec_state": project["spec_state"], "spec": project["spec"],
             "tasks": [{"id": t["id"], "title": t["title"], "role": t["role"], "state": t["state"]} for t in tasks],
             "approvals": [{"id": a["id"], "kind": a["kind"], "state": a["state"], "description": a["description"]} for a in store.approvals(pid)],
             "evidence": [{"level": e["level"], "actor": e["actor"], "note": e["note"], "artifact_sha256": e["artifact_sha256"],
-                          "created_at": e["created_at"]} for e in store.evidence(pid)],
+                          "created_at": e["created_at"], "current": e["manifest_sha256"] == current_manifest} for e in store.evidence(pid)],
             "runs_all": store.runs(pid),
             "events": store.events(pid, 40)}
 
