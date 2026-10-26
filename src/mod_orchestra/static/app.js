@@ -70,6 +70,7 @@ async function renderEnv() {
   grid.append(item("State DB", [["schema", (d.schema?.version ?? "?") + " / " + (d.schema?.current ?? "?")], ["path", d.schema?.path]]));
   grid.append(item("Staging", [["pending", (d.stagings?.pending || []).length]]));
   grid.append(item("Node.js (designer worker)", [["executable", d.node?.executable || "NOT FOUND"], ["version", d.node?.version], ["note", d.node?.note]]));
+  grid.append(item("Blockbench (optional)", [["executable", d.blockbench?.executable || "not found — .bbmodel files open with the system association if any"], ["note", d.blockbench?.note]]));
   grid.append(item("Claude Code (agent runs)", [["executable", d.claude_code?.executable || "NOT FOUND — install Claude Code or set CRAFTCTL_CLAUDE_BIN"], ["note", d.claude_code?.note]]));
   grid.append(item("Git", [["executable", d.git?.executable || "—"]]));
 }
@@ -218,7 +219,7 @@ function renderGallery(p) {
       await api(`/api/project/${p.id}/dispatch`, { task: out.task }); toast("Designer started with your feedback.", "ok"); await openProject(p.id);
     }, "primary"));
     if (m.task_state === "READY") row.append(btn("Run designer as is", async () => { await api(`/api/project/${p.id}/dispatch`, { task: m.task }); toast("Designer started.", "ok"); await openProject(p.id); }));
-    if (m.bbmodel) row.append(el("span", `Editable source: models/${m.mob}.bbmodel (open in Blockbench with the GeckoLib plugin)`, "muted"));
+    if (m.bbmodel) { row.append(btn("Open in Blockbench", async () => { const out = await api(`/api/project/${p.id}/open-model`, { mob: m.mob }); toast(out.note || `Opening ${out.opened.split(/[\\/]/).pop()} in ${out.app ? "Blockbench" : "the default app"}…`, "ok"); }, "secondary")); row.append(el("span", `models/${m.mob}.bbmodel — edit it there; the controller keeps using this file as the source`, "muted")); }
     fb.append(row); card.append(fb); g.append(card);
   }
 }

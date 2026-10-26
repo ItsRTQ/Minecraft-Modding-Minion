@@ -82,3 +82,42 @@ def feedback_context(store: Store, pid: str, mob: str) -> str:
     lines += [f"- {n}" for n in notes[:8]]
     lines += ["", f"The previous `models/{mob}.bbmodel` is still there: edit it (`bbmodel_edit`, `bbmodel_geckolib_upsert_animation` with `replace: true`) rather than starting over, unless the feedback asks for a different creature."]
     return "\n".join(lines)
+
+
+def find_blockbench() -> str | None:
+    """Best-effort location of the Blockbench desktop app (not required: file association is used first)."""
+    import os, shutil
+    candidates = []
+    if os.name == "nt":
+        for base in (os.environ.get("LOCALAPPDATA"), os.environ.get("PROGRAMFILES"), os.environ.get("PROGRAMFILES(X86)")):
+            if base:
+                candidates += [Path(base) / "Programs" / "Blockbench" / "Blockbench.exe", Path(base) / "Blockbench" / "Blockbench.exe"]
+    elif os.uname().sysname == "Darwin" if hasattr(os, "uname") else False:
+        candidates += [Path("/Applications/Blockbench.app")]
+    for c in candidates:
+        if c.exists():
+            return str(c)
+    return shutil.which("blockbench") or shutil.which("Blockbench")
+
+
+def open_in_blockbench(store: Store, pid: str, mob: str) -> dict:
+    """Open models/<mob>.bbmodel with the user's Blockbench (file association). Local, user-initiated, never run by agents."""
+    import os, subprocess, sys
+    root = Path(store.project(pid)["root"])
+    if mob not in {m["identifier"] for m in store.project(pid)["spec"].get("mobs", [])}:
+        raise InputError(f"Unknown mob {mob!r}")
+    path = root / "models" / f"{mob}.bbmodel"
+    if not path.is_file():
+        raise InputError("No .bbmodel for this mob yet (the designer has not run)")
+    app = find_blockbench()
+    try:
+        if os.name == "nt":
+            os.startfile(str(path))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(path)])
+        else:
+            subprocess.Popen(["xdg-open", str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError as exc:
+        raise StateError(f"Could not open {path.name}: {exc}. Install Blockbench (https://www.blockbench.net) with the GeckoLib Animation Utils plugin, or open the file by hand.")
+    store.add_event(pid, "user", "OPENED_IN_BLOCKBENCH", {"mob": mob, "app": app})
+    return {"opened": str(path), "app": app, "note": None if app else "Opened with the system's default app for .bbmodel; if nothing appeared, install Blockbench."}

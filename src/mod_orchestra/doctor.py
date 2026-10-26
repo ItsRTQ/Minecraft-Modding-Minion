@@ -78,6 +78,8 @@ def inspect() -> dict:
         "wrapper": _wrapper_status(),
         "node": {"executable": shutil.which("node"), "version": _version([shutil.which("node"), "--version"]) if shutil.which("node") else None,
                  "note": "Required for the designer worker (vendored blockbench-mcp-safe runs on Node)"},
+        "blockbench": {"executable": __import__("mod_orchestra.feedback", fromlist=["find_blockbench"]).find_blockbench(),
+                       "note": "Optional: opens the designer's .bbmodel files for inspection/editing (GeckoLib Animation Utils plugin recommended)"},
         "claude_code": {"executable": shutil.which("claude") or os.environ.get("CRAFTCTL_CLAUDE_BIN"),
                         "note": "Required for agent runs (craftctl dispatch / orchestrate); uses your own Claude login"},
         "schema": _schema_status(),

@@ -191,3 +191,19 @@ class AddMobAfterGeneration(Base):
         self.assertEqual(res["task_state"], "DONE"); self.assertIn("Task-specific instructions", fake.envelopes[0].extra_instructions)
         states = {t["id"]: t["state"] for t in self.store.tasks("p_mod")}
         self.assertEqual(states["p_mod:MODEL:glow_slime"], "READY"); self.assertNotEqual(states["p_mod:BUILD"], "DONE")
+
+
+class OpenInBlockbench(Base):
+    def test_open_model_uses_the_system_opener_and_validates(self):
+        from mod_orchestra.feedback import open_in_blockbench
+        with self.assertRaisesRegex(InputError, "No .bbmodel"):
+            open_in_blockbench(self.store, "c_mod", "sky_critter")
+        self.deliver()
+        import mod_orchestra.feedback as fb
+        opened = {}
+        with patch("subprocess.Popen", lambda cmd, **k: opened.setdefault("cmd", cmd)), patch.object(fb, "find_blockbench", return_value=None), patch("sys.platform", "linux"):
+            out = open_in_blockbench(self.store, "c_mod", "sky_critter")
+        self.assertTrue(out["opened"].endswith("sky_critter.bbmodel")); self.assertEqual(opened["cmd"][0], "xdg-open")
+        self.assertIn("OPENED_IN_BLOCKBENCH", [e["kind"] for e in self.store.events("c_mod")])
+        with self.assertRaisesRegex(InputError, "Unknown mob"):
+            open_in_blockbench(self.store, "c_mod", "dragon")
