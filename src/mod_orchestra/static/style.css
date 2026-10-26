@@ -141,3 +141,6 @@ details > summary{list-style:none}details > summary::before{content:"▸ ";color
 .checks{display:flex;gap:10px;flex-wrap:wrap;font-weight:400}.checks label{flex-direction:row;align-items:center;gap:4px;margin:0}.checks input{width:auto}
 .numbers{grid-template-columns:repeat(3,1fr)!important}.numbers label{font-size:12px}
 .feature .fk{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:4px;background:var(--bg);border:1px solid var(--line-2);color:var(--muted);margin-left:6px}
+.add-bar{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+.modal{background:var(--panel);border:1px solid var(--line-2);border-radius:var(--radius);padding:18px 20px;width:min(760px,94vw);max-height:90vh;overflow:auto}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.modal-head h3{margin:0}

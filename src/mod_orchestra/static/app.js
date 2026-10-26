@@ -30,6 +30,11 @@ qs("nav-env").onclick = async () => { show("env"); await renderEnv(); };
 for (const t of document.querySelectorAll(".subtab")) t.onclick = () => { for (const x of document.querySelectorAll(".subtab")) x.classList.toggle("active", x === t); for (const p of document.querySelectorAll(".subpane")) p.classList.toggle("hidden", p.id !== "sub-" + t.dataset.sub); };
 for (const t of document.querySelectorAll(".tab")) t.onclick = () => { activeTab = t.dataset.tab; for (const x of document.querySelectorAll(".tab")) x.classList.toggle("active", x === t); for (const p of document.querySelectorAll(".tabpane")) p.classList.toggle("hidden", p.id !== "tab-" + activeTab); };
 qs("lightbox-close").onclick = () => qs("lightbox").classList.add("hidden");
+for (const b of document.querySelectorAll("[data-modal]")) b.onclick = () => { if (!selected) return toast("Open a project first", "bad"); qs(b.dataset.modal).classList.remove("hidden"); const first = qs(b.dataset.modal).querySelector("input,select,textarea"); if (first) first.focus(); };
+for (const x of document.querySelectorAll(".modal-close")) x.onclick = () => x.closest(".lightbox").classList.add("hidden");
+for (const m of document.querySelectorAll(".lightbox")) m.addEventListener("click", (e) => { if (e.target === m && m.id !== "picker") m.classList.add("hidden"); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") for (const m of document.querySelectorAll(".lightbox:not(.hidden)")) if (m.id !== "picker") m.classList.add("hidden"); });
+const closeModal = (id) => qs(id).classList.add("hidden");
 qs("lightbox").onclick = (e) => { if (e.target.id === "lightbox") qs("lightbox").classList.add("hidden"); };
 function openLightbox(src, caption) { qs("lightbox-img").src = src; qs("lightbox-cap").textContent = caption || ""; qs("lightbox").classList.remove("hidden"); }
 
@@ -289,7 +294,7 @@ qs("addmob-form").onsubmit = async (e) => {
     const out = await api(`/api/project/${selected}/add-mob`, { identifier: qs("am-id").value.trim(), label: qs("am-label").value.trim(), behavior: qs("am-behavior").value, drops });
     const desc = qs("am-desc").value.trim();
     if (desc) await api(`/api/project/${selected}/feedback`, { mob: qs("am-id").value.trim(), text: desc }).catch(() => {});
-    qs("addmob-form").reset(); addMobDrops = []; qs("am-drops-summary").textContent = "nothing";
+    qs("addmob-form").reset(); addMobDrops = []; qs("am-drops-summary").textContent = "nothing"; closeModal("modal-mob");
     toast(out.tasks ? `Mob added. Files written; the coder registers it (${out.tasks[0]}), then the designer models it.` : "Mob added to the spec (re-approve before generating).", "ok");
     await openProject(selected);
   } catch (err) { toast(err.message, "bad"); }
@@ -322,7 +327,7 @@ async function renderFeatures(p) {
     e.preventDefault();
     try {
       const out = await api(`/api/project/${p.id}/add-feature`, { kind: qs("af-kind").value, label: qs("af-label").value.trim(), identifier: qs("af-id").value.trim() });
-      addForm.reset(); delete qs("af-id").dataset.touched;
+      addForm.reset(); delete qs("af-id").dataset.touched; closeModal("modal-feat");
       toast(out.generated ? `Added. Files written; the coder registers it (${out.task}) — see Now.` : "Added to the spec. Re-approve before generating.", "ok");
       await openProject(p.id);
     } catch (err) { toast(err.message, "bad"); }
@@ -342,7 +347,7 @@ qs("addmat-form").onsubmit = async (e) => {
       tools: checked("mt-tools"), armor: checked("mt-armor"), durability: Number(qs("mt-durability").value), mining_speed: Number(qs("mt-speed").value), attack_damage_bonus: Number(qs("mt-attack").value),
       mining_level: qs("mt-level").value, enchantability: Number(qs("mt-ench").value), armor_defense: defense, armor_durability: Number(qs("mt-adur").value), toughness: Number(qs("mt-tough").value),
       knockback_resistance: Number(qs("mt-kb").value), recipes: qs("mt-recipes").checked });
-    qs("addmat-form").reset(); delete qs("mt-id").dataset.touched; qs("mt-preset").onchange();
+    qs("addmat-form").reset(); delete qs("mt-id").dataset.touched; qs("mt-preset").onchange(); closeModal("modal-mat");
     toast(out.generated ? `Set added. Files written; the coder registers it (${out.task}) — see Now.` : `Set added to the spec (${(out.items || []).length} items). Re-approve before generating.`, "ok");
     await openProject(selected);
   } catch (err) { toast(err.message, "bad"); }
@@ -354,7 +359,7 @@ qs("addfood-form").onsubmit = async (e) => {
   const effects = qs("fd-effect").value ? [{ effect: qs("fd-effect").value, duration: Number(qs("fd-duration").value), amplifier: Number(qs("fd-amplifier").value), chance: 1.0 }] : [];
   try {
     const out = await api(`/api/project/${selected}/add-food`, { identifier: qs("fd-id").value.trim(), label: qs("fd-label").value.trim(), nutrition: Number(qs("fd-nutrition").value), saturation: Number(qs("fd-saturation").value), effects, always_edible: qs("fd-always").checked, fast: qs("fd-fast").checked });
-    qs("addfood-form").reset(); delete qs("fd-id").dataset.touched;
+    qs("addfood-form").reset(); delete qs("fd-id").dataset.touched; closeModal("modal-food");
     toast(out.generated ? `Food added. Files written; the coder registers it (${out.task}) — see Now.` : "Food added to the spec. Re-approve before generating.", "ok");
     await openProject(selected);
   } catch (err) { toast(err.message, "bad"); }
