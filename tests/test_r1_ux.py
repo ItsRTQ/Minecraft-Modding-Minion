@@ -112,3 +112,16 @@ class DeleteOrder(Base):
                 workflow.delete_project(self.store, "u_mod", remove_workspace=True)
         self.assertEqual(self.store.project("u_mod")["id"], "u_mod", "record must survive a failed directory removal")
         self.assertTrue(self.root.is_dir())
+
+
+class AddTaskCasing(unittest.TestCase):
+    def test_add_task_keeps_identifier_case_after_colon(self):
+        from mod_orchestra.cli import dispatch as cli_dispatch, parser
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); store = Store(base / "state.sqlite")
+        with patch.object(workflow, "PROJECTS", base / "projects"), patch("mod_orchestra.cli.Store", return_value=store):
+            (base / "projects").mkdir()
+            workflow.new_project(store, name="U", mod_id="u_mod", package="com.x.u", idea="items: gem")
+            workflow.plan_project(store, "u_mod")
+            out = cli_dispatch(parser().parse_args(["add-task", "u_mod", "--id", "model:sky_critter", "--role", "designer", "--title", "m"]))
+        self.assertEqual(out["task"], "u_mod:MODEL:sky_critter")
