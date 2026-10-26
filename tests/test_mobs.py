@@ -49,7 +49,7 @@ class SpecMobs(unittest.TestCase):
             with self.assertRaisesRegex(InputError, msg):
                 read_spec(base | {"mobs": [bad]})
         ok = read_spec(base | {"mobs": [{"identifier": "ok_mob", "label": "Ok", "drops": ["gem", "minecraft:bone"], "egg_colors": [1, 2]}]})
-        self.assertEqual(ok.mobs[0].drops, ("gem", "minecraft:bone"))
+        self.assertEqual([d.item for d in ok.mobs[0].drops], ["gem", "minecraft:bone"])
 
 
 class Generated(unittest.TestCase):

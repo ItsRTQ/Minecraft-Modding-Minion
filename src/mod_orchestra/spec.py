@@ -56,17 +56,37 @@ class Drop:
 
 
 @dataclass(frozen=True)
+class MobDrop:
+    """One entry of a mob's death loot: item id, count range and drop chance (0-1)."""
+    item: str
+    count_min: int = 1
+    count_max: int = 1
+    chance: float = 1.0
+
+
+def coerce_mob_drop(value) -> MobDrop:
+    if isinstance(value, MobDrop):
+        return value
+    if isinstance(value, str):
+        return MobDrop(item=value)
+    if isinstance(value, dict):
+        return MobDrop(item=str(value.get("item", "")), count_min=int(value.get("count_min", 1)), count_max=int(value.get("count_max", 1)),
+                       chance=float(value.get("chance", 1.0)))
+    raise InputError(f"Bad mob drop: {value!r}")
+
+
+@dataclass(frozen=True)
 class Mob:
     """v1 criterion 6 'simple mob': GeckoLib-rendered entity with idle + walk, basic AI, spawn egg, loot."""
     identifier: str
     label: str
-    behavior: str = "passive"          # passive | hostile
+    behavior: str = "passive"          # passive | neutral (retaliates when hurt) | hostile
     health: float = 10.0
     speed: float = 0.25
     width: float = 0.8
     height: float = 0.9
     attack_damage: float = 3.0         # hostile only
-    drops: tuple[str, ...] = ()        # local ids or minecraft:ids dropped on death (1 each)
+    drops: tuple = ()                  # MobDrop entries (strings and dicts are coerced on read)
     egg_colors: tuple[int, int] = DEFAULT_EGG_COLORS
 
 
@@ -171,7 +191,7 @@ def validate_drop(spec: "Spec", d: Drop) -> None:
         raise InputError("Drop counts must satisfy 0 <= min <= max <= 64")
 
 
-MOB_BEHAVIORS = ("passive", "hostile")
+MOB_BEHAVIORS = ("passive", "neutral", "hostile")
 
 
 def validate_mob(spec: "Spec", m: Mob) -> None:
@@ -186,7 +206,12 @@ def validate_mob(spec: "Spec", m: Mob) -> None:
     if not (0 <= m.attack_damage <= 100):
         raise InputError("Mob attack_damage 0-100")
     for d in m.drops:
-        resolve_result(spec.local_ids(), spec.mod_id, d)
+        d = coerce_mob_drop(d)
+        resolve_result(spec.local_ids(), spec.mod_id, d.item)
+        if not (0 <= d.count_min <= d.count_max <= 64):
+            raise InputError(f"Mob drop {d.item}: counts must satisfy 0 <= min <= max <= 64")
+        if not (0 < d.chance <= 1):
+            raise InputError(f"Mob drop {d.item}: chance must be in (0, 1]")
     if len(m.egg_colors) != 2 or any(not (0 <= c <= 0xFFFFFF) for c in m.egg_colors):
         raise InputError("egg_colors must be two 24-bit RGB ints")
 
@@ -223,7 +248,8 @@ PATTERNS = [
 ]
 TAB_PATTERN = re.compile(r"\btab\s*:\s*([^;\n]+)", re.I)
 MOB_PATTERNS = [("hostile", re.compile(r"\bhostile\s+(?:mob|mobs)\s*:\s*([^;\n]+)", re.I)),
-                ("passive", re.compile(r"(?<!hostile )\b(?:mob|mobs)\s*:\s*([^;\n]+)", re.I))]
+                ("neutral", re.compile(r"\bneutral\s+(?:mob|mobs)\s*:\s*([^;\n]+)", re.I)),
+                ("passive", re.compile(r"(?<!hostile )(?<!neutral )\b(?:mob|mobs)\s*:\s*([^;\n]+)", re.I))]
 # Java constant names the generator reserves inside ModMain; user content may not shadow them.
 RESERVED_JAVA_NAMES = {"MOD_ID"}
 
@@ -311,7 +337,7 @@ def read_spec(raw: dict) -> Spec:
         recipes=[Recipe(**{**r, "pattern": tuple(r.get("pattern", ())), "ingredients": tuple(r.get("ingredients", ()))}) for r in raw.get("recipes", [])],
         drops=[Drop(**d) for d in raw.get("drops", [])],
         tab=raw.get("tab"), tab_icon=raw.get("tab_icon"),
-        mobs=[Mob(**{**m, "drops": tuple(m.get("drops", ())),
+        mobs=[Mob(**{**m, "drops": tuple(coerce_mob_drop(d) for d in m.get("drops", ())),
                       "egg_colors": tuple(m.get("egg_colors") or default_egg_colors(m.get("identifier", ""), m.get("behavior", "passive")))})
               for m in raw.get("mobs", [])],
     )

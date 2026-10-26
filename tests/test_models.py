@@ -142,3 +142,70 @@ class VendoredServer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PreviewHistory(Base):
+    def test_each_installed_model_keeps_its_previews_as_a_version(self):
+        from mod_orchestra.feedback import model_gallery, file_for_ui
+        self.deliver(); (self.models / "sky_critter_rest.png").write_bytes(placeholder_png("r", 32, 32))
+        out = dispatch(self.store, "c_mod", task_id="c_mod:MODEL:sky_critter", provider=FakeProvider(handoff("c_mod:MODEL:sky_critter")))
+        self.assertEqual(out["task_state"], "DONE")
+        gal = model_gallery(self.store, "c_mod")[0]
+        self.assertEqual(len(gal["versions"]), 1); self.assertEqual(gal["versions"][0]["run"], out["run"])
+        self.assertTrue(any(p.endswith("sky_critter_rest.png") for p in gal["versions"][0]["previews"]))
+        path, ctype = file_for_ui(self.store, "c_mod", gal["versions"][0]["previews"][0]); self.assertEqual(ctype, "image/png")
+
+
+class AddMobAfterGeneration(Base):
+    def test_files_tasks_and_instructions(self):
+        from mod_orchestra.models import add_mob_after_generation
+        from mod_orchestra.fabric import validate_generated
+        out = add_mob_after_generation(self.store, "c_mod", Mob(identifier="moon_fox", label="Moon Fox", behavior="hostile", drops=("gem",)))
+        self.assertEqual(out["tasks"], ["c_mod:ADD_MOB:moon_fox", "c_mod:MODEL:moon_fox"]); self.assertFalse(out["first_mob"])
+        self.assertTrue((self.ws / "src/main/java/com/x/c/entity/MoonFoxEntity.java").is_file())
+        self.assertTrue((self.ws / "src/main/resources/assets/c_mod/geo/entity/moon_fox.geo.json").is_file())
+        self.assertTrue((self.ws / "src/main/resources/assets/c_mod/models/item/moon_fox_spawn_egg.json").is_file())
+        lang = json.loads((self.ws / "src/main/resources/assets/c_mod/lang/en_us.json").read_text())
+        self.assertEqual(lang["entity.c_mod.moon_fox"], "Moon Fox"); self.assertIn("entity.c_mod.sky_critter", lang)
+        self.assertEqual(validate_generated(self.ws)["status"], "PASS", "new files are an accepted revision")
+        spec = self.store.project("c_mod")["spec"]; self.assertEqual([m["identifier"] for m in spec["mobs"]], ["sky_critter", "moon_fox"])
+        tasks = {t["id"]: t for t in self.store.tasks("c_mod")}
+        self.assertEqual(tasks["c_mod:ADD_MOB:moon_fox"]["state"], "READY"); self.assertEqual(tasks["c_mod:MODEL:moon_fox"]["state"], "BACKLOG")
+        instr = self.store.task_instructions("c_mod:ADD_MOB:moon_fox")
+        self.assertIn("MoonFoxEntity", instr); self.assertIn("MobCategory.MONSTER", instr); self.assertIn("EntityRendererRegistry.register", instr)
+        self.assertNotIn("first mob", instr)
+        with self.assertRaisesRegex(InputError, "already exists"):
+            add_mob_after_generation(self.store, "c_mod", Mob(identifier="moon_fox", label="x"))
+
+    def test_first_mob_instructions_include_geckolib_setup_and_coder_done_reopens_build(self):
+        from mod_orchestra.models import add_mob_after_generation
+        from mod_orchestra import workflow as wf
+        wf.new_project(self.store, name="P", mod_id="p_mod", package="com.x.p", idea="items: gem")
+        wf.plan_project(self.store, "p_mod"); wf.approve_spec(self.store, "p_mod"); wf.generate_project(self.store, "p_mod")
+        with self.store.tx() as con:
+            con.execute("UPDATE tasks SET state='DONE' WHERE id='p_mod:BUILD'")
+        out = add_mob_after_generation(self.store, "p_mod", Mob(identifier="glow_slime", label="Glow Slime"))
+        self.assertTrue(out["first_mob"]); self.assertIn("GeckoLib repository", self.store.task_instructions("p_mod:ADD_MOB:glow_slime"))
+        fake = FakeProvider(handoff("p_mod:ADD_MOB:glow_slime", files=["src/main/java/com/x/p/ModMain.java"]))
+        res = dispatch(self.store, "p_mod", task_id="p_mod:ADD_MOB:glow_slime", provider=fake)
+        self.assertEqual(res["task_state"], "DONE"); self.assertIn("Task-specific instructions", fake.envelopes[0].extra_instructions)
+        states = {t["id"]: t["state"] for t in self.store.tasks("p_mod")}
+        self.assertEqual(states["p_mod:MODEL:glow_slime"], "READY"); self.assertNotEqual(states["p_mod:BUILD"], "DONE")
+
+
+class OpenInBlockbench(Base):
+    def test_open_model_uses_the_system_opener_and_validates(self):
+        from mod_orchestra.feedback import open_in_blockbench
+        with self.assertRaisesRegex(InputError, "No .bbmodel"):
+            open_in_blockbench(self.store, "c_mod", "sky_critter")
+        self.deliver()
+        import mod_orchestra.feedback as fb
+        opened = {}
+        import os as _os
+        with patch("subprocess.Popen", lambda cmd, **k: opened.setdefault("cmd", list(cmd))), patch.object(fb, "find_blockbench", return_value=None), \
+             patch("sys.platform", "linux"), patch.object(_os, "startfile", lambda path: opened.setdefault("cmd", ["startfile", str(path)]), create=True):
+            out = open_in_blockbench(self.store, "c_mod", "sky_critter")
+        self.assertTrue(out["opened"].endswith("sky_critter.bbmodel")); self.assertIn(opened["cmd"][0], ("xdg-open", "startfile"))
+        self.assertIn("OPENED_IN_BLOCKBENCH", [e["kind"] for e in self.store.events("c_mod")])
+        with self.assertRaisesRegex(InputError, "Unknown mob"):
+            open_in_blockbench(self.store, "c_mod", "dragon")

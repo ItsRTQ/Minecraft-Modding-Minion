@@ -50,7 +50,8 @@ def plan_project(store: Store, pid: str) -> dict:
     elif not spec.mobs:
         edges.append((f"{pid}:SCAFFOLD", f"{pid}:BUILD"))
     edges.append((f"{pid}:BUILD", f"{pid}:GAME"))
-    store.set_tasks(pid, tasks, edges)
+    project_status = store.project(pid)["status"]
+    store.set_tasks(pid, tasks, edges, replace=project_status in ("IDEA", "PLAN_READY"))
     store.update_project(pid, status="PLAN_READY")
     return {"project": pid, "tasks": tasks, "dependencies": edges, "blocking_questions": spec.questions,
             "note": "This is a bounded deterministic implementation plan, not a full AI-generated engineering plan."}
@@ -64,8 +65,9 @@ def approve_spec(store: Store, pid: str) -> None:
     if project["spec_state"] != "DRAFT":
         raise StateError("Spec is already approved")
     store.update_project(pid, spec_state="APPROVED")
-    if not store.tasks(pid):
-        plan_project(store, pid)
+    # Replan on approval while no source exists: the spec may have changed since the first plan
+    # (interpreter proposal, add-recipe/add-mob), and the plan must match what will be generated.
+    plan_project(store, pid)
     tid = pid + ":SPEC"
     state = next((t["state"] for t in store.tasks(pid) if t["id"] == tid), None)
     if state in ("WAITING_USER", "FAILED", "BLOCKED"):   # an interpreter pass left it parked; approval closes it
@@ -147,14 +149,17 @@ def delete_project(store: Store, pid: str, *, remove_workspace: bool) -> dict:
 
 def summary(store: Store, pid: str) -> dict:
     project = store.project(pid)
+    manifest_file = Path(project["root"]) / ".mod-orchestra" / "generation-manifest.json"
+    current_manifest = hashlib.sha256(manifest_file.read_bytes()).hexdigest() if manifest_file.is_file() else None
     tasks = store.tasks(pid)
     return {"id": pid, "name": project["name"], "root": project["root"],
             "status": project["status"], "spec_state": project["spec_state"], "spec": project["spec"],
             "tasks": [{"id": t["id"], "title": t["title"], "role": t["role"], "state": t["state"]} for t in tasks],
             "approvals": [{"id": a["id"], "kind": a["kind"], "state": a["state"], "description": a["description"]} for a in store.approvals(pid)],
             "evidence": [{"level": e["level"], "actor": e["actor"], "note": e["note"], "artifact_sha256": e["artifact_sha256"],
-                          "created_at": e["created_at"]} for e in store.evidence(pid)],
-            "events": store.events(pid, 20)}
+                          "created_at": e["created_at"], "current": e["manifest_sha256"] == current_manifest} for e in store.evidence(pid)],
+            "runs_all": store.runs(pid),
+            "events": store.events(pid, 40)}
 
 
 def export_state_markdown(store: Store, pid: str) -> str:

@@ -232,6 +232,12 @@ def dispatch(args: argparse.Namespace) -> object:
     if args.command == "add-mob":
         from .specedit import add_mob
         colors = tuple(int(c, 16) for c in args.egg_colors) if args.egg_colors else None
+        if store.project(args.project)["status"] in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
+            from .models import add_mob_after_generation
+            from .spec import Mob
+            return add_mob_after_generation(store, args.project, Mob(identifier=args.id, label=args.label, behavior=args.behavior, health=args.health,
+                                                                     speed=args.speed, width=args.width, height=args.height, attack_damage=args.attack,
+                                                                     drops=tuple(args.drops or ()), egg_colors=colors or (0x8A6DD1, 0xE6D8FF)))
         return add_mob(store, args.project, identifier=args.id, label=args.label, behavior=args.behavior, health=args.health, speed=args.speed,
                        width=args.width, height=args.height, attack_damage=args.attack, drops=args.drops, egg_colors=colors)
     if args.command == "remove-mob":

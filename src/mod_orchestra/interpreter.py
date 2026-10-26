@@ -19,7 +19,7 @@ SPEC_INSTRUCTIONS = f"""
 ## Your job on this task (interpreter)
 Turn the user's idea into a complete, concrete spec for a Fabric 1.21.1 mod using ONLY what the generator
 supports: items, blocks, a creative tab, crafting/smelting recipes, block drops, and simple mobs (a GeckoLib
-entity with idle + walk animations, basic AI — passive wanders / hostile attacks players —, spawn egg, loot on death). Preserve the user's
+entity with idle + walk animations, basic AI — passive wanders, neutral fights back when hurt, hostile attacks players —, spawn egg, loot on death with counts and chance). Preserve the user's
 intent and wording; do not add content they did not ask for; do not drop content they did ask for.
 If the idea mentions things the generator cannot build (bosses with phases, custom AI, biomes, dimensions,
 armor stats, tools with custom durability, GUIs, commands, sounds), keep the user's wish in `unknowns` and ask about it only
@@ -41,8 +41,8 @@ Put the proposal in the handoff under `spec` with EXACTLY this shape (schema_ver
                "count": 1, "pattern": ["RRR"," S "," S "], "key": {{"R": "identifier", "S": "minecraft:stick"}},
                "ingredients": ["identifier", "minecraft:id", "#minecraft:tag"], "experience": 0.7, "cooking_time": 200}}],
   "drops": [{{"block": "identifier", "item": "identifier or minecraft:id", "count_min": 1, "count_max": 1, "fortune": true, "silk_touch": true}}],
-  "mobs": [{{"identifier": "snake_case", "label": "Display Name", "behavior": "passive|hostile", "health": 10, "speed": 0.25,
-            "width": 0.8, "height": 0.9, "attack_damage": 3, "drops": ["identifier or minecraft:id"], "egg_colors": [9075153, 15128831]}}],
+  "mobs": [{{"identifier": "snake_case", "label": "Display Name", "behavior": "passive|neutral|hostile", "health": 10, "speed": 0.25,
+            "width": 0.8, "height": 0.9, "attack_damage": 3, "drops": [{{"item": "identifier or minecraft:id", "count_min": 1, "count_max": 1, "chance": 1.0}}], "egg_colors": [9075153, 15128831]}}],
   "assumptions": ["..."]}}
 ```
 Rules the controller enforces (a violation fails your handoff): identifiers unique and snake_case (2-50 chars);

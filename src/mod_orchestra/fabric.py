@@ -78,8 +78,15 @@ def generate(spec: Spec, directory: Path) -> dict:
     staging directory that the next generate sweeps.
     """
     directory = Path(directory).expanduser()
+    controller_dir = None
     if directory.exists():
-        ensure_new_directory(directory)  # raises on nonempty/symlink; empty dir is replaced below
+        # The controller may already own <workspace>/.mod-orchestra (run logs from an interpreter pass made before
+        # generation). That is not user content: keep it and treat the directory as empty otherwise.
+        entries = [e for e in directory.iterdir()] if not directory.is_symlink() else [None]
+        if entries == [directory / ".mod-orchestra"] and not (directory / ".mod-orchestra").is_symlink():
+            controller_dir = directory / ".mod-orchestra"
+        else:
+            ensure_new_directory(directory)  # raises on nonempty/symlink; empty dir is replaced below
     sweep_orphan_stagings(directory.parent)
     staging = staging_dir_for(spec, directory)
     staging.parent.mkdir(parents=True, exist_ok=True)
@@ -88,8 +95,19 @@ def generate(spec: Spec, directory: Path) -> dict:
         checked = validate_generated(staging)
         if checked["status"] != "PASS":
             raise StateError("Staged source failed integrity validation before install: " + str(checked["problems"][:5]))
+        if controller_dir is not None:
+            # merge the controller's pre-generation files (runs/) into the staged .mod-orchestra, then clear the dir
+            for item in controller_dir.iterdir():
+                target = staging / ".mod-orchestra" / item.name
+                if target.exists():
+                    for sub in item.iterdir():
+                        shutil.move(str(sub), str(target / sub.name))
+                    shutil.rmtree(item, ignore_errors=True)
+                else:
+                    shutil.move(str(item), str(target))
+            shutil.rmtree(controller_dir)
         if directory.exists():
-            directory.rmdir()  # known empty from the check above
+            directory.rmdir()  # known empty now
         os.replace(staging, directory)
     except Exception:
         shutil.rmtree(staging, ignore_errors=True)
