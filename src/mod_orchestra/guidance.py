@@ -105,6 +105,13 @@ def guidance(store: Store, pid: str) -> dict:
         if ":MODEL:" in t["id"] or t["id"].endswith(":SPEC"):
             continue
         step(f"{t['id']} is {t['state']}", "user", action="requeue", payload={"task": t["id"]}, detail=t.get("last_error") or "Requeue to try again")
+    for t in ready:
+        if ":ADD_MOB:" in t["id"]:
+            steps.insert(0, {"label": f"Dispatch the coder to register the new mob ({t['id'].split(':ADD_MOB:')[1]})", "who": "agent", "action": "dispatch",
+                             "payload": {"task": t["id"]}, "command": None, "detail": "The mob's own files are already written; the coder only wires ModMain/ModClient and compiles."})
+        elif ":MODEL:" in t["id"] and stage not in ("model",):
+            steps.insert(0, {"label": f"Dispatch the designer for {t['id'].split(':MODEL:')[1]}", "who": "agent", "action": "dispatch",
+                             "payload": {"task": t["id"]}, "command": None, "detail": "Authors the .bbmodel, texture, idle/walk; renders previews. ~$1–2."})
     repairs = [t for t in ready if ":REPAIR:" in t["id"]]
     if repairs:
         step(f"Let the debugger repair the build ({repairs[0]['id']})", "agent", action="dispatch", payload={"task": repairs[0]["id"]}, detail="Autonomous repair loop, max 3 attempts per failure.")

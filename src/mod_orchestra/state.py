@@ -58,6 +58,9 @@ CREATE TABLE IF NOT EXISTS runs (
 CREATE INDEX IF NOT EXISTS idx_runs_project ON runs(project_id, created_at);
 ALTER TABLE tasks ADD COLUMN last_error TEXT;
 """),
+    (4, "per-task worker instructions (add-mob after generation)", """
+CREATE TABLE IF NOT EXISTS task_instructions (task_id TEXT PRIMARY KEY, text TEXT NOT NULL);
+"""),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 
@@ -230,6 +233,11 @@ class Store:
                         (worker, time.time() + ttl, task_id))
             self.event(con, row["project_id"], worker, "TASK_LEASED", {"task": task_id})
             return dict(con.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone())
+
+    def task_instructions(self, task_id: str) -> str:
+        with self.tx() as con:
+            row = con.execute("SELECT text FROM task_instructions WHERE task_id=?", (task_id,)).fetchone()
+        return row["text"] if row else ""
 
     def lease_info(self, task_id: str) -> dict | None:
         with self.tx() as con:

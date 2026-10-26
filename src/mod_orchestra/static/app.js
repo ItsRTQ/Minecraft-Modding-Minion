@@ -216,6 +216,22 @@ function renderGallery(p) {
   }
 }
 
+qs("addmob-form").onsubmit = async (e) => {
+  e.preventDefault(); if (!selected) return;
+  const drops = qs("am-drops").value.trim().split(/\s+/).filter(Boolean);
+  try {
+    const out = await api(`/api/project/${selected}/add-mob`, { identifier: qs("am-id").value.trim(), label: qs("am-label").value.trim(), behavior: qs("am-behavior").value, drops });
+    const desc = qs("am-desc").value.trim();
+    if (desc) await api(`/api/project/${selected}/feedback`, { mob: qs("am-id").value.trim(), text: desc }).catch(() => {});
+    qs("addmob-form").reset();
+    toast(out.tasks ? `Mob added. Files written; the coder registers it (${out.tasks[0]}), then the designer models it.` : "Mob added to the spec (re-approve before generating).", "ok");
+    await openProject(selected);
+  } catch (err) { toast(err.message, "bad"); }
+};
+qs("am-label").oninput = () => { if (!qs("am-id").dataset.touched) qs("am-id").value = qs("am-label").value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50); };
+qs("am-id").oninput = () => { qs("am-id").dataset.touched = "1"; };
+
+
 // ---------- activity ----------
 function renderRuns(p) {
   const list = qs("runs-list"); list.replaceChildren();

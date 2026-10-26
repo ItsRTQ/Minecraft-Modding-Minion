@@ -82,6 +82,20 @@
       <div id="tab-models" class="tabpane hidden">
         <div class="card"><div class="card-head"><h3>Mob models</h3><p class="muted">Each mob starts as a placeholder. A designer agent authors the real model with the Blockbench MCP and renders previews here. Tell it what to change; your note goes into its next run.</p></div>
           <div id="gallery"></div>
+          <details class="addmob"><summary>＋ Add a mob</summary>
+            <form id="addmob-form" class="form">
+              <div class="row">
+                <label>Name <input id="am-label" required placeholder="Moon Fox"></label>
+                <label>Identifier <input id="am-id" required pattern="[a-z][a-z0-9_]{1,49}" placeholder="moon_fox"></label>
+              </div>
+              <div class="row">
+                <label>Behaviour <select id="am-behavior"><option value="passive">passive — wanders, flees nothing</option><option value="hostile">hostile — attacks players</option></select></label>
+                <label>Drops on death <input id="am-drops" placeholder="sky_crystal minecraft:feather (space separated, optional)"></label>
+              </div>
+              <label>What should it look like? <textarea id="am-desc" rows="2" placeholder="Small fox with a crescent on its forehead, dark blue fur, bushy tail"></textarea><small>Sent to the designer as its first feedback note.</small></label>
+              <div class="actions"><button class="primary" type="submit">Add mob</button><span class="muted" id="am-note"></span></div>
+            </form>
+          </details>
         </div>
       </div>
 

@@ -153,6 +153,15 @@ def serve(store: Store, port: int = 8765) -> None:
                     if op == "server-smoke": return start_job(pid, "server-smoke", lambda: server_smoke(store, pid, payload["approval_id"]))
                     if op == "run-client": return start_job(pid, "run-client", lambda: run_client(store, pid))
                     if op == "answer": return answer(store, pid, str(payload.get("text", "")))
+                    if op == "add-mob":
+                        from .models import add_mob_after_generation
+                        from .spec import Mob
+                        from .specedit import add_mob as add_mob_spec
+                        m = Mob(identifier=str(payload.get("identifier", "")).strip(), label=str(payload.get("label", "")).strip() or str(payload.get("identifier", "")),
+                                behavior=str(payload.get("behavior", "passive")), drops=tuple(payload.get("drops") or ()))
+                        if store.project(pid)["status"] in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
+                            return add_mob_after_generation(store, pid, m)
+                        return add_mob_spec(store, pid, identifier=m.identifier, label=m.label, behavior=m.behavior, drops=list(m.drops))
                     if op == "feedback": return give_model_feedback(store, pid, str(payload.get("mob", "")), str(payload.get("text", "")))
                     if op == "decide":
                         store.decide_approval(payload["approval_id"], bool(payload.get("grant", True)))
