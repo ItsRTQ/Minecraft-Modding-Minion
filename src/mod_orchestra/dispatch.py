@@ -7,6 +7,7 @@ controller maps onto the task after validation.
 """
 from __future__ import annotations
 import os
+import re
 import time
 from pathlib import Path
 
@@ -27,6 +28,8 @@ def pick_task(store: Store, pid: str, task_id: str | None) -> dict:
         t = next((t for t in tasks if t["id"] == task_id), None)
         if t is None:
             raise StateError(f"Task not found: {task_id}")
+        if not _dispatchable_now(store, pid, t):
+            raise StateError(f"{task_id} is controller/user work (generate, build, game), not an agent task; use craftctl generate/build or Autopilot")
         if t["state"] != "READY":
             raise StateError(f"Task {task_id} is {t['state']}, not READY" + (f" (last error: {t['last_error']})" if t.get("last_error") else ""))
         return t
@@ -38,9 +41,16 @@ def pick_task(store: Store, pid: str, task_id: str | None) -> dict:
     return ready[0]
 
 
+PLANNER_OWNED = re.compile(r":(SPEC|SCAFFOLD|BUILD|GAME)$|:CONTENT:\d+$")
+
+
 def _dispatchable_now(store: Store, pid: str, task: dict) -> bool:
-    """QA/game tasks are not worth a worker until the user's trusted build passed on the source as it is now;
-    a worker running the game itself costs money and cannot produce accepted evidence (server-smoke can)."""
+    """Controller/user work is never dispatched to an agent whatever role the row carries (old plans had
+    SCAFFOLD/CONTENT/BUILD/GAME as coder/qa). SPEC is the exception: the interpreter is an agent."""
+    if PLANNER_OWNED.search(task["id"]) and not task["id"].endswith(":SPEC"):
+        return False
+    if task["role"] in ("controller", "user"):
+        return False
     if task["role"] != "qa" and not task["id"].endswith(":GAME"):
         return True
     from .evidence import levels_for_current_source

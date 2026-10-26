@@ -2,6 +2,7 @@
 // Minecraft Mod Orchestra — local UI. Vanilla JS, no dependencies. The token lives only in memory.
 const token = (location.hash || "").slice(1);
 let selected = null, pollTimer = null, activeTab = "activity", lastProject = null;
+const openLogs = new Set();  // run ids whose worker log the user keeps open across refreshes
 
 const qs = (id) => document.getElementById(id);
 const el = (tag, text, cls) => { const n = document.createElement(tag); if (text != null) n.textContent = text; if (cls) n.className = cls; return n; };
@@ -424,8 +425,10 @@ function renderRuns(p) {
     }
     if (r.error) card.append(el("div", "⚠ " + r.error, "needs"));
     const render = (d) => (d.live && d.live.length) ? d.live.join("\n") + (d.state === "RUNNING" ? "\n…" : "") : (d.log_tail || (r.state === "RUNNING" ? "(waiting for the worker's first output…)" : "(empty)"));
-    const lb = btn("Worker log", async () => { let box = card.querySelector(".log"); if (box) { const hidden = box.classList.toggle("hidden"); lb.textContent = hidden ? "Worker log" : "Hide log"; return; } const d = await api("/api/run/" + r.id); box = el("pre", null, "log"); box.dataset.run = r.id; box.textContent = render(d); card.append(box); lb.textContent = "Hide log"; if (r.state === "RUNNING") box.dataset.live = "1"; }, "mini secondary"); card.append(lb);
-    if (r.state === "RUNNING") { const raw = btn("Raw log", async () => { const d = await api("/api/run/" + r.id); let box = card.querySelector(".log"); if (!box) { box = el("pre", null, "log"); card.append(box); } box.textContent = d.log_tail || "(empty)"; delete box.dataset.live; }, "mini secondary"); card.append(raw); }
+    const showLog = async (raw) => { const d = await api("/api/run/" + r.id); let box = card.querySelector(".log"); if (!box) { box = el("pre", null, "log"); card.append(box); } box.classList.remove("hidden"); box.textContent = raw ? (d.log_tail || "(empty)") : render(d); lb.textContent = "Hide log"; if (!raw) { const atBottom = true; if (atBottom) box.scrollTop = box.scrollHeight; } };
+    const lb = btn(openLogs.has(r.id) ? "Hide log" : "Worker log", async () => { if (openLogs.has(r.id)) { openLogs.delete(r.id); const box = card.querySelector(".log"); if (box) box.classList.add("hidden"); lb.textContent = "Worker log"; return; } openLogs.add(r.id); await showLog(false); }, "mini secondary"); card.append(lb);
+    if (r.state === "RUNNING") card.append(btn("Raw log", () => { openLogs.add(r.id); return showLog(true); }, "mini secondary"));
+    if (openLogs.has(r.id)) showLog(false);
     list.append(card);
   }
 }
@@ -475,9 +478,7 @@ function pollUntilIdle(id) {
   clearTimeout(pollTimer);
   pollTimer = setTimeout(async () => {
     try { const p = await api("/api/project/" + encodeURIComponent(id)); if (selected !== id) return;
-      const openLive = [...document.querySelectorAll(".log[data-live]")].map(b => b.dataset.run);
-      await openProject(id);
-      for (const runId of openLive) { const card = document.querySelector(`.run[data-run="${runId}"]`); const btnEl = card && [...card.querySelectorAll("button")].find(b => b.textContent === "Worker log"); if (btnEl) btnEl.click(); } if (p.dispatching) pollUntilIdle(id); else toast(p.job?.error ? `${p.job.job} failed — see Now.` : `${p.job?.job || "Job"} finished — see Now.`, p.job?.error ? "bad" : "ok"); }
+      await openProject(id); if (p.dispatching) pollUntilIdle(id); else toast(p.job?.error ? `${p.job.job} failed — see Now.` : `${p.job?.job || "Job"} finished — see Now.`, p.job?.error ? "bad" : "ok"); }
     catch (e) { toast(e.message, "bad"); }
   }, 4000);
 }

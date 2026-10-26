@@ -66,6 +66,12 @@ CREATE TABLE IF NOT EXISTS task_instructions (task_id TEXT PRIMARY KEY, text TEX
 CREATE TABLE IF NOT EXISTS project_settings (project_id TEXT NOT NULL REFERENCES projects(id), key TEXT NOT NULL, value_json TEXT NOT NULL,
   PRIMARY KEY (project_id, key));
 """),
+    (6, "planner tasks belong to the controller/user, never agents (host run 11, K4)", """
+UPDATE tasks SET role='controller' WHERE id LIKE '%:SCAFFOLD' OR id LIKE '%:BUILD' OR id LIKE '%:CONTENT:__';
+UPDATE tasks SET role='user' WHERE id LIKE '%:GAME';
+UPDATE tasks SET state='READY', lease_owner=NULL, lease_expiry=NULL, version=version+1
+  WHERE (id LIKE '%:SCAFFOLD' OR id LIKE '%:CONTENT:__') AND state IN ('LEASED','RUNNING','WAITING_USER','FAILED','BLOCKED');
+"""),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 

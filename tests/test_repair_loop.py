@@ -250,3 +250,29 @@ class FullAutopilot(Base):
         out = orchestrate(self.store, "q_mod", max_runs=3, provider=FakeProvider(reply(h)))
         self.assertIn("questions for you", out["stopped_because"]); self.assertEqual(out["gates"], [])
         self.assertEqual(self.store.project("q_mod")["spec_state"], "DRAFT")
+
+
+class PlannerTasksNeverDispatched(unittest.TestCase):
+    def test_old_role_rows_are_migrated_and_guarded(self):
+        from mod_orchestra.dispatch import pick_task, _dispatchable_now
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); store = Store(base / "state.sqlite")
+        with patch.object(workflow, "PROJECTS", base / "projects"):
+            (base / "projects").mkdir()
+            workflow.new_project(store, name="P", mod_id="p_mod", package="com.x.p", idea="items: gem")
+            workflow.plan_project(store, "p_mod"); workflow.approve_spec(store, "p_mod")
+            # simulate a pre-v6 row: SCAFFOLD as coder, leased by a worker
+            with store.tx() as con:
+                con.execute("UPDATE tasks SET role='coder', state='WAITING_USER' WHERE id='p_mod:SCAFFOLD'")
+            # the id-based guard refuses regardless of role
+            t = next(x for x in store.tasks("p_mod") if x["id"] == "p_mod:SCAFFOLD")
+            self.assertFalse(_dispatchable_now(store, "p_mod", t))
+            with self.assertRaisesRegex(StateError, "controller/user work"):
+                pick_task(store, "p_mod", "p_mod:SCAFFOLD")
+            # and the migration SQL repairs the row on a fresh open
+            from mod_orchestra.state import MIGRATIONS
+            sql = MIGRATIONS[-1][2]
+            with store.tx() as con:
+                con.executescript(sql)
+            t = next(x for x in store.tasks("p_mod") if x["id"] == "p_mod:SCAFFOLD")
+            self.assertEqual((t["role"], t["state"]), ("controller", "READY"))
