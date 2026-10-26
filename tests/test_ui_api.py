@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from mod_orchestra import dispatch as dmod, ui, workflow
 from mod_orchestra.provider import FakeProvider
-from mod_orchestra.state import Store
+from mod_orchestra.state import Store, StateError
 
 REPLY = '```handoff\n' + json.dumps({"task": "u_mod:SCAFFOLD", "status": "WAITING_USER", "scope": "s", "changed_files": [],
         "checks_run": [], "evidence": {"level": "STATIC", "pointer": "src"}, "risks": [], "unknowns": [],
