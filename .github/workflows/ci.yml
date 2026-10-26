@@ -34,7 +34,7 @@ jobs:
       - name: Install
         run: python -m pip install -e .
       - name: Unit tests
-        run: python -m unittest discover -s tests -v
+        run: python scripts/run_tests_ci.py
       - name: Wrapper provenance holds on this OS
         shell: bash
         run: |
