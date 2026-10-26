@@ -201,10 +201,11 @@ class OpenInBlockbench(Base):
         self.deliver()
         import mod_orchestra.feedback as fb
         opened = {}
-        with patch("subprocess.Popen", lambda cmd, **k: opened.setdefault("cmd", cmd)), patch.object(fb, "find_blockbench", return_value=None), \
-             patch("sys.platform", "linux"), patch("os.name", "posix"):  # force the xdg-open branch on every OS
+        import os as _os
+        with patch("subprocess.Popen", lambda cmd, **k: opened.setdefault("cmd", list(cmd))), patch.object(fb, "find_blockbench", return_value=None), \
+             patch("sys.platform", "linux"), patch.object(_os, "startfile", lambda path: opened.setdefault("cmd", ["startfile", str(path)]), create=True):
             out = open_in_blockbench(self.store, "c_mod", "sky_critter")
-        self.assertTrue(out["opened"].endswith("sky_critter.bbmodel")); self.assertEqual(opened["cmd"][0], "xdg-open")
+        self.assertTrue(out["opened"].endswith("sky_critter.bbmodel")); self.assertIn(opened["cmd"][0], ("xdg-open", "startfile"))
         self.assertIn("OPENED_IN_BLOCKBENCH", [e["kind"] for e in self.store.events("c_mod")])
         with self.assertRaisesRegex(InputError, "Unknown mob"):
             open_in_blockbench(self.store, "c_mod", "dragon")
