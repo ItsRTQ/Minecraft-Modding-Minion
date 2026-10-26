@@ -68,7 +68,7 @@ class Generated(unittest.TestCase):
     def test_java_and_resources(self):
         main = (self.root / "src/main/java/com/x/r/ModMain.java").read_text()
         for needle in ("Registry.registerForHolder(BuiltInRegistries.ARMOR_MATERIAL", "new ArmorMaterial(Util.make(new EnumMap<>(ArmorItem.Type.class)",
-                       "SwordItem.createAttributes(RubyTier.INSTANCE, 3.0F, -2.4F)", "new ArmorItem(RUBY_ARMOR_MATERIAL, ArmorItem.Type.CHESTPLATE",
+                       "SwordItem.createAttributes(RubyTier.INSTANCE, 3, -2.4F)", "PickaxeItem.createAttributes(RubyTier.INSTANCE, 1.0F, -2.8F)", "new ArmorItem(RUBY_ARMOR_MATERIAL, ArmorItem.Type.CHESTPLATE",
                        'new ArmorMaterial.Layer(id("ruby"))', "FoodProperties.Builder().nutrition(6).saturationModifier(1.2F).effect(new MobEffectInstance(MobEffects.REGENERATION, 100, 1), 1.0F).alwaysEdible()",
                        "CreativeModeTabs.TOOLS_AND_UTILITIES", "CreativeModeTabs.COMBAT", "CreativeModeTabs.FOOD_AND_DRINKS", "output.accept(RUBY_SWORD);", "output.accept(RUBY_APPLE);"):
             self.assertIn(needle, main, needle)

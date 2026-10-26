@@ -78,8 +78,10 @@ def gear_registrations(spec: Spec) -> tuple[list[str], list[str], list[str]]:
         for kind in m.tools:
             klass, dmg, speed = TOOL_ATTRS[kind]
             const = f"{m.identifier}_{kind}".upper()
+            # SwordItem.createAttributes(Tier, int, float); DiggerItem subclasses take (Tier, float, float)
+            dmg_lit = f"{int(dmg)}" if kind == "sword" else f"{float(dmg)}F"
             fields.append(f'    public static final Item {const} = Registry.register(BuiltInRegistries.ITEM, id("{m.identifier}_{kind}"),')
-            fields.append(f"        new {klass}({tier}, new Item.Properties().attributes({klass}.createAttributes({tier}, {float(dmg)}F, {float(speed)}F))));")
+            fields.append(f"        new {klass}({tier}, new Item.Properties().attributes({klass}.createAttributes({tier}, {dmg_lit}, {float(speed)}F))));")
             init.append(f"        ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.{'COMBAT' if kind == 'sword' else 'TOOLS_AND_UTILITIES'}).register(entries -> entries.accept({const}));")
         for kind in m.armor:
             const = f"{m.identifier}_{kind}".upper()

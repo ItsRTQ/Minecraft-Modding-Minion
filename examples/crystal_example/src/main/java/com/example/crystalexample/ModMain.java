@@ -67,7 +67,7 @@ public class ModMain implements ModInitializer {
         }), 14, SoundEvents.ARMOR_EQUIP_IRON, () -> Ingredient.of(ModMain.SKY_CRYSTAL),
         List.of(new ArmorMaterial.Layer(id("crystal"))), 2.0F, 0.0F));
     public static final Item CRYSTAL_SWORD = Registry.register(BuiltInRegistries.ITEM, id("crystal_sword"),
-        new SwordItem(CrystalTier.INSTANCE, new Item.Properties().attributes(SwordItem.createAttributes(CrystalTier.INSTANCE, 3.0F, -2.4F))));
+        new SwordItem(CrystalTier.INSTANCE, new Item.Properties().attributes(SwordItem.createAttributes(CrystalTier.INSTANCE, 3, -2.4F))));
     public static final Item CRYSTAL_PICKAXE = Registry.register(BuiltInRegistries.ITEM, id("crystal_pickaxe"),
         new PickaxeItem(CrystalTier.INSTANCE, new Item.Properties().attributes(PickaxeItem.createAttributes(CrystalTier.INSTANCE, 1.0F, -2.8F))));
     public static final Item CRYSTAL_AXE = Registry.register(BuiltInRegistries.ITEM, id("crystal_axe"),
