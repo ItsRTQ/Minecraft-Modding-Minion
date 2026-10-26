@@ -9,7 +9,7 @@ import secrets
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
-from urllib.parse import urlparse, parse_qs, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 from .state import Store, StateError
 from .validation import InputError
 from .doctor import inspect
@@ -100,7 +100,7 @@ def serve(store: Store, port: int = 8765) -> None:
             return host == f"127.0.0.1:{port}" and self.headers.get("Authorization") == "Bearer " + token
 
         def handle_api(self, body: dict | None = None):
-            path = urlparse(self.path).path
+            path = unquote(urlparse(self.path).path)  # ids may arrive percent-encoded (task ids contain ':')
             payload = body or {}
             if self.command == "GET":
                 if path == "/api/doctor": return inspect()

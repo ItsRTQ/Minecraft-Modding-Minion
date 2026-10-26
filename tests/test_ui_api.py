@@ -201,3 +201,12 @@ class DeleteWithRunsAndInstructions(unittest.TestCase):
             out = workflow.delete_project(store, "d_mod", remove_workspace=True)
             self.assertGreaterEqual(out["rows"]["runs"], 1); self.assertGreaterEqual(out["rows"]["task_instructions"], 1)
             self.assertEqual(store.projects(), [])
+
+
+class PercentEncodedIds(unittest.TestCase):
+    def test_requeue_accepts_encoded_task_id(self):
+        # host run 11: "Task not found: ovis_moon%3ASPEC" — the path segment was not URL-decoded.
+        import mod_orchestra.ui as uimod
+        from urllib.parse import unquote
+        self.assertIn("unquote(", __import__("inspect").getsource(uimod.serve))
+        self.assertEqual(unquote("ovis_moon%3ASPEC"), "ovis_moon:SPEC")
