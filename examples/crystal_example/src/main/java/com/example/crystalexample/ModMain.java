@@ -33,7 +33,6 @@ import java.util.EnumMap;
 import java.util.List;
 import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.effect.MobEffectInstance;
-import net.minecraft.world.effect.MobEffects;
 import com.example.crystalexample.gear.CrystalTier;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.minecraft.core.registries.Registries;
@@ -84,7 +83,7 @@ public class ModMain implements ModInitializer {
         new ArmorItem(CRYSTAL_ARMOR_MATERIAL, ArmorItem.Type.LEGGINGS, new Item.Properties().durability(ArmorItem.Type.LEGGINGS.getDurability(30))));
     public static final Item CRYSTAL_BOOTS = Registry.register(BuiltInRegistries.ITEM, id("crystal_boots"),
         new ArmorItem(CRYSTAL_ARMOR_MATERIAL, ArmorItem.Type.BOOTS, new Item.Properties().durability(ArmorItem.Type.BOOTS.getDurability(30))));
-    public static final Item CRYSTAL_BERRY = Registry.register(BuiltInRegistries.ITEM, id("crystal_berry"), new Item(new Item.Properties().food(new FoodProperties.Builder().nutrition(4).saturationModifier(0.6F).effect(new MobEffectInstance(MobEffects.NIGHT_VISION, 400, 0), 1.0F).build())));
+    public static final Item CRYSTAL_BERRY = Registry.register(BuiltInRegistries.ITEM, id("crystal_berry"), new Item(new Item.Properties().food(new FoodProperties.Builder().nutrition(4).saturationModifier(0.6F).effect(new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.getHolder(ResourceLocation.fromNamespaceAndPath("minecraft", "night_vision")).orElseThrow(), 400, 0), 1.0F).build())));
 
     public static final ResourceKey<CreativeModeTab> TAB_KEY = ResourceKey.create(Registries.CREATIVE_MODE_TAB, id("crystal_example_tab"));
     public static final CreativeModeTab TAB = FabricItemGroup.builder()

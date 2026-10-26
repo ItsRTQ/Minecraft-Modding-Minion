@@ -63,7 +63,7 @@ def gear_registrations(spec: Spec) -> tuple[list[str], list[str], list[str]]:
                "net.minecraft.world.item.ArmorMaterial", "net.minecraft.world.item.crafting.Ingredient", "net.minecraft.core.Holder",
                "net.minecraft.core.registries.Registries", "net.minecraft.resources.ResourceLocation", "net.minecraft.sounds.SoundEvents",
                "net.minecraft.Util", "net.minecraft.tags.TagKey", "java.util.EnumMap", "java.util.List",
-               "net.minecraft.world.food.FoodProperties", "net.minecraft.world.effect.MobEffectInstance", "net.minecraft.world.effect.MobEffects"]
+               "net.minecraft.world.food.FoodProperties", "net.minecraft.world.effect.MobEffectInstance"]
     imports += [f"{spec.package}.gear.{cls(m.identifier)}Tier" for m in spec.materials]
     fields, init = [], []
     for m in spec.materials:
@@ -92,8 +92,10 @@ def gear_registrations(spec: Spec) -> tuple[list[str], list[str], list[str]]:
         const = f.identifier.upper()
         builder = f"new FoodProperties.Builder().nutrition({int(f.nutrition)}).saturationModifier({float(f.saturation)}F)"
         for e in f.effects:
-            eff = e["effect"].split(":", 1)[1].upper()
-            builder += f".effect(new MobEffectInstance(MobEffects.{eff}, {int(e.get('duration', 100))}, {int(e.get('amplifier', 0))}), {float(e.get('chance', 1.0))}F)"
+            ns, path = e["effect"].split(":", 1)
+            # Resolve by registry id: Mojmap constant names differ from ids (speed -> MOVEMENT_SPEED, haste -> DIG_SPEED, ...)
+            holder = f'BuiltInRegistries.MOB_EFFECT.getHolder(ResourceLocation.fromNamespaceAndPath("{ns}", "{path}")).orElseThrow()'
+            builder += f".effect(new MobEffectInstance({holder}, {int(e.get('duration', 100))}, {int(e.get('amplifier', 0))}), {float(e.get('chance', 1.0))}F)"
         if f.always_edible: builder += ".alwaysEdible()"
         if f.fast: builder += ".fast()"
         fields.append(f'    public static final Item {const} = Registry.register(BuiltInRegistries.ITEM, id("{f.identifier}"), new Item(new Item.Properties().food({builder}.build())));')

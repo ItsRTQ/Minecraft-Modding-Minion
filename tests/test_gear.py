@@ -69,7 +69,7 @@ class Generated(unittest.TestCase):
         main = (self.root / "src/main/java/com/x/r/ModMain.java").read_text()
         for needle in ("Registry.registerForHolder(BuiltInRegistries.ARMOR_MATERIAL", "new ArmorMaterial(Util.make(new EnumMap<>(ArmorItem.Type.class)",
                        "SwordItem.createAttributes(RubyTier.INSTANCE, 3, -2.4F)", "PickaxeItem.createAttributes(RubyTier.INSTANCE, 1.0F, -2.8F)", "new ArmorItem(RUBY_ARMOR_MATERIAL, ArmorItem.Type.CHESTPLATE",
-                       'new ArmorMaterial.Layer(id("ruby"))', "FoodProperties.Builder().nutrition(6).saturationModifier(1.2F).effect(new MobEffectInstance(MobEffects.REGENERATION, 100, 1), 1.0F).alwaysEdible()",
+                       'new ArmorMaterial.Layer(id("ruby"))', 'FoodProperties.Builder().nutrition(6).saturationModifier(1.2F).effect(new MobEffectInstance(BuiltInRegistries.MOB_EFFECT.getHolder(ResourceLocation.fromNamespaceAndPath("minecraft", "regeneration")).orElseThrow(), 100, 1), 1.0F).alwaysEdible()',
                        "CreativeModeTabs.TOOLS_AND_UTILITIES", "CreativeModeTabs.COMBAT", "CreativeModeTabs.FOOD_AND_DRINKS", "output.accept(RUBY_SWORD);", "output.accept(RUBY_APPLE);"):
             self.assertIn(needle, main, needle)
         self.assertTrue((self.root / "src/main/java/com/x/r/gear/RubyTier.java").is_file())
