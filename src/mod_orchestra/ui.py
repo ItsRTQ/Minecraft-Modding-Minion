@@ -171,6 +171,12 @@ def serve(store: Store, port: int = 8765) -> None:
                     if op == "add-feature":
                         from .content import add_feature
                         return add_feature(store, pid, kind=str(payload.get("kind", "item")), label=str(payload.get("label", "")), identifier=payload.get("identifier") or None)
+                    if op == "add-material":
+                        from .content import add_material_any
+                        return add_material_any(store, pid, **{k: v for k, v in payload.items()})
+                    if op == "add-food":
+                        from .content import add_food_any
+                        return add_food_any(store, pid, **{k: v for k, v in payload.items()})
                     if op == "rename-feature":
                         from .content import rename_feature
                         return rename_feature(store, pid, str(payload.get("identifier", "")), str(payload.get("label", "")))

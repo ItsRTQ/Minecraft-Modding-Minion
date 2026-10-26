@@ -100,7 +100,7 @@ class Proposal(Base):
         self.assertEqual((spec.mod_id, spec.package, spec.name), ("i_mod", "com.x.i", "Crystals"))
 
     def test_proposal_without_features_is_rejected(self):
-        with self.assertRaisesRegex(InputError, "no items, blocks or mobs"):
+        with self.assertRaisesRegex(InputError, "no items, blocks, mobs"):
             spec_from_proposal(self.spec(), {"features": []})
 
     def test_orchestrate_runs_spec_first_and_stops_for_the_user(self):

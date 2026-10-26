@@ -30,6 +30,15 @@ def list_features(store: Store, pid: str) -> list[dict]:
         out.append({"kind": kind, "identifier": key, "label": f["label"], "texture": tex if (ws / tex).is_file() else None,
                     "recipes": [r["id"] for r in spec.get("recipes", []) if r["result"] == key or key in json.dumps(r)],
                     "drop": next((d for d in spec.get("drops", []) if d["block"] == key), None)})
+    for m in spec.get("materials", []):
+        for kind in list(m.get("tools", [])) + list(m.get("armor", [])):
+            key = f"{m['identifier']}_{kind}"; tex = f"src/main/resources/assets/{pid}/textures/item/{key}.png"
+            out.append({"kind": "tool" if kind in ("sword", "pickaxe", "axe", "shovel", "hoe") else "armor", "identifier": key, "label": f"{m['label']} {kind.capitalize()}",
+                        "texture": tex if (ws / tex).is_file() else None, "material": m["identifier"], "recipes": [key] if m.get("recipes", True) else [], "drop": None})
+    for f in spec.get("foods", []):
+        tex = f"src/main/resources/assets/{pid}/textures/item/{f['identifier']}.png"
+        out.append({"kind": "food", "identifier": f["identifier"], "label": f["label"], "texture": tex if (ws / tex).is_file() else None,
+                    "food": {"nutrition": f["nutrition"], "saturation": f["saturation"], "effects": f.get("effects", [])}, "recipes": [], "drop": None})
     return out
 
 
@@ -147,3 +156,103 @@ def remove_feature(store: Store, pid: str, identifier: str) -> dict:
         raise InputError(f"{identifier} is used by: {', '.join(used)} — remove those first")
     from .specedit import _save
     return _save(store, pid, replace(spec, features=[x for x in spec.features if x.identifier != identifier]), f"remove {identifier}") | {"removed": identifier}
+
+
+# ---------------------------------------------------------------------------------------------
+# Materials (tool/armor sets) and foods after generation: same shape as add_feature.
+# ---------------------------------------------------------------------------------------------
+def _write_gear_files(ws: Path, pid: str, package: str, new_spec, material=None, food=None) -> list[str]:
+    from .gear import tier_java, cls as gear_cls, gear_recipes
+    from .fabric import recipe_json, recipe_advancement_json
+    res = ws / "src/main/resources"; assets = res / "assets" / pid; java_dir = ws / "src/main/java" / package.replace(".", "/")
+    written: list[str] = []
+
+    def put(rel: Path, data: bytes):
+        if rel.exists():
+            raise InputError(f"Refusing to overwrite {rel.relative_to(ws)}")
+        rel.parent.mkdir(parents=True, exist_ok=True); rel.write_bytes(data); written.append(str(rel.relative_to(ws)).replace("\\", "/"))
+
+    lang_file = assets / "lang/en_us.json"
+    lang = json.loads(lang_file.read_text(encoding="utf8")) if lang_file.is_file() else {}
+    if material:
+        m = material
+        put(java_dir / "gear" / f"{gear_cls(m.identifier)}Tier.java", tier_java(new_spec, m).encode())
+        for kind in m.tools:
+            key = f"{m.identifier}_{kind}"
+            put(assets / "models/item" / f"{key}.json", (json.dumps({"parent": "item/handheld", "textures": {"layer0": f"{pid}:item/{key}"}}, indent=2) + "\n").encode())
+            put(assets / "textures/item" / f"{key}.png", placeholder_png(pid + "/" + key)); lang[f"item.{pid}.{key}"] = f"{m.label} {kind.capitalize()}"
+        for kind in m.armor:
+            key = f"{m.identifier}_{kind}"
+            put(assets / "models/item" / f"{key}.json", (json.dumps({"parent": "item/generated", "textures": {"layer0": f"{pid}:item/{key}"}}, indent=2) + "\n").encode())
+            put(assets / "textures/item" / f"{key}.png", placeholder_png(pid + "/" + key)); lang[f"item.{pid}.{key}"] = f"{m.label} {kind.capitalize()}"
+        if m.armor:
+            put(assets / "textures/models/armor" / f"{m.identifier}_layer_1.png", placeholder_png(pid + "/armor1/" + m.identifier, 64, 32))
+            put(assets / "textures/models/armor" / f"{m.identifier}_layer_2.png", placeholder_png(pid + "/armor2/" + m.identifier, 64, 32))
+        for r in gear_recipes(replace(new_spec, materials=[m])):
+            put(res / "data" / pid / "recipe" / f"{r.id}.json", (json.dumps(recipe_json(new_spec, r), indent=2) + "\n").encode())
+            put(res / "data" / pid / "advancement/recipes" / f"{r.id}.json", (json.dumps(recipe_advancement_json(new_spec, r), indent=2) + "\n").encode())
+    if food:
+        f = food
+        put(assets / "models/item" / f"{f.identifier}.json", (json.dumps({"parent": "item/generated", "textures": {"layer0": f"{pid}:item/{f.identifier}"}}, indent=2) + "\n").encode())
+        put(assets / "textures/item" / f"{f.identifier}.png", placeholder_png(pid + "/" + f.identifier)); lang[f"item.{pid}.{f.identifier}"] = f.label
+    lang_file.write_text(json.dumps(lang, indent=2, sort_keys=True) + "\n", encoding="utf8"); written.append(f"src/main/resources/assets/{pid}/lang/en_us.json")
+    return written
+
+
+def _gear_task(store: Store, pid: str, ws: Path, package: str, new_spec, only_spec, kind_label: str, ident: str, written: list[str]) -> dict:
+    from .gear import gear_registrations, gear_item_ids
+    imports, fields, init = gear_registrations(only_spec)
+    accepted = accept_changes(ws, run_id=f"add-{kind_label}:{ident}", actor="user", changed=written)
+    from .dispatch import _source_changed, _reopen_build
+    _source_changed(store, pid)
+    java_dir = f"src/main/java/{package.replace('.', '/')}"
+    instructions = [f"Register the new {kind_label} '{ident}' in {java_dir}/ModMain.java (do not touch anything else):",
+                    "1. Add these imports if missing:"] + ["   import " + i + ";" for i in imports] + [
+                    "2. Add the static fields next to the other content fields (order matters: keep them after the plain items/blocks):"] + ["   " + l for l in fields] + [
+                    "3. In onInitialize(), add:"] + ["   " + l.strip() for l in init] + [
+                    "4. If the mod has its own creative tab (TAB with displayItems), also add inside displayItems:"] + [f"   output.accept({i.upper()});" for i in gear_item_ids(only_spec)] + [
+                    "5. Run ./gradlew build (or gradlew.bat build) and report BUILD_PASS only if it exits 0."]
+    task_id = f"{pid}:ADD_{kind_label.upper()}:{ident}"
+    store.add_task(pid, task_id, "coder", f"Register new {kind_label} {ident} in ModMain")
+    with store.tx() as con:
+        con.execute("INSERT OR IGNORE INTO task_instructions(task_id, text) VALUES(?,?)", (task_id, "\n".join(instructions)))
+    _reopen_build(store, pid)
+    store.add_event(pid, "controller", "FEATURE_ADDED", {"kind": kind_label, "identifier": ident, "files": written, "task": task_id})
+    return {"identifier": ident, "kind": kind_label, "generated": True, "files": written, "accepted": accepted["accepted"], "task": task_id,
+            "next": {"action": "dispatch", "payload": {"task": task_id}}}
+
+
+def add_material_any(store: Store, pid: str, **kw) -> dict:
+    from .spec import Material
+    from .specedit import add_material
+    proj = store.project(pid)
+    if proj["status"] not in GENERATED_STATUSES:
+        return add_material(store, pid, **kw) | {"generated": False}
+    spec = read_spec(proj["spec"])
+    mat = Material(identifier=kw["identifier"], label=kw["label"], ingredient=kw["ingredient"], tools=tuple(kw.get("tools") or ()), armor=tuple(kw.get("armor") or ()),
+                   **{k: v for k, v in kw.items() if k not in ("identifier", "label", "ingredient", "tools", "armor") and v is not None})
+    if any(m.identifier == mat.identifier for m in spec.materials):
+        raise InputError(f"Material {mat.identifier!r} already exists")
+    new_spec = replace(spec, materials=list(spec.materials) + [mat]); validate_spec_content(new_spec)
+    ws = Path(proj["root"])
+    written = _write_gear_files(ws, pid, spec.package, new_spec, material=mat)
+    _save_spec(store, pid, new_spec, f"add material {mat.identifier} after generation")
+    return _gear_task(store, pid, ws, spec.package, new_spec, replace(new_spec, materials=[mat], foods=[]), "material", mat.identifier, written)
+
+
+def add_food_any(store: Store, pid: str, **kw) -> dict:
+    from .spec import Food
+    from .specedit import add_food
+    proj = store.project(pid)
+    if proj["status"] not in GENERATED_STATUSES:
+        return add_food(store, pid, **kw) | {"generated": False}
+    spec = read_spec(proj["spec"])
+    food = Food(identifier=kw["identifier"], label=kw["label"], nutrition=int(kw.get("nutrition", 4)), saturation=float(kw.get("saturation", 0.3)),
+                effects=tuple(kw.get("effects") or ()), always_edible=bool(kw.get("always_edible")), fast=bool(kw.get("fast")))
+    if food.identifier in spec.local_ids():
+        raise InputError(f"{food.identifier!r} already exists")
+    new_spec = replace(spec, foods=list(spec.foods) + [food]); validate_spec_content(new_spec)
+    ws = Path(proj["root"])
+    written = _write_gear_files(ws, pid, spec.package, new_spec, food=food)
+    _save_spec(store, pid, new_spec, f"add food {food.identifier} after generation")
+    return _gear_task(store, pid, ws, spec.package, new_spec, replace(new_spec, materials=[], foods=[food]), "food", food.identifier, written)

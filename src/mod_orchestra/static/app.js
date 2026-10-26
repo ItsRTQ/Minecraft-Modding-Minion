@@ -307,8 +307,9 @@ async function renderFeatures(p) {
   for (const f of feats) {
     const row = el("div", null, "feature"); const img = el("img"); img.alt = "";
     if (f.texture) img.src = fileUrl(p.id, f.texture); else img.style.visibility = "hidden";
-    const mid = el("div"); mid.append(el("div", f.label, "fname"), el("div", `${p.id}:${f.identifier} · ${f.kind}`, "fid"));
+    const mid = el("div"); const nm = el("div", null, "fname"); nm.append(document.createTextNode(f.label), el("span", f.kind, "fk")); mid.append(nm, el("div", `${p.id}:${f.identifier}`, "fid"));
     const bits = []; if (f.recipes?.length) bits.push("recipes: " + f.recipes.join(", ")); if (f.drop) bits.push(`drops ${f.drop.item} ${f.drop.count_min}-${f.drop.count_max}`);
+    if (f.material) bits.push("material: " + f.material); if (f.food) bits.push(`nutrition ${f.food.nutrition} · saturation ${f.food.saturation}` + (f.food.effects?.length ? " · " + f.food.effects.map(e => e.effect.replace("minecraft:", "")).join(", ") : ""));
     if (bits.length) mid.append(el("small", bits.join(" · ")));
     const right = el("div", null, "actions"); right.style.marginTop = "0";
     right.append(btn("Rename", async () => { const label = prompt("Display name for " + f.identifier + ":", f.label); if (!label || label === f.label) return; const out = await api(`/api/project/${p.id}/rename-feature`, { identifier: f.identifier, label }); toast(out.note || "Renamed.", "ok"); await openProject(p.id); }, "mini secondary"));
@@ -327,6 +328,37 @@ async function renderFeatures(p) {
     } catch (err) { toast(err.message, "bad"); }
   };
 }
+const MAT_PRESETS = { iron: [250, 6, 2, "iron", 14, "2 6 5 2", 15, 0, 0], diamond: [1561, 8, 3, "diamond", 10, "3 8 6 3", 33, 2, 0], netherite: [2031, 9, 4, "netherite", 15, "3 8 6 3", 37, 3, 0.1] };
+qs("mt-preset").onchange = () => { const v = MAT_PRESETS[qs("mt-preset").value]; if (!v) return; [qs("mt-durability").value, qs("mt-speed").value, qs("mt-attack").value, qs("mt-level").value, qs("mt-ench").value, qs("mt-defense").value, qs("mt-adur").value, qs("mt-tough").value, qs("mt-kb").value] = v; };
+for (const id of ["mt-durability", "mt-speed", "mt-attack", "mt-level", "mt-ench", "mt-defense", "mt-adur", "mt-tough", "mt-kb"]) qs(id).oninput = () => { qs("mt-preset").value = "custom"; };
+qs("mt-label").oninput = () => { if (!qs("mt-id").dataset.touched) qs("mt-id").value = qs("mt-label").value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40); };
+qs("mt-id").oninput = () => { qs("mt-id").dataset.touched = "1"; };
+qs("addmat-form").onsubmit = async (e) => {
+  e.preventDefault(); if (!selected) return;
+  const checked = (box) => [...qs(box).querySelectorAll("input:checked")].map(i => i.value);
+  const defense = qs("mt-defense").value.trim().split(/\s+/).map(Number);
+  try {
+    const out = await api(`/api/project/${selected}/add-material`, { identifier: qs("mt-id").value.trim(), label: qs("mt-label").value.trim(), ingredient: qs("mt-ingredient").value.trim(),
+      tools: checked("mt-tools"), armor: checked("mt-armor"), durability: Number(qs("mt-durability").value), mining_speed: Number(qs("mt-speed").value), attack_damage_bonus: Number(qs("mt-attack").value),
+      mining_level: qs("mt-level").value, enchantability: Number(qs("mt-ench").value), armor_defense: defense, armor_durability: Number(qs("mt-adur").value), toughness: Number(qs("mt-tough").value),
+      knockback_resistance: Number(qs("mt-kb").value), recipes: qs("mt-recipes").checked });
+    qs("addmat-form").reset(); delete qs("mt-id").dataset.touched; qs("mt-preset").onchange();
+    toast(out.generated ? `Set added. Files written; the coder registers it (${out.task}) — see Now.` : `Set added to the spec (${(out.items || []).length} items). Re-approve before generating.`, "ok");
+    await openProject(selected);
+  } catch (err) { toast(err.message, "bad"); }
+};
+qs("fd-label").oninput = () => { if (!qs("fd-id").dataset.touched) qs("fd-id").value = qs("fd-label").value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50); };
+qs("fd-id").oninput = () => { qs("fd-id").dataset.touched = "1"; };
+qs("addfood-form").onsubmit = async (e) => {
+  e.preventDefault(); if (!selected) return;
+  const effects = qs("fd-effect").value ? [{ effect: qs("fd-effect").value, duration: Number(qs("fd-duration").value), amplifier: Number(qs("fd-amplifier").value), chance: 1.0 }] : [];
+  try {
+    const out = await api(`/api/project/${selected}/add-food`, { identifier: qs("fd-id").value.trim(), label: qs("fd-label").value.trim(), nutrition: Number(qs("fd-nutrition").value), saturation: Number(qs("fd-saturation").value), effects, always_edible: qs("fd-always").checked, fast: qs("fd-fast").checked });
+    qs("addfood-form").reset(); delete qs("fd-id").dataset.touched;
+    toast(out.generated ? `Food added. Files written; the coder registers it (${out.task}) — see Now.` : "Food added to the spec. Re-approve before generating.", "ok");
+    await openProject(selected);
+  } catch (err) { toast(err.message, "bad"); }
+};
 qs("af-label").oninput = () => { if (!qs("af-id").dataset.touched) qs("af-id").value = qs("af-label").value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50); };
 qs("af-id").oninput = () => { qs("af-id").dataset.touched = "1"; };
 

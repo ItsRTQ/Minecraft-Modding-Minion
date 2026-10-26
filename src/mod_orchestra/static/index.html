@@ -107,6 +107,48 @@
         <div id="sub-items" class="subpane hidden">
           <div class="card"><div class="card-head"><h3>Items &amp; blocks</h3><p class="muted">Simple items and cube blocks with placeholder textures. Recipes and block drops live in the spec (<code>craftctl add-recipe / add-drop</code> before generation).</p></div>
             <div id="features-list"></div>
+            <details class="addmob"><summary>＋ Add a tool &amp; armor set (material)</summary>
+              <form id="addmat-form" class="form">
+                <div class="row">
+                  <label>Material name <input id="mt-label" required placeholder="Ruby"></label>
+                  <label>Identifier <input id="mt-id" required pattern="[a-z][a-z0-9_]{1,40}" placeholder="ruby"><small>Items become <code>ruby_sword</code>, <code>ruby_helmet</code>… </small></label>
+                </div>
+                <label>Made from (repair + recipes) <input id="mt-ingredient" required placeholder="ruby   or   minecraft:diamond   or   #minecraft:planks"><small>One of this mod's items, a vanilla id, or a tag.</small></label>
+                <div class="row">
+                  <label>Tools <div class="checks" id="mt-tools"><label><input type="checkbox" value="sword" checked> sword</label><label><input type="checkbox" value="pickaxe" checked> pickaxe</label><label><input type="checkbox" value="axe" checked> axe</label><label><input type="checkbox" value="shovel" checked> shovel</label><label><input type="checkbox" value="hoe" checked> hoe</label></div></label>
+                  <label>Armor <div class="checks" id="mt-armor"><label><input type="checkbox" value="helmet" checked> helmet</label><label><input type="checkbox" value="chestplate" checked> chestplate</label><label><input type="checkbox" value="leggings" checked> leggings</label><label><input type="checkbox" value="boots" checked> boots</label></div></label>
+                </div>
+                <label>Preset <select id="mt-preset"><option value="iron">like iron (250 uses, speed 6, +2 dmg, armor 2/6/5/2)</option><option value="diamond" selected>like diamond (1561 uses, speed 8, +3 dmg, armor 3/8/6/3, toughness 2)</option><option value="netherite">like netherite (2031 uses, speed 9, +4 dmg, toughness 3, knockback resistance)</option><option value="custom">custom numbers</option></select></label>
+                <div class="row numbers" id="mt-numbers">
+                  <label>Durability <input id="mt-durability" type="number" min="1" max="10000" value="1561"></label>
+                  <label>Mining speed <input id="mt-speed" type="number" min="0.5" max="50" step="0.5" value="8"></label>
+                  <label>Attack bonus <input id="mt-attack" type="number" min="0" max="50" step="0.5" value="3"></label>
+                  <label>Mines up to <select id="mt-level"><option value="wood">wood</option><option value="stone">stone</option><option value="iron">iron</option><option value="diamond" selected>diamond</option><option value="netherite">netherite</option></select></label>
+                  <label>Enchantability <input id="mt-ench" type="number" min="0" max="50" value="10"></label>
+                  <label>Armor defense (H/C/L/B) <input id="mt-defense" value="3 8 6 3" pattern="\d+ \d+ \d+ \d+"></label>
+                  <label>Armor durability ×<input id="mt-adur" type="number" min="1" max="100" value="33"></label>
+                  <label>Toughness <input id="mt-tough" type="number" min="0" max="20" step="0.5" value="2"></label>
+                  <label>Knockback resist. <input id="mt-kb" type="number" min="0" max="1" step="0.05" value="0"></label>
+                </div>
+                <label><input type="checkbox" id="mt-recipes" checked> Generate the standard crafting recipes (vanilla patterns)</label>
+                <div class="actions"><button class="primary" type="submit">Add set</button></div>
+              </form>
+            </details>
+            <details class="addmob"><summary>＋ Add a food</summary>
+              <form id="addfood-form" class="form">
+                <div class="row">
+                  <label>Name <input id="fd-label" required placeholder="Ruby Apple"></label>
+                  <label>Identifier <input id="fd-id" required pattern="[a-z][a-z0-9_]{1,49}" placeholder="ruby_apple"></label>
+                </div>
+                <div class="row">
+                  <label>Nutrition (0–20) <input id="fd-nutrition" type="number" min="0" max="20" value="4"><small>apple 4 · bread 5 · steak 8 · golden apple 4</small></label>
+                  <label>Saturation (0–2) <input id="fd-saturation" type="number" min="0" max="2" step="0.1" value="0.3"><small>apple 0.3 · steak 0.8 · golden apple 1.2</small></label>
+                </div>
+                <label>Effect (optional) <div class="row"><select id="fd-effect"><option value="">none</option><option value="minecraft:regeneration">regeneration</option><option value="minecraft:speed">speed</option><option value="minecraft:strength">strength</option><option value="minecraft:resistance">resistance</option><option value="minecraft:fire_resistance">fire resistance</option><option value="minecraft:night_vision">night vision</option><option value="minecraft:absorption">absorption</option><option value="minecraft:saturation">saturation</option><option value="minecraft:haste">haste</option><option value="minecraft:jump_boost">jump boost</option><option value="minecraft:water_breathing">water breathing</option><option value="minecraft:poison">poison</option><option value="minecraft:nausea">nausea</option></select><input id="fd-duration" type="number" min="1" max="72000" value="200" placeholder="duration (ticks)"><input id="fd-amplifier" type="number" min="0" max="9" value="0" placeholder="level-1"></div><small>duration in ticks (20 = 1 s); amplifier 0 = level I</small></label>
+                <div class="row"><label><input type="checkbox" id="fd-always"> Edible even when full (like golden apple)</label><label><input type="checkbox" id="fd-fast"> Eats fast (like dried kelp)</label></div>
+                <div class="actions"><button class="primary" type="submit">Add food</button></div>
+              </form>
+            </details>
             <details class="addmob"><summary>＋ Add an item or block</summary>
               <form id="addfeature-form" class="form">
                 <div class="row">
