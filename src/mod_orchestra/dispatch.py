@@ -16,7 +16,7 @@ from .provider import AgentProvider, ClaudeCodeProvider, FakeProvider, TaskEnvel
 from .redact import redact_obj
 from .state import Store, StateError
 
-DISPATCHABLE_ROLES = tuple(CAPABILITIES)        # every role may be dispatched; some will mostly produce WAITING_USER
+DISPATCHABLE_ROLES = tuple(r for r in CAPABILITIES if r not in ("controller", "user"))  # BUILD/GAME are never agent tasks
 LEASE_TTL = 3600
 
 
@@ -229,16 +229,73 @@ MAX_AUTO_RETRIES = 1
 HUMAN_NEEDED = ("WAITING_USER", "BLOCKED", "FAILED")
 
 
+AUTOPILOT_DEFAULT = {"approve_spec": False, "generate": False, "build": False, "server_smoke": False}
+
+
+def autopilot_policy(store: Store, pid: str) -> dict:
+    """What the user has pre-authorised Autopilot to do for this project (set only by the user)."""
+    return AUTOPILOT_DEFAULT | (store.get_setting(pid, "autopilot", {}) or {})
+
+
+def _autopilot_gate(store: Store, pid: str, policy: dict, gates: list[dict]) -> tuple[bool, str]:
+    """Perform one controller-side gate the user pre-authorised. Returns (did_something, stop_reason)."""
+    from .guidance import guidance
+    g = guidance(store, pid)
+    stage, questions = g["stage"], g.get("questions") or []
+    proj = store.project(pid)
+    if stage == "spec" and proj["spec_state"] != "APPROVED":
+        if questions:
+            return False, "the interpreter has questions for you: " + " | ".join(questions)
+        if not policy["approve_spec"]:
+            return False, f"spec drafted — approve it (craftctl approve-spec {pid}) or enable Autopilot's 'approve spec' for this project"
+        from .workflow import approve_spec
+        approve_spec(store, pid); gates.append({"gate": "approve_spec"}); store.add_event(pid, "controller", "AUTOPILOT_GATE", {"gate": "approve_spec"})
+        return True, ""
+    if stage == "source":
+        if not policy["generate"]:
+            return False, "spec approved — generate the source"
+        from .workflow import generate_project
+        generate_project(store, pid); gates.append({"gate": "generate"}); store.add_event(pid, "controller", "AUTOPILOT_GATE", {"gate": "generate"})
+        return True, ""
+    if stage == "build":
+        if not policy["build"]:
+            return False, "ready to build — request/grant/run the trusted build, or enable Autopilot's 'build'"
+        from .build import request_build, build_project
+        a = request_build(store, pid); store.decide_approval(a["id"], True)
+        res = build_project(store, pid, a["id"]); gates.append({"gate": "build", "status": res["status"]})
+        store.add_event(pid, "controller", "AUTOPILOT_GATE", {"gate": "build", "status": res["status"]})
+        if res["status"] != "BUILD_PASS" and (res.get("repair") or {}).get("exhausted"):
+            return False, "build failed and the repair loop is exhausted: " + str(res["repair"].get("error"))
+        return True, ""
+    if stage == "server":
+        if not policy["server_smoke"]:
+            return False, "built — run the dedicated-server smoke, or enable Autopilot's 'server smoke'"
+        from .smoke import request_smoke, server_smoke
+        a = request_smoke(store, pid); store.decide_approval(a["id"], True)
+        res = server_smoke(store, pid, a["id"]); gates.append({"gate": "server_smoke", "status": res["status"]})
+        store.add_event(pid, "controller", "AUTOPILOT_GATE", {"gate": "server_smoke", "status": res["status"]})
+        if res["status"] != "SERVER_BOOT_PASS" and (res.get("repair") or {}).get("exhausted"):
+            return False, "server smoke failed and the repair loop is exhausted"
+        return True, ""
+    if stage == "client":
+        return False, f"ready for your eyes: launch the client (craftctl run-client {pid}), then record CLIENT_BOOT_PASS / CONTENT_VERIFIED"
+    if stage == "verified":
+        return False, "verified on this exact source — nothing left for Autopilot"
+    return False, "no READY tasks and no gate Autopilot can cross here"
+
+
 def orchestrate(store: Store, pid: str, *, max_runs: int = 5, max_cost_usd: float = 5.0, max_seconds: int = 3600,
                 provider: AgentProvider | None = None) -> dict:
-    """Coordinator loop: dispatch READY tasks one at a time until the user is needed or a budget is hit.
-    Never crosses an approval gate: a WAITING_USER/BLOCKED/FAILED outcome ends the loop."""
+    """Coordinator loop: dispatch READY tasks one at a time; cross only the gates the user pre-authorised
+    in the project's Autopilot policy (approve spec, generate, build, server smoke). Stops for questions,
+    exhausted repairs, budgets, and always before the client (the user's eyes)."""
     started = time.time()
     if not store.tasks(pid):
         from .workflow import plan_project
         plan_project(store, pid)
     stale = reconcile_stale_runs(store, pid)
-    runs, cost = [], 0.0
+    policy = autopilot_policy(store, pid)
+    runs, cost, gates = [], 0.0, []
     reason = "no READY tasks"
     while True:
         if len(runs) >= max_runs:
@@ -249,11 +306,16 @@ def orchestrate(store: Store, pid: str, *, max_runs: int = 5, max_cost_usd: floa
             reason = f"max_seconds ({max_seconds}) reached"; break
         store.refresh_ready(pid)
         if not any(t["state"] == "READY" and t["role"] in DISPATCHABLE_ROLES and _dispatchable_now(store, pid, t) for t in store.tasks(pid)):
-            reason = "no READY tasks (or they wait on a trusted BUILD_PASS of the current source)"; break
+            did, why = _autopilot_gate(store, pid, policy, gates)
+            if did:
+                continue
+            reason = why; break
         out = dispatch(store, pid, provider=provider)
         runs.append({k: out.get(k) for k in ("run", "task", "role", "task_state", "cost_usd", "duration_s", "error")})
         cost += float(out.get("cost_usd") or 0.0)
         if out["task_state"] == "DONE" and ":REPAIR:" in out["task"]:
+            if policy["build"]:
+                continue  # Autopilot will run the trusted build itself at the gate
             reason = (f"repair {out['task']} DONE by the debugger; confirm with the trusted build: "
                       f"craftctl request-build {pid}; craftctl decide <id> grant; craftctl build {pid} --approval-id <id>")
             break
@@ -263,13 +325,15 @@ def orchestrate(store: Store, pid: str, *, max_runs: int = 5, max_cost_usd: floa
                 continue  # the controller opened a repair task; keep going, the debugger is next
             if out.get("auto_retry"):
                 continue  # a format failure was requeued with the reason; run it again
+            if out["task_state"] == "WAITING_USER" and out["task"].endswith(":SPEC"):
+                continue  # the spec proposal is in; the gate step decides (approve if authorised and no questions)
             needs = (out.get("handoff") or {}).get("needs_user") or []
             reason = f"{out['task_state']} on {out['task']}" + (": " + "; ".join(needs) if needs else "")
             if rep.get("exhausted"):
                 reason = "repair loop exhausted: " + rep.get("error", "")
             break
-    store.add_event(pid, "controller", "ORCHESTRATE_STOPPED", {"reason": reason, "runs": len(runs), "cost_usd": round(cost, 4)})
-    return {"project": pid, "runs": runs, "total_cost_usd": round(cost, 4), "elapsed_s": round(time.time() - started, 1),
+    store.add_event(pid, "controller", "ORCHESTRATE_STOPPED", {"reason": reason, "runs": len(runs), "cost_usd": round(cost, 4), "gates": gates})
+    return {"project": pid, "runs": runs, "gates": gates, "total_cost_usd": round(cost, 4), "elapsed_s": round(time.time() - started, 1),
             "stopped_because": reason, "stale_runs_reconciled": stale}
 
 

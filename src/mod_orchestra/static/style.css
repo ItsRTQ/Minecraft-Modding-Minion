@@ -153,3 +153,5 @@ input[type=checkbox]:focus-visible{outline:2px solid rgba(124,156,255,.5);outlin
 .checks label{display:inline-flex!important;gap:6px;align-items:center}
 .numbers small{line-height:1.3}
 button.danger{border-color:rgba(255,107,107,.5);color:var(--bad)}button.danger:hover{background:rgba(255,107,107,.12)}
+.policy{margin-top:12px;border:1px dashed var(--line-2);border-radius:var(--radius-s);padding:8px 12px}.policy summary{font-weight:600;cursor:pointer}
+.policy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px 16px;margin-top:8px}

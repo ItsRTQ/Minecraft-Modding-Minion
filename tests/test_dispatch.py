@@ -222,8 +222,9 @@ class Orchestrate(unittest.TestCase):
                 self.reply = reply(GOOD | {"task": envelope.task_id})
                 return super().run(envelope, log_path)
         out = orchestrate(self.store, "o_mod", max_runs=10, provider=Echo(""))
-        self.assertTrue(out["stopped_because"].startswith("no READY tasks"))
-        self.assertGreaterEqual(len(out["runs"]), 3)  # SCAFFOLD, CONTENT:01, CONTENT:02, BUILD, GAME…
+        # with no gates pre-authorised, Autopilot stops at the first gate it cannot cross and says which
+        self.assertEqual(out["stopped_because"], "spec approved — generate the source"); self.assertEqual(out["gates"], [])
+        self.assertGreaterEqual(len(out["runs"]), 2)  # SCAFFOLD, CONTENT:01, CONTENT:02, BUILD, GAME…
         self.assertTrue(all(r["task_state"] == "DONE" for r in out["runs"]))
 
     def test_stops_when_user_is_needed(self):

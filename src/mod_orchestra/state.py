@@ -61,6 +61,10 @@ ALTER TABLE tasks ADD COLUMN last_error TEXT;
     (4, "per-task worker instructions (add-mob after generation)", """
 CREATE TABLE IF NOT EXISTS task_instructions (task_id TEXT PRIMARY KEY, text TEXT NOT NULL);
 """),
+    (5, "per-project settings (autopilot policy)", """
+CREATE TABLE IF NOT EXISTS project_settings (project_id TEXT NOT NULL REFERENCES projects(id), key TEXT NOT NULL, value_json TEXT NOT NULL,
+  PRIMARY KEY (project_id, key));
+"""),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 
@@ -234,6 +238,19 @@ class Store:
             self.event(con, row["project_id"], worker, "TASK_LEASED", {"task": task_id})
             return dict(con.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone())
 
+    def get_setting(self, pid: str, key: str, default=None):
+        with self.tx() as con:
+            row = con.execute("SELECT value_json FROM project_settings WHERE project_id=? AND key=?", (pid, key)).fetchone()
+        return json.loads(row["value_json"]) if row else default
+
+    def set_setting(self, pid: str, key: str, value, *, actor: str = "user") -> None:
+        """USER-ONLY (the UI and CLI are the user; MCP never calls this)."""
+        with self.tx() as con:
+            if con.execute("SELECT 1 FROM projects WHERE id=?", (pid,)).fetchone() is None:
+                raise StateError(f"Project not found: {pid}")
+            con.execute("INSERT OR REPLACE INTO project_settings(project_id, key, value_json) VALUES(?,?,?)", (pid, key, json.dumps(value)))
+            self.event(con, pid, actor, "SETTING_CHANGED", {"key": key, "value": value})
+
     def task_instructions(self, task_id: str) -> str:
         with self.tx() as con:
             row = con.execute("SELECT text FROM task_instructions WHERE task_id=?", (task_id,)).fetchone()
@@ -266,6 +283,7 @@ class Store:
                 raise StateError(f"Project not found: {pid}")
             counts = {}
             # every table that references the project or its tasks (schema v1-v4); children first
+            counts["project_settings"] = con.execute("DELETE FROM project_settings WHERE project_id=?", (pid,)).rowcount
             counts["task_instructions"] = con.execute("DELETE FROM task_instructions WHERE task_id IN (SELECT id FROM tasks WHERE project_id=?)", (pid,)).rowcount
             counts["runs"] = con.execute("DELETE FROM runs WHERE project_id=?", (pid,)).rowcount
             for table in ("evidence", "approvals", "events"):

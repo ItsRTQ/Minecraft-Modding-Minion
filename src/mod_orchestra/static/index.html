@@ -56,6 +56,17 @@
           <div><div class="eyebrow">Now</div><h2 id="now-headline"></h2><p id="now-detail" class="muted"></p></div>
           <div id="now-busy" class="busy hidden"><span class="spinner"></span><span id="now-busy-text">Working…</span></div>
         </div>
+        <details class="policy" id="policy">
+          <summary>Autopilot permissions for this project <span id="policy-summary" class="muted"></span></summary>
+          <p class="muted">What Autopilot may do on its own. Agents never set these. It always stops for interpreter questions, exhausted repairs, the budget, and before the game client.</p>
+          <div class="policy-grid">
+            <label class="check"><input type="checkbox" id="pol-approve_spec"><span>Approve the spec</span><small>Only when the interpreter has no questions.</small></label>
+            <label class="check"><input type="checkbox" id="pol-generate"><span>Generate the source</span><small>Deterministic generator, never overwrites.</small></label>
+            <label class="check"><input type="checkbox" id="pol-build"><span>Run trusted builds</span><small>Requests, grants and runs Gradle through the broker; failures go to the repair loop.</small></label>
+            <label class="check"><input type="checkbox" id="pol-server_smoke"><span>Run the dedicated-server smoke</span><small>Accepts the Minecraft EULA in the isolated run/ folder, boots, checks, stops.</small></label>
+          </div>
+          <div class="actions"><button type="button" class="secondary mini" id="pol-all">Allow everything up to the client</button><button type="button" class="secondary mini" id="pol-none">Ask me for every gate</button></div>
+        </details>
         <div id="now-steps" class="steps"></div>
         <div id="now-job" class="job-result hidden"></div>
       </div>

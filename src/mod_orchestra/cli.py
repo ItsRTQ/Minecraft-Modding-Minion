@@ -63,6 +63,8 @@ def parser() -> argparse.ArgumentParser:
     a.add_argument("project"); a.add_argument("--id", required=True, help="Short task suffix, e.g. SAPPHIRE -> <project>:SAPPHIRE")
     a.add_argument("--role", required=True, choices=sorted(__import__("mod_orchestra.capabilities", fromlist=["CAPABILITIES"]).CAPABILITIES))
     a.add_argument("--title", required=True); a.add_argument("--after", nargs="*", default=None, help="Task ids this one depends on")
+    a = sub.add_parser("autopilot", help="USER-ONLY: set what Autopilot may do on its own for a project (gates it may cross)")
+    a.add_argument("project"); a.add_argument("--allow", nargs="*", choices=["approve_spec", "generate", "build", "server_smoke", "all", "none"], default=None)
     a = sub.add_parser("orchestrate", help="USER-ONLY: dispatch READY tasks one after another until you are needed or a budget is hit")
     a.add_argument("project"); a.add_argument("--max-runs", type=int, default=5); a.add_argument("--max-cost-usd", type=float, default=5.0)
     a.add_argument("--max-seconds", type=int, default=3600)
@@ -224,6 +226,13 @@ def dispatch(args: argparse.Namespace) -> object:
         kind, _, rest = args.id.partition(":")
         tid = f"{args.project}:{kind.upper()}" + (f":{rest}" if rest else "")
         return store.add_task(args.project, tid, args.role, args.title, after=args.after)
+    if args.command == "autopilot":
+        from .dispatch import autopilot_policy, AUTOPILOT_DEFAULT
+        if args.allow is not None:
+            allow = set(args.allow)
+            policy = {k: (k in allow or "all" in allow) and "none" not in allow for k in AUTOPILOT_DEFAULT}
+            store.set_setting(args.project, "autopilot", policy)
+        return autopilot_policy(store, args.project)
     if args.command == "orchestrate":
         from .dispatch import orchestrate
         from .provider import FakeProvider

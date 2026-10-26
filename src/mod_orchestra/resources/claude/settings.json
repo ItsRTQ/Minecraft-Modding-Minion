@@ -94,7 +94,9 @@
       "PowerShell(craftctl add-material*)",
       "PowerShell(craftctl remove-material*)",
       "PowerShell(craftctl add-food*)",
-      "PowerShell(craftctl remove-food*)"
+      "PowerShell(craftctl remove-food*)",
+      "Bash(craftctl autopilot*)",
+      "PowerShell(craftctl autopilot*)"
     ]
   },
   "hooks": {

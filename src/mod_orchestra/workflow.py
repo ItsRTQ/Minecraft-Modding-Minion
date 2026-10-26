@@ -43,8 +43,8 @@ def plan_project(store: Store, pid: str) -> dict:
         tasks.append({"id": tid, "role": "designer", "title": f"Blockbench/GeckoLib model + idle/walk + texture for mob: {mob.label}"})
         edges.append((f"{pid}:SCAFFOLD", tid))
         edges.append((tid, f"{pid}:BUILD"))
-    tasks.append({"id": f"{pid}:BUILD", "role": "coder", "title": "Compile with trusted approved Gradle toolchain (debugger takes over on BUILD_FAILED)"})
-    tasks.append({"id": f"{pid}:GAME", "role": "qa", "title": "Launch isolated Minecraft test and verify behavior"})
+    tasks.append({"id": f"{pid}:BUILD", "role": "controller", "title": "Trusted build through the controller (craftctl build / Autopilot); the debugger takes over on BUILD_FAILED"})
+    tasks.append({"id": f"{pid}:GAME", "role": "user", "title": "Server smoke (controller) + client verification (you): record CLIENT_BOOT_PASS and CONTENT_VERIFIED"})
     if spec.features:
         edges.extend((f"{pid}:CONTENT:{i:02d}", f"{pid}:BUILD") for i in range(1, len(spec.features) + 1))
     elif not spec.mobs:

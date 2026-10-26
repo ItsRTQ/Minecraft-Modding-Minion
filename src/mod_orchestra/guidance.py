@@ -127,8 +127,9 @@ def guidance(store: Store, pid: str) -> dict:
     cost = round(sum(float(r.get("cost_usd") or 0) for r in runs), 2)
     last = runs[-1] if runs else None
     happened = (f"Last worker: {last['role']} on {last['task_id']} → {last['state']}" + (f" (${last['cost_usd']:.2f}, {int(last['duration_s'] or 0)} s)" if last.get("cost_usd") else "")) if last else "No agent has run yet."
+    from .dispatch import autopilot_policy
     return {"stage": stage, "stages": STAGES, "headline": HEADLINES[stage], "detail": happened, "steps": steps, "busy": False,
-            "questions": questions, "levels": sorted(levels), "cost_usd": cost, "runs": len(runs)}
+            "questions": questions, "levels": sorted(levels), "cost_usd": cost, "runs": len(runs), "autopilot": autopilot_policy(store, pid)}
 
 
 HEADLINES = {

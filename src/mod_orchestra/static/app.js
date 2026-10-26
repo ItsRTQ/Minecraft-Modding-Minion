@@ -111,8 +111,24 @@ function renderStepper(g) {
   g.stages.forEach((s, i) => { const d = el("div", null, "step " + (i < idx ? "done" : i === idx ? "current" : "")); d.append(el("div", (i < idx ? "✓ " : "") + (i + 1), "sn"), el("div", s, "st")); box.append(d); });
 }
 
+const POLICY_KEYS = ["approve_spec", "generate", "build", "server_smoke"];
+async function savePolicy(pid) {
+  const policy = Object.fromEntries(POLICY_KEYS.map(k => [k, qs("pol-" + k).checked]));
+  try { await api(`/api/project/${pid}/autopilot`, policy); renderPolicySummary(policy); toast("Autopilot permissions saved.", "ok"); } catch (e) { toast(e.message, "bad"); }
+}
+function renderPolicySummary(policy) {
+  const on = POLICY_KEYS.filter(k => policy[k]);
+  qs("policy-summary").textContent = on.length === POLICY_KEYS.length ? "— everything up to the client" : on.length ? "— " + on.map(k => k.replace("_", " ")).join(", ") : "— asks you at every gate";
+}
+function renderPolicy(p) {
+  const policy = p.guidance.autopilot || {};
+  for (const k of POLICY_KEYS) { const box = qs("pol-" + k); box.checked = !!policy[k]; box.onchange = () => savePolicy(p.id); }
+  qs("pol-all").onclick = () => { for (const k of POLICY_KEYS) qs("pol-" + k).checked = true; savePolicy(p.id); };
+  qs("pol-none").onclick = () => { for (const k of POLICY_KEYS) qs("pol-" + k).checked = false; savePolicy(p.id); };
+  renderPolicySummary(policy);
+}
 function renderNow(p) {
-  const g = p.guidance;
+  const g = p.guidance; renderPolicy(p);
   qs("now-headline").textContent = g.headline; qs("now-detail").textContent = g.detail || "";
   const busy = qs("now-busy"); busy.classList.toggle("hidden", !p.dispatching);
   if (p.dispatching && p.job) qs("now-busy-text").textContent = `${p.job.job} running · ${fmtDur(p.job.elapsed_s)}`;
@@ -130,7 +146,7 @@ function renderNow(p) {
 function summarizeJob(job, r) {
   if (!r) return job + " finished";
   if (job === "dispatch") return `${r.role} on ${r.task} → ${r.task_state}${r.cost_usd ? " · " + fmtMoney(r.cost_usd) : ""}${r.duration_s ? " · " + fmtDur(r.duration_s) : ""}${r.error ? "\n" + r.error : ""}`;
-  if (job === "orchestrate") return `orchestrate: ${r.runs.length} run(s), ${fmtMoney(r.total_cost_usd)} · stopped because: ${r.stopped_because}`;
+  if (job === "orchestrate") return `Autopilot: ${r.runs.length} agent run(s)${r.gates?.length ? ", gates: " + r.gates.map(g => g.gate + (g.status ? " → " + g.status : "")).join(", ") : ""} · ${fmtMoney(r.total_cost_usd)}\nstopped because: ${r.stopped_because}`;
   if (job === "build") return `build → ${r.status} (exit ${r.exit_code}, ${fmtDur(r.duration_s)})${r.repair ? "\nrepair task opened: " + (r.repair.task || r.repair.error) : ""}`;
   if (job === "server-smoke") return `server smoke → ${r.status} (${fmtDur(r.duration_s)})${r.mod_errors?.length ? "\n" + r.mod_errors.join("\n") : ""}${r.repair ? "\nrepair task opened: " + (r.repair.task || r.repair.error) : ""}`;
   if (job === "run-client") return `client closed after ${fmtDur(r.duration_s)} · mod loaded: ${r.mod_loaded ? "yes" : "NO"} (${r.mods_loaded ?? "?"} mods)\nNow record what you saw in Verification.`;

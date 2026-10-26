@@ -125,6 +125,9 @@ def serve(store: Store, port: int = 8765) -> None:
                     if op == "guidance": return guidance(store, pid)
                     if op == "gallery": return model_gallery(store, pid)
                     if op == "job": return job_status(pid) or {"job": None, "running": False}
+                    if op == "autopilot":
+                        from .dispatch import autopilot_policy
+                        return autopilot_policy(store, pid)
                     if op == "items":
                         from .catalog import item_catalog
                         return item_catalog(store, pid)
@@ -175,6 +178,11 @@ def serve(store: Store, port: int = 8765) -> None:
                         if store.project(pid)["status"] in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
                             return add_mob_after_generation(store, pid, m)
                         return add_mob_spec(store, pid, identifier=m.identifier, label=m.label, behavior=m.behavior, drops=list(m.drops))
+                    if op == "autopilot":
+                        from .dispatch import AUTOPILOT_DEFAULT
+                        policy = {k: bool(payload.get(k, False)) for k in AUTOPILOT_DEFAULT}
+                        store.set_setting(pid, "autopilot", policy)
+                        return policy
                     if op == "delete":
                         from .workflow import delete_project
                         if payload.get("confirm") != pid:
