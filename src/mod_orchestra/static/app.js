@@ -11,7 +11,7 @@ const fmtMoney = (v) => v == null ? "" : "$" + Number(v).toFixed(2);
 const fmtDur = (s) => s == null ? "" : (s >= 60 ? Math.floor(s / 60) + "m " + Math.round(s % 60) + "s" : Math.round(s) + "s");
 const ago = (t) => { const d = Date.now() / 1000 - t; return d < 60 ? "just now" : d < 3600 ? Math.floor(d / 60) + " min ago" : d < 86400 ? Math.floor(d / 3600) + " h ago" : Math.floor(d / 86400) + " d ago"; };
 function codeLine(text) { const w = el("div", null, "codeline"); const c = el("code", text); const b = el("button", "copy", "mini secondary"); b.onclick = async (e) => { e.preventDefault(); try { await navigator.clipboard.writeText(text); b.textContent = "copied"; setTimeout(() => (b.textContent = "copy"), 1500); } catch { toast("Clipboard blocked; select and copy manually", "bad"); } }; w.append(c, b); return w; }
-const fileUrl = (pid, rel) => `/api/project/${encodeURIComponent(pid)}/file?path=${encodeURIComponent(rel)}&token=${encodeURIComponent(token)}`;
+const fileUrl = (pid, rel) => `/api/project/${encodeURIComponent(pid)}/file?path=${encodeURIComponent(rel)}&token=${encodeURIComponent(token)}&v=${Date.now()}`;
 
 async function api(path, payload) {
   const options = { headers: { Authorization: "Bearer " + token } };
@@ -454,6 +454,8 @@ function renderRuns(p) {
         for (const c of h.needs_user) n.append(codeLine(c)); card.append(n);
       }
       if (h.risks?.length) card.append(el("div", "risks: " + h.risks.join(" · "), "risk"));
+      if (h.sprites) { const sp = h.sprites; const d = el("div", null, "needs"); d.append(el("b", `Sprites installed: ${sp.installed.length}` + (Object.keys(sp.rejected || {}).length ? ` · rejected: ${Object.keys(sp.rejected).length}` : ""))); for (const rel of sp.installed) d.append(el("code", rel.split("/").pop())); for (const [k, why] of Object.entries(sp.rejected || {})) d.append(el("code", `✗ ${k}: ${why}`)); card.append(d); }
+      if (h.model) card.append(el("div", `model installed: ${h.model.bones.length} bones, ${h.model.cubes} cubes, ${h.model.animations.length} animations`, "risk"));
       if (h.questions?.length) card.append(el("div", "questions: " + h.questions.join(" · "), "risk"));
     }
     if (r.error) card.append(el("div", "⚠ " + r.error, "needs"));
