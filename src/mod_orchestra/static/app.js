@@ -35,6 +35,18 @@ for (const x of document.querySelectorAll(".modal-close")) x.onclick = () => x.c
 for (const m of document.querySelectorAll(".lightbox")) m.addEventListener("click", (e) => { if (e.target === m && m.id !== "picker") m.classList.add("hidden"); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") for (const m of document.querySelectorAll(".lightbox:not(.hidden)")) if (m.id !== "picker") m.classList.add("hidden"); });
 const closeModal = (id) => qs(id).classList.add("hidden");
+qs("p-delete").onclick = () => { if (!lastProject) return; qs("del-confirm").value = ""; qs("del-path").textContent = lastProject.root || ""; qs("modal-delete").classList.remove("hidden"); qs("del-confirm").focus(); };
+qs("del-go").onclick = async () => {
+  if (!lastProject) return;
+  if (qs("del-confirm").value.trim() !== lastProject.id) return toast("Type the exact project id to confirm", "bad");
+  try {
+    const out = await api(`/api/project/${lastProject.id}/delete`, { confirm: lastProject.id, workspace: qs("del-workspace").checked });
+    closeModal("modal-delete"); toast(`Deleted ${lastProject.id}${out.workspace_removed ? " and its workspace" : ""}.`, "ok");
+    selected = null; lastProject = null; await renderProjectList();
+    const projects = await api("/api/projects").catch(() => []);
+    if (projects.length) await openProject(projects[0].id); else show("new");
+  } catch (err) { toast(err.message, "bad"); }
+};
 qs("lightbox").onclick = (e) => { if (e.target.id === "lightbox") qs("lightbox").classList.add("hidden"); };
 function openLightbox(src, caption) { qs("lightbox-img").src = src; qs("lightbox-cap").textContent = caption || ""; qs("lightbox").classList.remove("hidden"); }
 

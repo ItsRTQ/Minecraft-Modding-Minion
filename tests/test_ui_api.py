@@ -168,3 +168,17 @@ class GuidanceGalleryFeedback(unittest.TestCase):
         self.assertIn("g_mod:MODEL:shadow", ids); self.assertIn("g_mod:MODEL:sky_critter", ids)
         self.assertEqual(next(t["state"] for t in self.store.tasks("g_mod") if t["id"] == "g_mod:SPEC"), "DONE")
         self.assertIn("TASK_GRAPH_REPLANNED", [e["kind"] for e in self.store.events("g_mod")])
+
+
+class DeleteFromUi(unittest.TestCase):
+    def test_delete_requires_exact_id_and_removes_project(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); store = Store(base / "state.sqlite")
+        with patch.object(workflow, "PROJECTS", base / "projects"):
+            (base / "projects").mkdir()
+            proj = workflow.new_project(store, name="D", mod_id="d_mod", package="com.x.d", idea="items: gem")
+            root = Path(proj["root"]); root.mkdir(parents=True, exist_ok=True); (root / "x.txt").write_text("x")
+            out = workflow.delete_project(store, "d_mod", remove_workspace=True)
+            self.assertTrue(out["workspace_removed"]); self.assertFalse(root.exists())
+            with self.assertRaises(StateError):
+                store.project("d_mod")

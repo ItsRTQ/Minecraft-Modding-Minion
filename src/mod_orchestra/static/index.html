@@ -46,7 +46,7 @@
     <section id="view-project" class="view hidden">
       <header class="page-head project-head">
         <div><div class="eyebrow" id="p-id"></div><h1 id="p-name"></h1></div>
-        <div class="head-meta"><span class="pill" id="p-status"></span><span class="muted" id="p-cost"></span></div>
+        <div class="head-meta"><span class="pill" id="p-status"></span><span class="muted" id="p-cost"></span><button id="p-delete" class="secondary mini danger" type="button">Delete project</button></div>
       </header>
 
       <div class="stepper" id="stepper"></div>
@@ -209,6 +209,13 @@
                 <label>What should it look like? <textarea id="am-desc" rows="2" placeholder="Small fox with a crescent on its forehead, dark blue fur, bushy tail"></textarea><small>Sent to the designer as its first feedback note.</small></label>
                 <div class="actions"><button class="primary" type="submit">Add mob</button><span class="muted" id="am-note"></span></div>
               </form></div></div>
+<div id="modal-delete" class="lightbox hidden"><div class="modal">
+  <div class="modal-head"><h3>Delete project</h3><button type="button" class="secondary mini modal-close">✕</button></div>
+  <p class="muted">Removes this project from the controller: spec, tasks, runs, approvals and evidence. This cannot be undone.</p>
+  <label class="check"><input type="checkbox" id="del-workspace" checked><span>Also delete the workspace folder on disk</span><small id="del-path" class="mono"></small></label>
+  <label>Type the project id to confirm <input id="del-confirm" placeholder="project_id"></label>
+  <div class="actions"><button type="button" id="del-go" class="danger">Delete</button></div>
+</div></div>
 <div id="picker" class="lightbox hidden"><div class="picker-inner">
   <div class="picker-head"><h3 id="picker-title">Drops on death</h3><input id="picker-search" placeholder="Search items and blocks…"></div>
   <div class="picker-cols">
