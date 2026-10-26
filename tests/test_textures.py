@@ -57,7 +57,7 @@ class Generated(unittest.TestCase):
 
     def test_upload_replaces_texture_as_revision(self):
         from mod_orchestra.fabric import validate_generated
-        root = self.assets.parents[3]
+        root = Path(self.store.project("t_mod")["root"])
         good = base64.b64encode(tinted_item_png("gem", (1, 2, 3), (4, 5, 6))).decode()
         out = set_texture(self.store, "t_mod", kind="item", identifier="gem", png_base64=good)
         self.assertTrue(out["file"].endswith("textures/item/gem.png")); self.assertEqual(validate_generated(root)["status"], "PASS")
