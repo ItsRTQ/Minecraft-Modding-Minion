@@ -205,7 +205,9 @@ def dispatch(args: argparse.Namespace) -> object:
     if args.command == "requeue":
         return store.requeue(args.task_id, args.reason)
     if args.command == "add-task":
-        tid = f"{args.project}:{args.id.upper()}"
+        # Uppercase the task kind only; identifiers after a colon (MODEL:<mob>, CONTENT:<n>) keep their case.
+        kind, _, rest = args.id.partition(":")
+        tid = f"{args.project}:{kind.upper()}" + (f":{rest}" if rest else "")
         return store.add_task(args.project, tid, args.role, args.title, after=args.after)
     if args.command == "orchestrate":
         from .dispatch import orchestrate
