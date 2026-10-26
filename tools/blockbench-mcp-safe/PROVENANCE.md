@@ -15,4 +15,4 @@ Verified by the controller maintainer before vendoring (sandbox, Node 22):
   `.geo.json` is identical bone-by-bone to that project's exporter output (CI keeps this oracle check on Linux).
 - CPU render with texture and animation pose works without a GPU.
 
-Still unverified: opening the produced `.bbmodel` in Blockbench 5 with the GeckoLib plugin (owner task).
+2026-10-26: a designer-produced `.bbmodel` (sky_critter, 9 bones, idle + walk, embedded texture) opened in Blockbench with the GeckoLib plugin on the owner's machine: rig, animations and texture load correctly.

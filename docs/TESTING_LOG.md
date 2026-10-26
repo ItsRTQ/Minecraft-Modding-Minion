@@ -269,7 +269,7 @@ First autonomous model: `craftctl dispatch critter_test --task critter_test:MODE
 | J2 | High | plan | The plan was frozen at the first `dispatch`/`plan`; a later interpreter proposal (mobs, content) never got its tasks (`Task not found: …:MODEL:…`). `approve-spec` re-plans while no source exists; `set_tasks(replace=True)` keeps a DONE SPEC task. | FIXED |
 | J3 | Low | fake provider | `CRAFTCTL_FAKE_REPLY_FILE` was read once; now read per run (dev/testing only). | FIXED |
 
-UI rendering in a browser still needs the owner's eyes (criterion 7).
+Owner session on the UI (host run 10, 2026-10-26): drops edited through the picker → rebuild → client launched from the UI; feedback, Add-a-mob form, Autopilot; three UX findings fixed during the session (stale needs_user shown as pending; Autopilot buried in Verification; evidence from older sources mixed in). **v1 criterion 7 observed.** `models/sky_critter.bbmodel` opened in Blockbench via the new button: rig, animations and texture load — the last unverified claim of the blockbench-mcp-safe audit is now verified. I3 (hitbox from model bounds) closed as not needed: the owner judged the in-game hitbox adequate.
 
 ## Not yet tested
 
