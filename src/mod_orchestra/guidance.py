@@ -53,11 +53,14 @@ def guidance(store: Store, pid: str) -> dict:
     def step(label, who, *, action=None, payload=None, command=None, detail=None):
         steps.append({"label": label, "who": who, "action": action, "payload": payload or {}, "command": command, "detail": detail})
 
+    from .dispatch import autopilot_policy
+    cost = round(sum(float(r.get("cost_usd") or 0) for r in runs), 2)
     if running:
         r = running[0]
         return {"stage": stage, "stages": STAGES, "headline": f"A {r['role']} worker is running on {r['task_id']}",
                 "detail": "Started by the controller with your installed Claude Code. This page refreshes until it finishes.",
-                "steps": [], "busy": True, "questions": questions, "levels": sorted(levels)}
+                "steps": [], "busy": True, "questions": questions, "levels": sorted(levels), "cost_usd": cost, "runs": len(runs),
+                "autopilot": autopilot_policy(store, pid)}
 
     if stage == "idea":
         step("Let the interpreter propose a spec from your idea", "agent", action="dispatch", payload={"task": f"{pid}:SPEC"},
@@ -124,10 +127,8 @@ def guidance(store: Store, pid: str) -> dict:
         step(f"Autopilot: run the {len(agent_ready)} READY task(s) back to back until you are needed", "agent", action="orchestrate",
              payload={"max_runs": 5, "max_cost_usd": 5.0},
              detail="Chains interpreter → coder → designer → debugger automatically. Stops at every gate (approval, question, unrepairable failure) or when the budget is hit.")
-    cost = round(sum(float(r.get("cost_usd") or 0) for r in runs), 2)
     last = runs[-1] if runs else None
     happened = (f"Last worker: {last['role']} on {last['task_id']} → {last['state']}" + (f" (${last['cost_usd']:.2f}, {int(last['duration_s'] or 0)} s)" if last.get("cost_usd") else "")) if last else "No agent has run yet."
-    from .dispatch import autopilot_policy
     return {"stage": stage, "stages": STAGES, "headline": HEADLINES[stage], "detail": happened, "steps": steps, "busy": False,
             "questions": questions, "levels": sorted(levels), "cost_usd": cost, "runs": len(runs), "autopilot": autopilot_policy(store, pid)}
 

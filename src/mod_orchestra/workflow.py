@@ -31,12 +31,12 @@ def plan_project(store: Store, pid: str) -> dict:
     spec = read_spec(project["spec"])
     tasks = [
         {"id": f"{pid}:SPEC", "role": "interpreter", "title": "Review, resolve questions, approve idea", "ready": True},
-        {"id": f"{pid}:SCAFFOLD", "role": "coder", "title": "Generate new Fabric starter workspace"},
+        {"id": f"{pid}:SCAFFOLD", "role": "controller", "title": "Generate the Fabric starter workspace (craftctl generate / Autopilot)"},
     ]
     edges = [(f"{pid}:SPEC", f"{pid}:SCAFFOLD")]
     for index, feat in enumerate(spec.features, 1):
         tid = f"{pid}:CONTENT:{index:02d}"
-        tasks.append({"id": tid, "role": "designer" if feat.kind == "block" else "coder", "title": f"Generate {feat.kind}: {feat.label}"})
+        tasks.append({"id": tid, "role": "controller", "title": f"Generate {feat.kind}: {feat.label} (generator)"})
         edges.append((f"{pid}:SCAFFOLD", tid))
     for mob in spec.mobs:
         tid = f"{pid}:MODEL:{mob.identifier}"

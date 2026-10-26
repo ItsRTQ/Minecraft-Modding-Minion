@@ -13,7 +13,7 @@ from mod_orchestra import dispatch as dmod, ui, workflow
 from mod_orchestra.provider import FakeProvider
 from mod_orchestra.state import Store, StateError
 
-REPLY = '```handoff\n' + json.dumps({"task": "u_mod:SCAFFOLD", "status": "WAITING_USER", "scope": "s", "changed_files": [],
+REPLY = '```handoff\n' + json.dumps({"task": "u_mod:WORK", "status": "WAITING_USER", "scope": "s", "changed_files": [],
         "checks_run": [], "evidence": {"level": "STATIC", "pointer": "src"}, "risks": [], "unknowns": [],
         "needs_user": ["craftctl request-build u_mod"], "next_agent": "none"}) + '\n```'
 
@@ -48,6 +48,7 @@ class UiApi(unittest.TestCase):
             raise RuntimeError("UI server did not start in time")
         workflow.new_project(cls.store, name="U", mod_id="u_mod", package="com.x.u", idea="items: gem")
         workflow.plan_project(cls.store, "u_mod"); workflow.approve_spec(cls.store, "u_mod")
+        cls.store.add_task("u_mod", "u_mod:WORK", "coder", "ad-hoc coder work")
 
     @classmethod
     def tearDownClass(cls):
@@ -87,7 +88,7 @@ class UiApi(unittest.TestCase):
         self.assertFalse(self.call("/api/project/u_mod")[1]["dispatching"])
 
     def test_3_requeue_and_evidence_from_ui(self):
-        code, out = self.call("/api/task/u_mod:SCAFFOLD/requeue", {})
+        code, out = self.call("/api/task/u_mod:WORK/requeue", {})
         self.assertEqual((code, out["state"]), (200, "READY"))
         code, out = self.call("/api/project/u_mod/evidence", {"level": "CLIENT_BOOT_PASS", "note": "x"})
         self.assertEqual(code, 400); self.assertIn("cannot be attached", out["error"])
@@ -210,3 +211,18 @@ class PercentEncodedIds(unittest.TestCase):
         from urllib.parse import unquote
         self.assertIn("unquote(", __import__("inspect").getsource(uimod.serve))
         self.assertEqual(unquote("ovis_moon%3ASPEC"), "ovis_moon:SPEC")
+
+
+class ReplanKeepsUserTasks(unittest.TestCase):
+    def test_add_task_survives_approve_spec_replan(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); store = Store(base / "state.sqlite")
+        with patch.object(workflow, "PROJECTS", base / "projects"):
+            (base / "projects").mkdir()
+            workflow.new_project(store, name="K", mod_id="k_mod", package="com.x.k", idea="items: gem")
+            workflow.plan_project(store, "k_mod")
+            store.add_task("k_mod", "k_mod:EXTRA", "coder", "user-added", after=["k_mod:SPEC"])
+            workflow.approve_spec(store, "k_mod")
+            ids = {t["id"]: t for t in store.tasks("k_mod")}
+            self.assertIn("k_mod:EXTRA", ids); self.assertEqual(ids["k_mod:SCAFFOLD"]["role"], "controller"); self.assertEqual(ids["k_mod:CONTENT:01"]["role"], "controller")
+            self.assertEqual(ids["k_mod:EXTRA"]["state"], "READY", "edge from the (DONE) SPEC task survived")

@@ -2,6 +2,7 @@
 from __future__ import annotations
 import hashlib
 import json
+import re
 import secrets
 import sqlite3
 import time
@@ -202,8 +203,11 @@ class Store:
             if existing and not replace:
                 raise StateError("Tasks already planned; use replan before generation")
             if existing:
-                con.execute("DELETE FROM task_edges WHERE predecessor IN (SELECT id FROM tasks WHERE project_id=?) OR successor IN (SELECT id FROM tasks WHERE project_id=?)", (pid, pid))
-                con.execute("DELETE FROM tasks WHERE project_id=?", (pid,))
+                # Replace only planner-owned tasks; user/controller-added ones (ADD_*, ad-hoc add-task, REPAIR) and their edges survive.
+                planner_ids = {t["id"] for t in tasks} | {i for i in existing if re.search(r":(SPEC|SCAFFOLD|BUILD|GAME)$|:(CONTENT|MODEL):", i)}
+                for old in planner_ids & set(existing):
+                    con.execute("DELETE FROM task_edges WHERE predecessor=? OR successor=?", (old, old))
+                    con.execute("DELETE FROM tasks WHERE id=?", (old,))
             for t in tasks:
                 state = "READY" if t.get("ready") else "BACKLOG"
                 prev = existing.get(t["id"])
