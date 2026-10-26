@@ -79,6 +79,7 @@ def guidance(store: Store, pid: str) -> dict:
             elif ":MODEL:" in t["id"] and t["state"] in ("FAILED", "WAITING_USER", "BLOCKED"):
                 step(f"Requeue {t['id']} ({t['state']})", "user", action="requeue", payload={"task": t["id"]}, detail=t.get("last_error"))
     elif stage == "build":
+        step("Or look at it in the game now", "user", action="run-client", detail="runClient compiles the current source and opens Minecraft with only this mod. The trusted build is still needed for evidence.")
         if granted:
             step("Run the trusted build", "controller", action="build", payload={"approval_id": granted[0]["id"]}, detail="Gradle through the broker; BUILD_PASS is recorded with the JAR hash.")
         elif pending:

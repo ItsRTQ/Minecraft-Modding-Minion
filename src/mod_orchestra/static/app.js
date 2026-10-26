@@ -346,6 +346,7 @@ function renderVerify(p) {
   if (!generated) { qs("validate-box").textContent = "Generate source first."; return; }
   acts.append(btn("Check files unchanged", async () => { const v = await api(`/api/project/${p.id}/validate`); qs("validate-box").textContent = v.status === "PASS" ? `PASS · ${v.checked} files intact · ${v.revisions} accepted revision(s)` : `${v.status} · ${(v.problems || []).join("; ")}`; qs("validate-box").className = v.status === "PASS" ? "ok" : "bad"; }));
   acts.append(btn("Build log", async () => { const r = await api(`/api/project/${p.id}/logs`); const b = qs("build-log"); b.textContent = r.text; b.classList.remove("hidden"); }));
+  acts.append(btn("Launch game client", async () => { if (!confirm("Opens Minecraft with only this mod (isolated run/ folder). It compiles the current source first. Close the game when done.")) return; await api(`/api/project/${p.id}/run-client`, {}); toast("Client launching. Come back here when you close it.", "ok"); await openProject(p.id); }, "primary"));
   acts.append(btn("Diagnose last build", async () => { const d = await api(`/api/project/${p.id}/diagnose`); const box = qs("diagnose-box"); box.replaceChildren(); if (d.status === "NO_LOG") { box.append(el("p", d.note, "muted")); return; } if (!d.classifications.length) { box.append(el("p", "No known failure pattern matched.", "muted")); return; } for (const c of d.classifications) { const w = el("div", null, "warning"); w.append(el("b", c.kind), el("div", c.symptom), el("div", c.guidance, "muted")); box.append(w); } }));
 }
 
