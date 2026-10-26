@@ -370,3 +370,24 @@ class RebuildAfterRevision(unittest.TestCase):
             record_evidence(self.store, "r_mod", "CLIENT_BOOT_PASS", actor="user")
         record_evidence(self.store, "r_mod", "BUILD_PASS", actor="user", jar=jar)
         self.assertEqual(self.store.project("r_mod")["status"], "BUILD_PASSED_GAME_UNTESTED")
+
+
+class StreamJsonParsing(unittest.TestCase):
+    def test_result_event_wins_and_live_summary_reads_tool_calls(self):
+        from mod_orchestra.provider import parse_claude_json, live_summary
+        log = "\n".join([
+            "$ claude -p --output-format stream-json",
+            json.dumps({"type": "system", "subtype": "init", "session_id": "s1"}),
+            json.dumps({"type": "assistant", "message": {"content": [{"type": "text", "text": "Reading the spec"}, {"type": "tool_use", "name": "Read", "input": {"file_path": "spec.json"}}]}}),
+            json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "is_error": True, "content": "No such file"}]}}),
+            json.dumps({"type": "result", "subtype": "success", "num_turns": 3, "total_cost_usd": 0.12, "session_id": "s1", "result": "```handoff\n{}\n```"}),
+        ])
+        env = parse_claude_json(log)
+        self.assertEqual(env["type"], "result"); self.assertEqual(env["session_id"], "s1")
+        live = live_summary(log)
+        self.assertEqual(live[0], "… Reading the spec"); self.assertEqual(live[1], "→ Read spec.json"); self.assertTrue(live[2].startswith("   ✗ No such file"))
+        self.assertIn("■ finished: success · 3 turns · $0.12", live[-1])
+
+    def test_plain_json_envelope_still_parses(self):
+        from mod_orchestra.provider import parse_claude_json
+        self.assertEqual(parse_claude_json('header\n{"result": "x", "session_id": "a", "total_cost_usd": 0.1}\n')["session_id"], "a")

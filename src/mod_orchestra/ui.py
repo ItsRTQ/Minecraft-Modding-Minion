@@ -74,10 +74,13 @@ def serve(store: Store, port: int = 8765) -> None:
                 if r["id"] == run_id:
                     log = Path(r["log_path"]) if r.get("log_path") else None
                     tail = ""
+                    live = []
                     if log and log.is_file():
-                        data = log.read_bytes()[-32768:]
-                        tail = redact("\n".join(data.decode("utf-8", "replace").splitlines()[-150:]))
-                    return r | {"log_tail": tail}
+                        text = log.read_bytes()[-262144:].decode("utf-8", "replace")
+                        tail = redact("\n".join(text.splitlines()[-150:]))
+                        from .provider import live_summary
+                        live = [redact(l) for l in live_summary(text)]
+                    return r | {"log_tail": tail, "live": live}
         raise InputError("Run not found")
 
     class Handler(BaseHTTPRequestHandler):

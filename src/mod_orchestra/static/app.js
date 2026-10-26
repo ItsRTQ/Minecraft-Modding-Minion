@@ -390,7 +390,7 @@ function renderRuns(p) {
   list.append(el("p", "History of what each worker did and asked for. Anything still pending for you is in the Now panel at the top, as buttons.", "muted"));
   const lastEvidenceAt = Math.max(0, ...(p.evidence || []).map(e => e.created_at));
   for (const r of runs) {
-    const card = el("div", null, "run"); const head = el("div", null, "head");
+    const card = el("div", null, "run"); card.dataset.run = r.id; const head = el("div", null, "head");
     head.append(el("span", r.state, "state " + r.state), el("b", `${r.role} → ${r.task_id}`), el("small", [r.duration_s != null ? fmtDur(r.duration_s) : "running", r.turns != null ? r.turns + " turns" : null, r.cost_usd != null ? fmtMoney(r.cost_usd) : null, ago(r.created_at)].filter(Boolean).join(" · "), "muted"));
     card.append(head);
     const h = r.handoff;
@@ -407,7 +407,9 @@ function renderRuns(p) {
       if (h.questions?.length) card.append(el("div", "questions: " + h.questions.join(" · "), "risk"));
     }
     if (r.error) card.append(el("div", "⚠ " + r.error, "needs"));
-    const lb = btn("Worker log", async () => { let box = card.querySelector(".log"); if (box) { const hidden = box.classList.toggle("hidden"); lb.textContent = hidden ? "Worker log" : "Hide log"; return; } const d = await api("/api/run/" + r.id); box = el("pre", null, "log"); box.textContent = d.log_tail || "(empty)"; card.append(box); lb.textContent = "Hide log"; }, "mini secondary"); card.append(lb);
+    const render = (d) => (d.live && d.live.length) ? d.live.join("\n") + (d.state === "RUNNING" ? "\n…" : "") : (d.log_tail || (r.state === "RUNNING" ? "(waiting for the worker's first output…)" : "(empty)"));
+    const lb = btn("Worker log", async () => { let box = card.querySelector(".log"); if (box) { const hidden = box.classList.toggle("hidden"); lb.textContent = hidden ? "Worker log" : "Hide log"; return; } const d = await api("/api/run/" + r.id); box = el("pre", null, "log"); box.dataset.run = r.id; box.textContent = render(d); card.append(box); lb.textContent = "Hide log"; if (r.state === "RUNNING") box.dataset.live = "1"; }, "mini secondary"); card.append(lb);
+    if (r.state === "RUNNING") { const raw = btn("Raw log", async () => { const d = await api("/api/run/" + r.id); let box = card.querySelector(".log"); if (!box) { box = el("pre", null, "log"); card.append(box); } box.textContent = d.log_tail || "(empty)"; delete box.dataset.live; }, "mini secondary"); card.append(raw); }
     list.append(card);
   }
 }
@@ -456,7 +458,10 @@ function renderTasks(p) {
 function pollUntilIdle(id) {
   clearTimeout(pollTimer);
   pollTimer = setTimeout(async () => {
-    try { const p = await api("/api/project/" + encodeURIComponent(id)); if (selected !== id) return; await openProject(id); if (p.dispatching) pollUntilIdle(id); else toast(p.job?.error ? `${p.job.job} failed — see Now.` : `${p.job?.job || "Job"} finished — see Now.`, p.job?.error ? "bad" : "ok"); }
+    try { const p = await api("/api/project/" + encodeURIComponent(id)); if (selected !== id) return;
+      const openLive = [...document.querySelectorAll(".log[data-live]")].map(b => b.dataset.run);
+      await openProject(id);
+      for (const runId of openLive) { const card = document.querySelector(`.run[data-run="${runId}"]`); const btnEl = card && [...card.querySelectorAll("button")].find(b => b.textContent === "Worker log"); if (btnEl) btnEl.click(); } if (p.dispatching) pollUntilIdle(id); else toast(p.job?.error ? `${p.job.job} failed — see Now.` : `${p.job?.job || "Job"} finished — see Now.`, p.job?.error ? "bad" : "ok"); }
     catch (e) { toast(e.message, "bad"); }
   }, 4000);
 }

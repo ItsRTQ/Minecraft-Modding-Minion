@@ -189,6 +189,9 @@ def dispatch(store: Store, pid: str, *, task_id: str | None = None, provider: Ag
     if not lease:
         raise StateError(f"Could not lease {task['id']}")
     run = store.create_run(pid, task["id"], task["role"], provider.name)
+    log_path_early = Path(proj["root"]) / ".mod-orchestra" / "runs" / f"{run['id']}.log"
+    with store.tx() as con:
+        con.execute("UPDATE runs SET log_path=? WHERE id=?", (str(log_path_early), run["id"]))
     log_path = Path(proj["root"]) / ".mod-orchestra" / "runs" / f"{run['id']}.log"
     try:
         envelope = build_envelope(store, pid, task)
