@@ -107,7 +107,10 @@ def guidance(store: Store, pid: str) -> dict:
             continue
         step(f"{t['id']} is {t['state']}", "user", action="requeue", payload={"task": t["id"]}, detail=t.get("last_error") or "Requeue to try again")
     for t in ready:
-        if ":ADD_MOB:" in t["id"]:
+        if ":ADD_ITEM:" in t["id"] or ":ADD_BLOCK:" in t["id"]:
+            steps.insert(0, {"label": f"Dispatch the coder to register the new {t['id'].split(':')[-2].split('_')[1].lower()} ({t['id'].split(':')[-1]})", "who": "agent", "action": "dispatch",
+                             "payload": {"task": t["id"]}, "command": None, "detail": "Its model, texture and lang are already written; the coder only adds the registration lines and compiles."})
+        elif ":ADD_MOB:" in t["id"]:
             steps.insert(0, {"label": f"Dispatch the coder to register the new mob ({t['id'].split(':ADD_MOB:')[1]})", "who": "agent", "action": "dispatch",
                              "payload": {"task": t["id"]}, "command": None, "detail": "The mob's own files are already written; the coder only wires ModMain/ModClient and compiles."})
         elif ":MODEL:" in t["id"] and stage not in ("model",):

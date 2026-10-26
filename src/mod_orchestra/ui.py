@@ -124,6 +124,9 @@ def serve(store: Store, port: int = 8765) -> None:
                     if op == "items":
                         from .catalog import item_catalog
                         return item_catalog(store, pid)
+                    if op == "features":
+                        from .content import list_features
+                        return list_features(store, pid)
                     if op == "logs": return {"text": tail_log(store, pid, 200)}
                     if op == "diagnose": return project_diagnose(store, pid)
                     if op == "validate":
@@ -165,6 +168,15 @@ def serve(store: Store, port: int = 8765) -> None:
                         if store.project(pid)["status"] in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
                             return add_mob_after_generation(store, pid, m)
                         return add_mob_spec(store, pid, identifier=m.identifier, label=m.label, behavior=m.behavior, drops=list(m.drops))
+                    if op == "add-feature":
+                        from .content import add_feature
+                        return add_feature(store, pid, kind=str(payload.get("kind", "item")), label=str(payload.get("label", "")), identifier=payload.get("identifier") or None)
+                    if op == "rename-feature":
+                        from .content import rename_feature
+                        return rename_feature(store, pid, str(payload.get("identifier", "")), str(payload.get("label", "")))
+                    if op == "remove-feature":
+                        from .content import remove_feature
+                        return remove_feature(store, pid, str(payload.get("identifier", "")))
                     if op == "mob-drops":
                         from .models import set_mob_drops
                         return set_mob_drops(store, pid, str(payload.get("mob", "")), list(payload.get("drops") or []))

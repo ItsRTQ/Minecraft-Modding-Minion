@@ -27,6 +27,7 @@ function toast(msg, kind) { const t = qs("toast"); t.textContent = msg; t.classN
 function show(view) { for (const v of document.querySelectorAll(".view")) v.classList.add("hidden"); qs("view-" + view).classList.remove("hidden"); }
 qs("nav-new").onclick = () => { show("new"); selected = null; renderProjectList(); };
 qs("nav-env").onclick = async () => { show("env"); await renderEnv(); };
+for (const t of document.querySelectorAll(".subtab")) t.onclick = () => { for (const x of document.querySelectorAll(".subtab")) x.classList.toggle("active", x === t); for (const p of document.querySelectorAll(".subpane")) p.classList.toggle("hidden", p.id !== "sub-" + t.dataset.sub); };
 for (const t of document.querySelectorAll(".tab")) t.onclick = () => { activeTab = t.dataset.tab; for (const x of document.querySelectorAll(".tab")) x.classList.toggle("active", x === t); for (const p of document.querySelectorAll(".tabpane")) p.classList.toggle("hidden", p.id !== "tab-" + activeTab); };
 qs("lightbox-close").onclick = () => qs("lightbox").classList.add("hidden");
 qs("lightbox").onclick = (e) => { if (e.target.id === "lightbox") qs("lightbox").classList.add("hidden"); };
@@ -82,7 +83,7 @@ async function openProject(id) {
   qs("p-id").textContent = p.id + " · " + p.spec.package; qs("p-name").textContent = p.name;
   const st = qs("p-status"); st.textContent = p.status.replace(/_/g, " "); st.className = "pill " + (p.status === "GAME_VERIFIED" ? "ok" : p.status === "BUILD_FAILED" ? "bad" : p.status.startsWith("BUILD_PASSED") ? "info" : "warn");
   qs("p-cost").textContent = p.guidance.runs ? `${p.guidance.runs} agent run${p.guidance.runs === 1 ? "" : "s"} · ${fmtMoney(p.guidance.cost_usd)} spent` : "no agent runs yet";
-  renderStepper(p.guidance); renderNow(p); renderSpec(p); renderGallery(p); renderRuns(p); renderEvents(p); renderVerify(p); renderTasks(p);
+  renderStepper(p.guidance); renderNow(p); renderSpec(p); renderGallery(p); renderFeatures(p); renderRuns(p); renderEvents(p); renderVerify(p); renderTasks(p);
   if (p.dispatching) pollUntilIdle(id);
 }
 
@@ -295,6 +296,38 @@ qs("addmob-form").onsubmit = async (e) => {
 qs("am-label").oninput = () => { if (!qs("am-id").dataset.touched) qs("am-id").value = qs("am-label").value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50); };
 qs("am-id").oninput = () => { qs("am-id").dataset.touched = "1"; };
 
+
+// ---------- items & blocks ----------
+async function renderFeatures(p) {
+  const list = qs("features-list"); list.replaceChildren();
+  let feats = []; try { feats = await api(`/api/project/${p.id}/features`); } catch (e) { list.append(el("p", e.message, "muted")); return; }
+  const generated = ["SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"].includes(p.status);
+  if (!feats.length) list.append(el("p", "No items or blocks yet.", "muted"));
+  for (const f of feats) {
+    const row = el("div", null, "feature"); const img = el("img"); img.alt = "";
+    if (f.texture) img.src = fileUrl(p.id, f.texture); else img.style.visibility = "hidden";
+    const mid = el("div"); mid.append(el("div", f.label, "fname"), el("div", `${p.id}:${f.identifier} · ${f.kind}`, "fid"));
+    const bits = []; if (f.recipes?.length) bits.push("recipes: " + f.recipes.join(", ")); if (f.drop) bits.push(`drops ${f.drop.item} ${f.drop.count_min}-${f.drop.count_max}`);
+    if (bits.length) mid.append(el("small", bits.join(" · ")));
+    const right = el("div", null, "actions"); right.style.marginTop = "0";
+    right.append(btn("Rename", async () => { const label = prompt("Display name for " + f.identifier + ":", f.label); if (!label || label === f.label) return; const out = await api(`/api/project/${p.id}/rename-feature`, { identifier: f.identifier, label }); toast(out.note || "Renamed.", "ok"); await openProject(p.id); }, "mini secondary"));
+    if (!generated) right.append(btn("Remove", async () => { if (!confirm(`Remove ${f.identifier} from the spec?`)) return; await api(`/api/project/${p.id}/remove-feature`, { identifier: f.identifier }); toast("Removed.", "ok"); await openProject(p.id); }, "mini secondary"));
+    else { const nb = btn("Remove", () => {}, "mini secondary"); nb.disabled = true; nb.title = "Removing content after generation needs a coder task (coming later)"; right.append(nb); }
+    row.append(img, mid, right); list.append(row);
+  }
+  const addForm = qs("addfeature-form");
+  addForm.onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const out = await api(`/api/project/${p.id}/add-feature`, { kind: qs("af-kind").value, label: qs("af-label").value.trim(), identifier: qs("af-id").value.trim() });
+      addForm.reset(); delete qs("af-id").dataset.touched;
+      toast(out.generated ? `Added. Files written; the coder registers it (${out.task}) — see Now.` : "Added to the spec. Re-approve before generating.", "ok");
+      await openProject(p.id);
+    } catch (err) { toast(err.message, "bad"); }
+  };
+}
+qs("af-label").oninput = () => { if (!qs("af-id").dataset.touched) qs("af-id").value = qs("af-label").value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50); };
+qs("af-id").oninput = () => { qs("af-id").dataset.touched = "1"; };
 
 // ---------- activity ----------
 function renderRuns(p) {

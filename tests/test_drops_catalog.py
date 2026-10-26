@@ -105,3 +105,46 @@ class Catalog(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ItemsAfterGeneration(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        base = Path(self.tmp.name); self.store = Store(base / "state.sqlite")
+        p = patch.object(workflow, "PROJECTS", base / "projects"); p.start(); self.addCleanup(p.stop)
+        (base / "projects").mkdir()
+        proj = workflow.new_project(self.store, name="I", mod_id="i_mod", package="com.x.i", idea="items: gem; blocks: ore; tab: Gems")
+        self.ws = Path(proj["root"])
+
+    def test_before_generation_edits_the_spec(self):
+        from mod_orchestra.content import add_feature, remove_feature, rename_feature, list_features
+        out = add_feature(self.store, "i_mod", kind="block", label="Moon Block")
+        self.assertEqual((out["identifier"], out["generated"], out["spec_state"]), ("moon_block", False, "DRAFT"))
+        self.assertEqual(rename_feature(self.store, "i_mod", "gem", "Shiny Gem")["label"], "Shiny Gem")
+        self.assertEqual([f["label"] for f in list_features(self.store, "i_mod")], ["Shiny Gem", "ore", "Moon Block"])
+        self.assertEqual(remove_feature(self.store, "i_mod", "moon_block")["removed"], "moon_block")
+        with self.assertRaisesRegex(InputError, "already exists"):
+            add_feature(self.store, "i_mod", kind="item", label="gem")
+
+    def test_after_generation_writes_files_and_coder_task(self):
+        from mod_orchestra.content import add_feature, remove_feature, rename_feature
+        from mod_orchestra.fabric import validate_generated
+        from mod_orchestra.state import StateError
+        workflow.plan_project(self.store, "i_mod"); workflow.approve_spec(self.store, "i_mod"); workflow.generate_project(self.store, "i_mod")
+        with self.store.tx() as con:
+            con.execute("UPDATE tasks SET state='DONE' WHERE id='i_mod:BUILD'")
+        out = add_feature(self.store, "i_mod", kind="block", label="Moon Block")
+        self.assertTrue(out["generated"]); self.assertEqual(out["task"], "i_mod:ADD_BLOCK:moon_block")
+        for rel in ("blockstates/moon_block.json", "models/block/moon_block.json", "models/item/moon_block.json", "textures/block/moon_block.png"):
+            self.assertTrue((self.ws / "src/main/resources/assets/i_mod" / rel).is_file(), rel)
+        self.assertTrue((self.ws / "src/main/resources/data/i_mod/loot_table/blocks/moon_block.json").is_file())
+        self.assertEqual(validate_generated(self.ws)["status"], "PASS")
+        instr = self.store.task_instructions("i_mod:ADD_BLOCK:moon_block")
+        self.assertIn("MOON_BLOCK_ITEM", instr); self.assertIn("BUILDING_BLOCKS", instr); self.assertIn("output.accept(MOON_BLOCK_ITEM)", instr)
+        self.assertNotEqual(next(t["state"] for t in self.store.tasks("i_mod") if t["id"] == "i_mod:BUILD"), "DONE")
+        self.assertEqual([f["identifier"] for f in self.store.project("i_mod")["spec"]["features"]], ["gem", "ore", "moon_block"])
+        out = rename_feature(self.store, "i_mod", "gem", "Sky Gem")
+        lang = json.loads((self.ws / "src/main/resources/assets/i_mod/lang/en_us.json").read_text())
+        self.assertEqual(lang["item.i_mod.gem"], "Sky Gem"); self.assertEqual(validate_generated(self.ws)["status"], "PASS")
+        with self.assertRaisesRegex(StateError, "not supported yet"):
+            remove_feature(self.store, "i_mod", "gem")
