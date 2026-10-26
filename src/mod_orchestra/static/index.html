@@ -60,6 +60,17 @@
         <div id="now-job" class="job-result hidden"></div>
       </div>
 
+      <details class="glossary"><summary>How this works — evidence levels and gates</summary>
+        <div class="glossary-grid">
+          <div><b>Static</b><p>Files exist and match the manifest. Proves nothing about the game.</p></div>
+          <div><b>BUILD_PASS</b><p>The controller ran Gradle through the broker and it exited 0. Recorded with the JAR hash.</p></div>
+          <div><b>SERVER_BOOT_PASS</b><p>The controller started the dedicated server with the mod, saw it finish booting with no mod errors, and stopped it.</p></div>
+          <div><b>CLIENT_BOOT_PASS</b><p>You launched the game and it loaded the mod. Only you can record this.</p></div>
+          <div><b>CONTENT_VERIFIED</b><p>You saw the behaviour (item in a tab, recipe works, mob spawns and animates). Only you can record this.</p></div>
+          <div><b>Gates</b><p>Approving a spec, granting a build or server run, and recording what you saw are yours. Agents propose, implement, repair and model; they never cross a gate. A source change resets the evidence for the new source.</p></div>
+        </div>
+      </details>
+
       <div class="tabs" id="tabs">
         <button data-tab="models" class="tab">Models</button>
         <button data-tab="spec" class="tab">Spec</button>

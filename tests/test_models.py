@@ -142,3 +142,15 @@ class VendoredServer(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PreviewHistory(Base):
+    def test_each_installed_model_keeps_its_previews_as_a_version(self):
+        from mod_orchestra.feedback import model_gallery, file_for_ui
+        self.deliver(); (self.models / "sky_critter_rest.png").write_bytes(placeholder_png("r", 32, 32))
+        out = dispatch(self.store, "c_mod", task_id="c_mod:MODEL:sky_critter", provider=FakeProvider(handoff("c_mod:MODEL:sky_critter")))
+        self.assertEqual(out["task_state"], "DONE")
+        gal = model_gallery(self.store, "c_mod")[0]
+        self.assertEqual(len(gal["versions"]), 1); self.assertEqual(gal["versions"][0]["run"], out["run"])
+        self.assertTrue(any(p.endswith("sky_critter_rest.png") for p in gal["versions"][0]["previews"]))
+        path, ctype = file_for_ui(self.store, "c_mod", gal["versions"][0]["previews"][0]); self.assertEqual(ctype, "image/png")

@@ -9,6 +9,7 @@ const btn = (label, onClick, cls) => { const b = el("button", label, cls); b.onc
 const fmtMoney = (v) => v == null ? "" : "$" + Number(v).toFixed(2);
 const fmtDur = (s) => s == null ? "" : (s >= 60 ? Math.floor(s / 60) + "m " + Math.round(s % 60) + "s" : Math.round(s) + "s");
 const ago = (t) => { const d = Date.now() / 1000 - t; return d < 60 ? "just now" : d < 3600 ? Math.floor(d / 60) + " min ago" : d < 86400 ? Math.floor(d / 3600) + " h ago" : Math.floor(d / 86400) + " d ago"; };
+function codeLine(text) { const w = el("div", null, "codeline"); const c = el("code", text); const b = el("button", "copy", "mini secondary"); b.onclick = async (e) => { e.preventDefault(); try { await navigator.clipboard.writeText(text); b.textContent = "copied"; setTimeout(() => (b.textContent = "copy"), 1500); } catch { toast("Clipboard blocked; select and copy manually", "bad"); } }; w.append(c, b); return w; }
 const fileUrl = (pid, rel) => `/api/project/${encodeURIComponent(pid)}/file?path=${encodeURIComponent(rel)}&token=${encodeURIComponent(token)}`;
 
 async function api(path, payload) {
@@ -67,6 +68,8 @@ async function renderEnv() {
   grid.append(item("Profile", [["id", d.profile?.id], ["minecraft", d.profile?.minecraft], ["loom", d.profile?.loom], ["fabric api", d.profile?.fabric_api], ["status", d.profile?.status]]));
   grid.append(item("State DB", [["schema", (d.schema?.version ?? "?") + " / " + (d.schema?.current ?? "?")], ["path", d.schema?.path]]));
   grid.append(item("Staging", [["pending", (d.stagings?.pending || []).length]]));
+  grid.append(item("Node.js (designer worker)", [["executable", d.node?.executable || "NOT FOUND"], ["version", d.node?.version], ["note", d.node?.note]]));
+  grid.append(item("Claude Code (agent runs)", [["executable", d.claude_code?.executable || "NOT FOUND — install Claude Code or set CRAFTCTL_CLAUDE_BIN"], ["note", d.claude_code?.note]]));
   grid.append(item("Git", [["executable", d.git?.executable || "—"]]));
 }
 
@@ -118,7 +121,7 @@ function summarizeJob(job, r) {
 function stepCard(p, s) {
   const c = el("div", null, "stepcard");
   c.append(el("span", s.who, "who " + s.who));
-  const mid = el("div"); mid.append(el("div", s.label, "lbl")); if (s.detail) mid.append(el("div", s.detail, "det")); if (s.command) { const code = el("code", s.command); mid.append(code); } c.append(mid);
+  const mid = el("div"); mid.append(el("div", s.label, "lbl")); if (s.detail) mid.append(el("div", s.detail, "det")); if (s.command) mid.append(codeLine(s.command)); c.append(mid);
   const right = el("div");
   if (s.action) right.append(actionButton(p, s));
   c.append(right); return c;
@@ -185,6 +188,15 @@ function renderGallery(p) {
     if (m.texture) { const pv = el("div", null, "preview tex"); const img = el("img"); img.src = fileUrl(p.id, m.texture); pv.append(img, el("small", "texture")); pv.onclick = () => openLightbox(img.src, m.texture); prev.append(pv); }
     if (!m.previews.length && !m.texture) prev.append(el("div", m.placeholder ? "No previews yet: the designer has not run for this mob. Dispatch its MODEL task from Now." : "No previews written by the designer.", "placeholder-note"));
     card.append(prev);
+    if (m.versions && m.versions.length > 1) {
+      const det = document.createElement("details"); det.append(el("summary", `Earlier versions (${m.versions.length - 1}) — compare after feedback`));
+      for (const v of m.versions.slice(0, -1).reverse()) {
+        const row = el("div", null, "previews"); row.append(el("div", `run ${v.run}${v.cost_usd != null ? " · " + fmtMoney(v.cost_usd) : ""}${v.created_at ? " · " + ago(v.created_at) : ""}`, "placeholder-note"));
+        for (const rel of v.previews) { const pv = el("div", null, "preview"); const img = el("img"); img.src = fileUrl(p.id, rel); pv.append(img, el("small", rel.split("/").pop())); pv.onclick = () => openLightbox(img.src, rel); row.append(pv); }
+        det.append(row);
+      }
+      card.append(det);
+    }
     if (m.feedback.length) { const ul = el("ul", null, "feedback-list"); for (const f of m.feedback) ul.append(el("li", "you: " + f.text)); card.append(el("div", "Feedback sent to the designer:", "muted")); card.append(ul); }
     const fb = el("form", null, "feedback"); const ta = el("textarea"); ta.placeholder = m.placeholder ? "Describe the creature you want (shape, colours, size) — this goes to the designer's first run" : "What should change? e.g. “wings too big, make the body rounder, darker blue”"; fb.append(ta);
     const row = el("div", null, "actions");
@@ -214,7 +226,7 @@ function renderRuns(p) {
       if (h.scope) card.append(el("div", h.scope, "muted"));
       if (h.changed_files?.length) card.append(el("div", "changed: " + h.changed_files.join(", "), "risk"));
       if (h.evidence) card.append(el("div", "evidence claimed: " + h.evidence.level + (h.evidence.pointer ? " — " + h.evidence.pointer : ""), "risk"));
-      if (h.needs_user?.length) { const n = el("div", null, "needs"); n.append(el("b", "You need to run:")); for (const c of h.needs_user) n.append(el("code", c)); card.append(n); }
+      if (h.needs_user?.length) { const n = el("div", null, "needs"); n.append(el("b", "You need to run:")); for (const c of h.needs_user) n.append(codeLine(c)); card.append(n); }
       if (h.risks?.length) card.append(el("div", "risks: " + h.risks.join(" · "), "risk"));
       if (h.questions?.length) card.append(el("div", "questions: " + h.questions.join(" · "), "risk"));
     }

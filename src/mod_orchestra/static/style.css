@@ -109,3 +109,8 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
 .env-item{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-s);padding:12px 14px}.env-item h4{margin:0 0 6px;font-size:13px}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;font-size:12px}.kv .k{color:var(--dim)}
 @media (max-width:900px){.shell{grid-template-columns:1fr}.sidebar{position:static;height:auto}.main{padding:18px}.event{grid-template-columns:1fr}.form .row{grid-template-columns:1fr}}
+.codeline{display:flex;gap:8px;align-items:center;margin:3px 0}.codeline code{flex:1;white-space:pre-wrap;word-break:break-all}
+.glossary{margin:4px 0 12px;color:var(--muted)}.glossary summary{cursor:pointer;font-weight:600;color:var(--text)}
+.glossary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-top:10px}
+.glossary-grid div{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius-s);padding:10px 12px;font-size:12px}.glossary-grid b{color:var(--text)}.glossary-grid p{margin:4px 0 0}
+details > summary{list-style:none}details > summary::before{content:"▸ ";color:var(--dim)}details[open] > summary::before{content:"▾ "}

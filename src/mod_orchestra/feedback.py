@@ -20,7 +20,17 @@ def model_gallery(store: Store, pid: str) -> list[dict]:
         previews = sorted(p.name for p in models.glob(f"{mid}_*.png")) if models.is_dir() else []
         task = next((t for t in store.tasks(pid) if t["id"] == f"{pid}:MODEL:{mid}"), None)
         feedback = [e["payload"] for e in store.events(pid, 200) if e["kind"] == "MODEL_FEEDBACK" and e["payload"].get("mob") == mid]
-        out.append({"mob": mid, "label": m["label"], "behavior": m["behavior"],
+        versions = []
+        hist = root / ".mod-orchestra" / "previews"
+        if hist.is_dir():
+            runs = {r["id"]: r for r in store.runs(pid)}
+            for d in sorted(hist.iterdir(), key=lambda d: runs.get(d.name, {}).get("created_at", 0)):
+                files = sorted(f.name for f in d.glob(f"{mid}*.png"))
+                if files:
+                    r = runs.get(d.name, {})
+                    versions.append({"run": d.name, "created_at": r.get("created_at"), "cost_usd": r.get("cost_usd"),
+                                     "previews": [f".mod-orchestra/previews/{d.name}/{n}" for n in files]})
+        out.append({"mob": mid, "label": m["label"], "behavior": m["behavior"], "versions": versions,
                     "bbmodel": (models / f"{mid}.bbmodel").is_file(), "geo": (models / f"{mid}.geo.json").is_file(),
                     "animation": (models / f"{mid}.animation.json").is_file(),
                     "texture": f"models/{mid}.png" if (models / f"{mid}.png").is_file() else None,
@@ -35,7 +45,7 @@ def file_for_ui(store: Store, pid: str, relative: str) -> tuple[Path, str]:
     """Only PNG/JSON under models/ or assets/<mod>/ may be served to the local UI."""
     root = Path(store.project(pid)["root"])
     rel = relative.replace("\\", "/")
-    if not (rel.startswith("models/") or rel.startswith(f"src/main/resources/assets/{pid}/")):
+    if not (rel.startswith("models/") or rel.startswith(f"src/main/resources/assets/{pid}/") or rel.startswith(".mod-orchestra/previews/")):
         raise InputError("Not a servable path")
     path = safe_inside(root, rel)
     if not path.is_file() or path.suffix.lower() not in (".png", ".json"):

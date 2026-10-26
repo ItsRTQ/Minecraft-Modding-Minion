@@ -110,6 +110,11 @@ def install_model(store: Store, pid: str, mob_id: str, *, run_id: str, actor: st
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ws / info["files"][key], dst)
     changed = [str(t.relative_to(ws)).replace("\\", "/") for t in targets.values()]
+    # Keep this run's previews + texture so the UI can show versions after feedback rounds.
+    history = ws / ".mod-orchestra" / "previews" / run_id
+    history.mkdir(parents=True, exist_ok=True)
+    for png in sorted((ws / MODEL_DIR).glob(f"{mob_id}_*.png")) + [ws / info["files"]["png"]]:
+        shutil.copyfile(png, history / png.name)
     accepted = accept_changes(ws, run_id=run_id, actor=actor, changed=changed)
     store.add_event(pid, "controller", "MODEL_INSTALLED", {"mob": mob_id, "run": run_id, **{k: v for k, v in info.items() if k != "files"}})
     return info | {"installed": changed, "accepted": accepted["accepted"], "source": info["files"]["bbmodel"]}
