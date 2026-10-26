@@ -98,3 +98,73 @@ class UiApi(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GuidanceGalleryFeedback(unittest.TestCase):
+    """Server-side guidance, model gallery, authenticated file route and the feedback loop."""
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        base = Path(self.tmp.name); self.store = Store(base / "state.sqlite")
+        p = patch.object(workflow, "PROJECTS", base / "projects"); p.start(); self.addCleanup(p.stop)
+        (base / "projects").mkdir()
+        from mod_orchestra import redact as redact_mod
+        p2 = patch.object(redact_mod, "PROJECTS", base / "projects"); p2.start(); self.addCleanup(p2.stop)
+        self.proj = workflow.new_project(self.store, name="G", mod_id="g_mod", package="com.x.g", idea="items: gem; mobs: sky critter; tab: Sky")
+
+    def g(self):
+        from mod_orchestra.guidance import guidance
+        return guidance(self.store, "g_mod")
+
+    def test_stages_follow_the_pipeline(self):
+        self.assertEqual(self.g()["stage"], "spec"); self.assertEqual(self.g()["steps"][0]["action"], "approve")
+        workflow.approve_spec(self.store, "g_mod"); self.assertEqual(self.g()["stage"], "source"); self.assertEqual(self.g()["steps"][0]["action"], "generate")
+        workflow.generate_project(self.store, "g_mod"); g = self.g()
+        self.assertEqual(g["stage"], "model"); self.assertEqual(g["steps"][0]["payload"]["task"], "g_mod:MODEL:sky_critter")
+        # designer delivers (fake) -> build stage with request-build
+        root = Path(self.proj["root"]); (root / "models").mkdir()
+        from mod_orchestra.geckolib import placeholder_geo, placeholder_animation; from mod_orchestra.spec import Mob; from mod_orchestra.fabric import placeholder_png
+        m = Mob(identifier="sky_critter", label="x")
+        (root / "models/sky_critter.bbmodel").write_text("{}"); (root / "models/sky_critter.geo.json").write_text(json.dumps(placeholder_geo(m)))
+        (root / "models/sky_critter.animation.json").write_text(json.dumps(placeholder_animation(m))); (root / "models/sky_critter.png").write_bytes(placeholder_png("t", 64, 32))
+        (root / "models/sky_critter_rest.png").write_bytes(placeholder_png("r", 32, 32))
+        h = {"task": "g_mod:MODEL:sky_critter", "status": "DONE", "scope": "s", "changed_files": ["models/sky_critter.geo.json"], "checks_run": [], "evidence": {"level": "STATIC", "pointer": "m"}, "risks": [], "unknowns": [], "needs_user": [], "next_agent": "coder"}
+        from mod_orchestra.dispatch import dispatch
+        dispatch(self.store, "g_mod", task_id="g_mod:MODEL:sky_critter", provider=FakeProvider("```handoff\n" + json.dumps(h) + "\n```"))
+        g = self.g(); self.assertEqual(g["stage"], "build"); self.assertEqual(g["steps"][0]["action"], "request-build")
+        from mod_orchestra import build as build_mod
+        a = build_mod.request_build(self.store, "g_mod"); self.assertEqual(self.g()["steps"][0]["action"], "decide")
+        self.store.decide_approval(a["id"], True); self.assertEqual(self.g()["steps"][0]["action"], "build")
+
+    def test_gallery_and_feedback(self):
+        from mod_orchestra.feedback import model_gallery, give_model_feedback, file_for_ui
+        from mod_orchestra.validation import InputError
+        workflow.approve_spec(self.store, "g_mod"); workflow.generate_project(self.store, "g_mod")
+        gal = model_gallery(self.store, "g_mod")[0]
+        self.assertTrue(gal["placeholder"]); self.assertEqual(gal["task_state"], "READY"); self.assertEqual(gal["previews"], [])
+        root = Path(self.proj["root"]); (root / "models").mkdir(); (root / "models/sky_critter_rest.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(model_gallery(self.store, "g_mod")[0]["previews"], ["models/sky_critter_rest.png"])
+        path, ctype = file_for_ui(self.store, "g_mod", "models/sky_critter_rest.png"); self.assertEqual(ctype, "image/png")
+        for bad in ("../../state.sqlite", "src/main/java/com/x/g/ModMain.java", "build.gradle", "models/../build.gradle"):
+            with self.assertRaises(InputError):
+                file_for_ui(self.store, "g_mod", bad)
+        # feedback on a DONE task reopens it and reaches the next designer packet
+        with self.store.tx() as con:
+            con.execute("UPDATE tasks SET state='DONE' WHERE id='g_mod:MODEL:sky_critter'")
+        out = give_model_feedback(self.store, "g_mod", "sky_critter", "wings too big")
+        self.assertEqual(out["state"], "READY")
+        from mod_orchestra.feedback import feedback_context
+        self.assertIn("wings too big", feedback_context(self.store, "g_mod", "sky_critter"))
+        self.assertEqual(model_gallery(self.store, "g_mod")[0]["feedback"][0]["text"], "wings too big")
+        with self.assertRaisesRegex(InputError, "Unknown mob"):
+            give_model_feedback(self.store, "g_mod", "dragon", "x")
+
+    def test_replan_on_approval_picks_up_spec_changes(self):
+        workflow.plan_project(self.store, "g_mod")
+        self.assertNotIn("g_mod:MODEL:shadow", {t["id"] for t in self.store.tasks("g_mod")})
+        from mod_orchestra.specedit import add_mob
+        add_mob(self.store, "g_mod", identifier="shadow", label="Shadow", behavior="hostile")
+        workflow.approve_spec(self.store, "g_mod")
+        ids = {t["id"] for t in self.store.tasks("g_mod")}
+        self.assertIn("g_mod:MODEL:shadow", ids); self.assertIn("g_mod:MODEL:sky_critter", ids)
+        self.assertEqual(next(t["state"] for t in self.store.tasks("g_mod") if t["id"] == "g_mod:SPEC"), "DONE")
+        self.assertIn("TASK_GRAPH_REPLANNED", [e["kind"] for e in self.store.events("g_mod")])

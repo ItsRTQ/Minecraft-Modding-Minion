@@ -1,20 +1,25 @@
 """Local-only browser GUI with per-process bearer token; no silent shell or network install."""
 from __future__ import annotations
 import threading
+import time
 import json
 from pathlib import Path
 import secrets
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib.resources import files
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, parse_qs
 from .state import Store, StateError
 from .validation import InputError
 from .doctor import inspect
 from .workflow import new_project, plan_project, approve_spec, generate_project, summary
 from .build import request_build, build_project, tail_log
 from .diagnostics import project_diagnose
-from .dispatch import dispatch
+from .dispatch import dispatch, orchestrate
+from .guidance import guidance
+from .feedback import model_gallery, file_for_ui, give_model_feedback
+from .interpreter import answer
+from .smoke import request_smoke, server_smoke, run_client
 from .evidence import record_evidence
 from .fabric import validate_generated
 from .redact import redact
@@ -27,27 +32,40 @@ def serve(store: Store, port: int = 8765) -> None:
     token = secrets.token_urlsafe(32)
     origin = f"http://127.0.0.1:{port}"
 
-    inflight: dict[str, threading.Thread] = {}
+    inflight: dict[str, dict] = {}   # pid -> {"thread", "job", "started", "result", "error"}
     inflight_lock = threading.Lock()
 
-    def start_dispatch(pid: str, task_id: str | None) -> dict:
-        """The UI is the user: dispatch runs in a background thread, the page polls /api/project/<id>."""
+    def start_job(pid: str, job: str, fn) -> dict:
+        """The UI is the user: long operations (agent runs, builds, smokes, the game client) run in a
+        background thread; the page polls /api/project/<id> whose `job` field shows progress and outcome."""
         with inflight_lock:
-            t = inflight.get(pid)
-            if t and t.is_alive():
-                raise StateError("A worker is already running for this project; wait for it to finish")
+            cur = inflight.get(pid)
+            if cur and cur["thread"].is_alive():
+                raise StateError(f"'{cur['job']}' is still running for this project; wait for it to finish")
+            entry = {"job": job, "started": time.time(), "result": None, "error": None}
             def worker():
                 try:
-                    dispatch(store, pid, task_id=task_id)
-                except Exception as exc:  # recorded in the Footprint by dispatch(); surface in events too
-                    store.add_event(pid, "controller", "DISPATCH_ERROR", {"error": str(exc)[:400]})
+                    entry["result"] = fn()
+                except Exception as exc:
+                    entry["error"] = str(exc)[:500]
+                    store.add_event(pid, "controller", "JOB_ERROR", {"job": job, "error": str(exc)[:400]})
                 finally:
-                    with inflight_lock:
-                        inflight.pop(pid, None)
-            th = threading.Thread(target=worker, name=f"dispatch-{pid}", daemon=True)
-            inflight[pid] = th
+                    entry["finished"] = time.time()
+            th = threading.Thread(target=worker, name=f"{job}-{pid}", daemon=True)
+            entry["thread"] = th
+            inflight[pid] = entry
             th.start()
-        return {"started": True, "project": pid, "task": task_id}
+        return {"started": True, "project": pid, "job": job}
+
+    def job_status(pid: str) -> dict | None:
+        e = inflight.get(pid)
+        if not e:
+            return None
+        return {"job": e["job"], "running": e["thread"].is_alive(), "elapsed_s": round(time.time() - e["started"], 1),
+                "result": e.get("result") if not e["thread"].is_alive() else None, "error": e.get("error")}
+
+    def start_dispatch(pid: str, task_id: str | None) -> dict:
+        return start_job(pid, "dispatch", lambda: dispatch(store, pid, task_id=task_id))
 
     def run_detail(run_id: str) -> dict:
         for p in store.projects():
@@ -93,10 +111,16 @@ def serve(store: Store, port: int = 8765) -> None:
                 if path.startswith("/api/project/"):
                     parts = path.strip("/").split("/")
                     if len(parts) == 3:
-                        return summary(store, parts[2]) | {"dispatching": parts[2] in inflight}
+                        pid = parts[2]
+                        js = job_status(pid)
+                        return summary(store, pid) | {"dispatching": bool(js and js["running"]), "job": js,
+                                                      "guidance": guidance(store, pid), "gallery": model_gallery(store, pid)}
                     if len(parts) != 4: raise InputError("Unexpected subpath")
                     pid, op = parts[2], parts[3]
                     if op == "runs": return store.runs(pid)
+                    if op == "guidance": return guidance(store, pid)
+                    if op == "gallery": return model_gallery(store, pid)
+                    if op == "job": return job_status(pid) or {"job": None, "running": False}
                     if op == "logs": return {"text": tail_log(store, pid, 200)}
                     if op == "diagnose": return project_diagnose(store, pid)
                     if op == "validate":
@@ -121,6 +145,18 @@ def serve(store: Store, port: int = 8765) -> None:
                     if op == "request-build": return request_build(store, pid)
                     if op == "build": return build_project(store, pid, payload["approval_id"])
                     if op == "dispatch": return start_dispatch(pid, payload.get("task") or None)
+                    if op == "orchestrate":
+                        return start_job(pid, "orchestrate", lambda: orchestrate(store, pid, max_runs=int(payload.get("max_runs", 5)),
+                                                                                    max_cost_usd=float(payload.get("max_cost_usd", 5.0))))
+                    if op == "build-bg": return start_job(pid, "build", lambda: build_project(store, pid, payload["approval_id"]))
+                    if op == "request-smoke": return request_smoke(store, pid)
+                    if op == "server-smoke": return start_job(pid, "server-smoke", lambda: server_smoke(store, pid, payload["approval_id"]))
+                    if op == "run-client": return start_job(pid, "run-client", lambda: run_client(store, pid))
+                    if op == "answer": return answer(store, pid, str(payload.get("text", "")))
+                    if op == "feedback": return give_model_feedback(store, pid, str(payload.get("mob", "")), str(payload.get("text", "")))
+                    if op == "decide":
+                        store.decide_approval(payload["approval_id"], bool(payload.get("grant", True)))
+                        return {"id": payload["approval_id"], "status": "GRANT" if payload.get("grant", True) else "DENY"}
                     if op == "evidence":
                         return record_evidence(store, pid, payload["level"], actor="user", note=str(payload.get("note", "")),
                                                jar=Path(payload["jar"]) if payload.get("jar") else None)
@@ -146,10 +182,26 @@ def serve(store: Store, port: int = 8765) -> None:
                 self.send_header("Content-Type", "text/html; charset=utf-8" if path == "/" else "text/javascript; charset=utf-8" if path.endswith(".js") else "text/css; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("X-Content-Type-Options", "nosniff")
-                self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'")
+                self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'")
                 self.send_header("Content-Length", str(len(raw)))
                 self.end_headers()
                 self.wfile.write(raw)
+                return
+            if path.startswith("/api/project/") and path.endswith("/file"):
+                # <img src> cannot carry headers: the page passes the token as a query parameter for this one route.
+                qs = parse_qs(urlparse(self.path).query)
+                if self.headers.get("Host") != f"127.0.0.1:{port}" or qs.get("token", [""])[0] != token:
+                    return self.response({"error": "Unauthorized"}, 403)
+                pid = path.strip("/").split("/")[2]
+                try:
+                    file_path, ctype = file_for_ui(store, pid, qs.get("path", [""])[0])
+                except (InputError, StateError) as exc:
+                    return self.response({"error": str(exc)}, 404)
+                raw = file_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", ctype); self.send_header("Cache-Control", "no-store")
+                self.send_header("X-Content-Type-Options", "nosniff"); self.send_header("Content-Length", str(len(raw)))
+                self.end_headers(); self.wfile.write(raw)
                 return
             if not self.authorized(): return self.response({"error": "Unauthorized"}, 403)
             try:

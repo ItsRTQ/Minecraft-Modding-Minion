@@ -69,3 +69,11 @@ class Staging(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_pre_generation_run_logs_in_dot_mod_orchestra_are_kept(self):
+        # UI flow: the interpreter run logs land in <workspace>/.mod-orchestra/runs before generation.
+        logs = self.root / ".mod-orchestra" / "runs"; logs.mkdir(parents=True); (logs / "abc.log").write_text("interpreter log")
+        workflow.generate_project(self.store, "cf_mod")
+        self.assertTrue((self.root / "build.gradle").is_file())
+        self.assertEqual((self.root / ".mod-orchestra" / "runs" / "abc.log").read_text(), "interpreter log")
+        self.assertTrue((self.root / ".mod-orchestra" / "generation-manifest.json").is_file())

@@ -62,7 +62,9 @@ def build_envelope(store: Store, pid: str, task: dict) -> TaskEnvelope:
         extra = SPEC_INSTRUCTIONS
     elif ":MODEL:" in task["id"]:
         from .models import MODEL_INSTRUCTIONS
-        extra = MODEL_INSTRUCTIONS.replace("<mob>", task["id"].split(":MODEL:")[1])
+        from .feedback import feedback_context
+        mob = task["id"].split(":MODEL:")[1]
+        extra = MODEL_INSTRUCTIONS.replace("<mob>", mob) + feedback_context(store, pid, mob)
     return TaskEnvelope(project_id=pid, task_id=task["id"], role=task["role"], title=task["title"],
                         workspace=Path(proj["root"]), packet=packet, extra_instructions=extra)
 
@@ -152,7 +154,7 @@ def provider_from_env() -> AgentProvider:
     """CRAFTCTL_PROVIDER=fake (+ CRAFTCTL_FAKE_REPLY_FILE) lets the UI/CLI be exercised without Claude Code."""
     if os.environ.get("CRAFTCTL_PROVIDER") == "fake":
         path = os.environ.get("CRAFTCTL_FAKE_REPLY_FILE")
-        return FakeProvider(Path(path).read_text(encoding="utf8") if path else "")
+        return FakeProvider(Path(path).read_text(encoding="utf8") if path and Path(path).is_file() else "")
     return ClaudeCodeProvider()
 
 

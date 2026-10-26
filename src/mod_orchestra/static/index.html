@@ -1,45 +1,116 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark"><title>Minecraft Mod Orchestra</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minecraft Mod Orchestra</title>
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<div class="app">
+<div class="shell">
   <aside class="sidebar">
-    <div class="brand"><div class="logo">▦</div><div><strong>Mod Orchestra</strong><small>Fabric · Developer Preview</small></div></div>
-    <p class="section-label">WORKSPACE</p>
-    <button id="nav-create" class="nav active">✦ &nbsp; New mod</button>
-    <button id="nav-projects" class="nav">▧ &nbsp; Projects</button>
-    <button id="nav-setup" class="nav">⚙ &nbsp; Environment</button>
-    <div class="side-bottom"><span class="status-dot"></span> Local-only controller<br><small>0.1.0 · Pre-alpha</small></div>
+    <div class="brand">
+      <div class="logo">MO</div>
+      <div><div class="brand-name">Mod Orchestra</div><div class="brand-sub">local controller · evidence over claims</div></div>
+    </div>
+    <button id="nav-new" class="nav-btn primary">＋ New mod</button>
+    <div class="nav-section">Projects</div>
+    <div id="project-list" class="project-list"></div>
+    <div class="nav-section">System</div>
+    <button id="nav-env" class="nav-btn">Environment</button>
+    <div class="sidebar-foot" id="sidebar-foot"></div>
   </aside>
+
   <main class="main">
-    <header class="topbar"><span class="crumb">WORKSPACE <span>/</span> <b id="crumb">New mod</b></span><span class="pill">SOURCE GENERATOR · PRE-ALPHA</span></header>
-    <div id="toast" role="status" aria-live="polite"></div>
-    <section id="view-create" class="view">
-      <div class="eyebrow">CREATE SOMETHING NEW</div>
-      <h1>Your idea. A new Minecraft mod.</h1>
-      <p class="lead">Start with a description. The current prototype safely generates basic Fabric item and block starters. Advanced mechanics are preserved as requirements, not falsely marked completed.</p>
-      <div class="two-col">
-        <div class="panel">
-          <form id="create-form">
-            <label for="name">Mod name</label><input id="name" maxlength="80" required value="Crystal Frontier" autocomplete="off">
-            <div class="fields"><div><label for="modid">Mod ID</label><input id="modid" maxlength="40" required value="crystal_frontier" autocomplete="off"></div><div><label for="package">Java package</label><input id="package" required value="com.example.crystalfrontier" autocomplete="off"></div></div>
-            <label for="idea">Describe your mod</label><textarea id="idea" required rows="6" placeholder="Describe your idea here...">Create a small crystal collection mod. items: amethyst coin, sky crystal; blocks: glowing crystal, ancient stone</textarea>
-            <div class="hint">For automatic source generation, declare content using <code>items: ...; blocks: ...</code>. Separate lists with semicolons.</div>
-            <button class="primary" type="submit">Create project &amp; interpret idea →</button>
+    <section id="view-new" class="view hidden">
+      <header class="page-head"><h1>New mod</h1><p>Describe what you want in plain words. An interpreter agent turns it into a spec you approve; nothing is generated before that.</p></header>
+      <form id="new-form" class="card form">
+        <label>Mod name <input id="new-name" required placeholder="Sky Critters"></label>
+        <div class="row">
+          <label>Mod id <input id="new-id" required pattern="[a-z][a-z0-9_]{1,39}" placeholder="sky_critters"><small>lowercase, underscores</small></label>
+          <label>Java package <input id="new-package" required placeholder="com.yourname.skycritters"></label>
+        </div>
+        <label>Your idea
+          <textarea id="new-idea" rows="5" required placeholder="A sky crystal ore that drops crystals, a crystal block made of 9 crystals, a small bird-like passive mob that drops a feather, and a creative tab called Sky."></textarea>
+          <small>Free text in English or Spanish. Or the exact grammar: <code>items: a, b; blocks: c; mobs: d; hostile mobs: e; tab: Label</code></small>
+        </label>
+        <div class="actions"><button class="primary" type="submit">Create project</button></div>
+      </form>
+    </section>
+
+    <section id="view-env" class="view hidden">
+      <header class="page-head"><h1>Environment</h1><p>What this machine can do. Nothing here changes your system.</p></header>
+      <div id="env-grid" class="grid"></div>
+    </section>
+
+    <section id="view-project" class="view hidden">
+      <header class="page-head project-head">
+        <div><div class="eyebrow" id="p-id"></div><h1 id="p-name"></h1></div>
+        <div class="head-meta"><span class="pill" id="p-status"></span><span class="muted" id="p-cost"></span></div>
+      </header>
+
+      <div class="stepper" id="stepper"></div>
+
+      <div class="card now" id="now">
+        <div class="now-head">
+          <div><div class="eyebrow">Now</div><h2 id="now-headline"></h2><p id="now-detail" class="muted"></p></div>
+          <div id="now-busy" class="busy hidden"><span class="spinner"></span><span id="now-busy-text">Working…</span></div>
+        </div>
+        <div id="now-steps" class="steps"></div>
+        <div id="now-job" class="job-result hidden"></div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button data-tab="models" class="tab">Models</button>
+        <button data-tab="spec" class="tab">Spec</button>
+        <button data-tab="activity" class="tab active">Activity</button>
+        <button data-tab="verify" class="tab">Verification</button>
+        <button data-tab="tasks" class="tab">Tasks</button>
+      </div>
+
+      <div id="tab-models" class="tabpane hidden">
+        <div class="card"><div class="card-head"><h3>Mob models</h3><p class="muted">Each mob starts as a placeholder. A designer agent authors the real model with the Blockbench MCP and renders previews here. Tell it what to change; your note goes into its next run.</p></div>
+          <div id="gallery"></div>
+        </div>
+      </div>
+
+      <div id="tab-spec" class="tabpane hidden">
+        <div class="card"><div class="card-head"><h3>Spec</h3><p class="muted" id="spec-state"></p></div><div id="spec-body"></div><div id="spec-questions"></div></div>
+      </div>
+
+      <div id="tab-activity" class="tabpane">
+        <div class="card"><div class="card-head"><h3>Agent runs</h3><p class="muted">One bounded Claude Code worker per task, started by the controller. It cannot approve, decide, build or claim in-game results.</p></div><div id="runs-list"></div></div>
+        <div class="card"><div class="card-head"><h3>Event log</h3></div><div id="events-list" class="events"></div></div>
+      </div>
+
+      <div id="tab-verify" class="tabpane hidden">
+        <div class="card"><div class="card-head"><h3>Evidence on this exact source</h3><p class="muted">Static generation is not verification. Levels are tied to the current manifest; a code change resets them.</p></div>
+          <div id="levels" class="levels"></div>
+          <div id="evidence-list"></div>
+          <form id="evidence-form" class="form inline">
+            <select id="evidence-level"><option value="CLIENT_BOOT_PASS">CLIENT_BOOT_PASS — the game loaded the mod</option><option value="CONTENT_VERIFIED">CONTENT_VERIFIED — I saw the behaviour</option><option value="BUILD_PASS">BUILD_PASS — I built it by hand</option><option value="SERVER_BOOT_PASS">SERVER_BOOT_PASS — I ran the server by hand</option></select>
+            <input id="evidence-note" placeholder="Exactly what you observed (tab, item, mob, behaviour, log line)" required>
+            <button class="secondary" type="submit">Record</button>
           </form>
         </div>
-        <div class="panel info-panel"><h3>What happens next?</h3><div class="step"><span>01</span><div><b>Interpret</b><small>Extract supported content and flag questions</small></div></div><div class="step"><span>02</span><div><b>Plan</b><small>Create a trackable task graph</small></div></div><div class="step"><span>03</span><div><b>You approve</b><small>Nothing generated into a workspace until you accept</small></div></div><div class="step"><span>04</span><div><b>Generate &amp; verify</b><small>Produce Fabric source, textures, metadata, and static checks</small></div></div><p class="muted note">Building the JAR requires a trusted local Gradle setup and another explicit approval. The generator does not claim to produce verified gameplay automatically.</p></div>
+        <div class="card"><div class="card-head"><h3>Build &amp; checks</h3></div>
+          <div class="actions" id="verify-actions"></div>
+          <div id="validate-box" class="muted"></div>
+          <pre id="build-log" class="log hidden"></pre>
+          <div id="diagnose-box"></div>
+        </div>
+      </div>
+
+      <div id="tab-tasks" class="tabpane hidden">
+        <div class="card"><div class="card-head"><h3>Task board</h3><p class="muted">Dependencies decide what is READY. Repairs run first. FAILED/WAITING tasks can be requeued.</p></div><div id="task-list"></div></div>
+        <div class="card"><div class="card-head"><h3>Approvals</h3></div><div id="approvals-list"></div></div>
       </div>
     </section>
-    <section id="view-projects" class="view hidden"><div class="eyebrow">YOUR WORK</div><h1>Projects</h1><p class="lead">Projects are stored locally. Source generation never overwrites existing nonempty folders.</p><div id="project-list" class="cards"></div></section>
-    <section id="view-setup" class="view hidden"><div class="eyebrow">FIRST-RUN CHECK</div><h1>Environment</h1><p class="lead">Read-only system diagnostics. No software is installed or downloaded.</p><div class="panel" id="doctor-data">Checking…</div><div class="panel"><h3>How to finish setup</h3><p>Install the Java JDK matching your selected Minecraft profile, and a trusted Gradle distribution. Blockbench is optional for simple items/blocks. See <code>docs/SETUP.md</code> for more details.</p></div></section>
-    <section id="view-detail" class="view hidden"><div class="eyebrow">PROJECT DASHBOARD</div><h1 id="detail-name">Project</h1><div class="detail-meta" id="detail-meta"></div><div class="grid-detail"><div><div class="panel"><h3>Interpreted specification</h3><div id="spec-details"></div></div><div class="panel"><h3>Operations</h3><div id="detail-actions" class="action-row"></div><div id="approvals-list"></div></div><div class="panel"><h3>Verification</h3><div id="validate-box" class="muted">Not checked yet.</div><div class="action-row" id="verify-actions"></div><div id="build-log" class="log hidden"></div><div id="diagnose-box"></div></div><div class="panel"><h3>Evidence</h3><div id="evidence-list"></div><form id="evidence-form" class="evidence-form"><select id="evidence-level"><option value="BUILD_PASS">BUILD_PASS (built by hand)</option><option value="CLIENT_BOOT_PASS">CLIENT_BOOT_PASS</option><option value="SERVER_BOOT_PASS">SERVER_BOOT_PASS</option><option value="CONTENT_VERIFIED">CONTENT_VERIFIED</option></select><input id="evidence-note" placeholder="What exactly did you observe? (log line, tab, behaviour)" required><button class="secondary" type="submit">Record what I saw</button></form></div><div class="panel"><h3>Recent activity</h3><div id="events-list"></div></div></div><div><div class="panel"><h3>Task board</h3><div id="task-list"></div></div><div class="panel"><h3>Agent runs</h3><p class="muted" id="runs-hint">Each run is one bounded Claude Code worker started by the controller. Approve/decide/build stay with you.</p><div id="runs-list"></div></div></div></div></section>
-    <footer>Mod Orchestra · Local-first · Fabric initial loader · Approval-controlled actions</footer>
   </main>
 </div>
+
+<div id="lightbox" class="lightbox hidden"><div class="lightbox-inner"><img id="lightbox-img" alt=""><div id="lightbox-cap" class="muted"></div><button id="lightbox-close" class="secondary">Close</button></div></div>
+<div id="toast" class="toast hidden"></div>
 <script src="/app.js"></script>
-</body></html>
+</body>
+</html>
