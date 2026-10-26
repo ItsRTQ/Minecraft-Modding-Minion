@@ -27,6 +27,8 @@ class Feature:
     kind: str
     identifier: str
     label: str
+    shape: str = ""        # placeholder texture silhouette: gem | ingot | food | block (default by kind)
+    color: str = ""        # optional hex (#RRGGBB) tint for the placeholder texture
 
 @dataclass(frozen=True)
 class Recipe:
@@ -113,6 +115,8 @@ class Material:
     toughness: float = 0.0                # diamond 2, netherite 3
     knockback_resistance: float = 0.0     # netherite 0.1
     recipes: bool = True                  # standard crafting patterns
+    color: str = ""                       # optional hex tint for tool/armor textures (default: stable hue from identifier)
+    accent: str = ""                      # optional hex highlight
 
     def item_ids(self) -> list[str]:
         return [f"{self.identifier}_{k}" for k in self.tools] + [f"{self.identifier}_{k}" for k in self.armor]
@@ -127,6 +131,7 @@ class Food:
     effects: tuple = ()                   # ({"effect": "minecraft:regeneration", "duration": 100, "amplifier": 0, "chance": 1.0}, ...)
     always_edible: bool = False
     fast: bool = False
+    color: str = ""
 
 
 @dataclass(frozen=True)

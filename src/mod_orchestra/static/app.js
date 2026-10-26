@@ -349,6 +349,16 @@ async function renderFeatures(p) {
     if (f.material) bits.push("material: " + f.material); if (f.food) bits.push(`nutrition ${f.food.nutrition} · saturation ${f.food.saturation}` + (f.food.effects?.length ? " · " + f.food.effects.map(e => e.effect.replace("minecraft:", "")).join(", ") : ""));
     if (bits.length) mid.append(el("small", bits.join(" · ")));
     const right = el("div", null, "actions"); right.style.marginTop = "0";
+    const up = el("input"); up.type = "file"; up.accept = "image/png"; up.style.display = "none";
+    up.onchange = async () => { const file = up.files[0]; if (!file) return; const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
+      const kind = f.kind === "block" ? "block" : "item";
+      try { const out = await api(`/api/project/${p.id}/set-texture`, { kind, identifier: f.identifier, png_base64: b64 }); toast(out.note, "ok"); await openProject(p.id); } catch (err) { toast(err.message, "bad"); } up.value = ""; };
+    right.append(up, btn("Upload texture", () => up.click(), "mini secondary"));
+    if (f.armor_layers && f.identifier.endsWith("_helmet")) { const upA = el("input"); upA.type = "file"; upA.accept = "image/png"; upA.style.display = "none"; upA.dataset.layer = "1";
+      const pick = (layer) => { upA.dataset.layer = layer; upA.click(); };
+      upA.onchange = async () => { const file = upA.files[0]; if (!file) return; const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
+        try { const out = await api(`/api/project/${p.id}/set-texture`, { kind: "armor_layer_" + upA.dataset.layer, identifier: f.material, png_base64: b64 }); toast(out.note, "ok"); await openProject(p.id); } catch (err) { toast(err.message, "bad"); } upA.value = ""; };
+      right.append(upA, btn("Armor layer 1 (64×32)", () => pick("1"), "mini secondary"), btn("Armor layer 2 (64×32)", () => pick("2"), "mini secondary")); }
     right.append(btn("Rename", async () => { const label = prompt("Display name for " + f.identifier + ":", f.label); if (!label || label === f.label) return; const out = await api(`/api/project/${p.id}/rename-feature`, { identifier: f.identifier, label }); toast(out.note || "Renamed.", "ok"); await openProject(p.id); }, "mini secondary"));
     if (!generated) right.append(btn("Remove", async () => { if (!confirm(`Remove ${f.identifier} from the spec?`)) return; await api(`/api/project/${p.id}/remove-feature`, { identifier: f.identifier }); toast("Removed.", "ok"); await openProject(p.id); }, "mini secondary"));
     else { const nb = btn("Remove", () => {}, "mini secondary"); nb.disabled = true; nb.title = "Removing content after generation needs a coder task (coming later)"; right.append(nb); }
@@ -358,13 +368,15 @@ async function renderFeatures(p) {
   addForm.onsubmit = async (e) => {
     e.preventDefault();
     try {
-      const out = await api(`/api/project/${p.id}/add-feature`, { kind: qs("af-kind").value, label: qs("af-label").value.trim(), identifier: qs("af-id").value.trim() });
+      const out = await api(`/api/project/${p.id}/add-feature`, { kind: qs("af-kind").value, label: qs("af-label").value.trim(), identifier: qs("af-id").value.trim(), shape: qs("af-shape").value, color: qs("af-color-hex").value });
       addForm.reset(); delete qs("af-id").dataset.touched; closeModal("modal-feat");
       toast(out.generated ? `Added. Files written; the coder registers it (${out.task}) — see Now.` : "Added to the spec. Re-approve before generating.", "ok");
       await openProject(p.id);
     } catch (err) { toast(err.message, "bad"); }
   };
 }
+for (const [c, h] of [["mt-color", "mt-color-hex"], ["mt-accent", "mt-accent-hex"], ["fd-color", "fd-color-hex"], ["af-color", "af-color-hex"]]) { qs(c).oninput = () => { qs(h).value = qs(c).value; }; qs(h).oninput = () => { if (/^#[0-9a-fA-F]{6}$/.test(qs(h).value)) qs(c).value = qs(h).value; }; }
+qs("mt-color").addEventListener("input", () => { const hex = qs("mt-color").value; const n = parseInt(hex.slice(1), 16); const l = [16, 8, 0].map(s => Math.min(255, ((n >> s) & 255) + Math.round((255 - ((n >> s) & 255)) * 0.35))); const acc = "#" + l.map(x => x.toString(16).padStart(2, "0")).join(""); qs("mt-accent").value = acc; qs("mt-accent-hex").value = acc; });
 const MAT_PRESETS = { iron: [250, 6, 2, "iron", 14, "2 6 5 2", 15, 0, 0], diamond: [1561, 8, 3, "diamond", 10, "3 8 6 3", 33, 2, 0], netherite: [2031, 9, 4, "netherite", 15, "3 8 6 3", 37, 3, 0.1] };
 qs("mt-preset").onchange = () => { const v = MAT_PRESETS[qs("mt-preset").value]; if (!v) return; [qs("mt-durability").value, qs("mt-speed").value, qs("mt-attack").value, qs("mt-level").value, qs("mt-ench").value, qs("mt-defense").value, qs("mt-adur").value, qs("mt-tough").value, qs("mt-kb").value] = v; };
 for (const id of ["mt-durability", "mt-speed", "mt-attack", "mt-level", "mt-ench", "mt-defense", "mt-adur", "mt-tough", "mt-kb"]) qs(id).oninput = () => { qs("mt-preset").value = "custom"; };
@@ -378,7 +390,7 @@ qs("addmat-form").onsubmit = async (e) => {
     const out = await api(`/api/project/${selected}/add-material`, { identifier: qs("mt-id").value.trim(), label: qs("mt-label").value.trim(), ingredient: qs("mt-ingredient").value.trim(),
       tools: checked("mt-tools"), armor: checked("mt-armor"), durability: Number(qs("mt-durability").value), mining_speed: Number(qs("mt-speed").value), attack_damage_bonus: Number(qs("mt-attack").value),
       mining_level: qs("mt-level").value, enchantability: Number(qs("mt-ench").value), armor_defense: defense, armor_durability: Number(qs("mt-adur").value), toughness: Number(qs("mt-tough").value),
-      knockback_resistance: Number(qs("mt-kb").value), recipes: qs("mt-recipes").checked });
+      knockback_resistance: Number(qs("mt-kb").value), recipes: qs("mt-recipes").checked, color: qs("mt-color-hex").value, accent: qs("mt-accent-hex").value });
     qs("addmat-form").reset(); delete qs("mt-id").dataset.touched; qs("mt-preset").onchange(); closeModal("modal-mat");
     toast(out.generated ? `Set added. Files written; the coder registers it (${out.task}) — see Now.` : `Set added to the spec (${(out.items || []).length} items). Re-approve before generating.`, "ok");
     await openProject(selected);
@@ -390,7 +402,7 @@ qs("addfood-form").onsubmit = async (e) => {
   e.preventDefault(); if (!selected) return;
   const effects = qs("fd-effect").value ? [{ effect: qs("fd-effect").value, duration: Number(qs("fd-duration").value), amplifier: Number(qs("fd-amplifier").value), chance: 1.0 }] : [];
   try {
-    const out = await api(`/api/project/${selected}/add-food`, { identifier: qs("fd-id").value.trim(), label: qs("fd-label").value.trim(), nutrition: Number(qs("fd-nutrition").value), saturation: Number(qs("fd-saturation").value), effects, always_edible: qs("fd-always").checked, fast: qs("fd-fast").checked });
+    const out = await api(`/api/project/${selected}/add-food`, { identifier: qs("fd-id").value.trim(), label: qs("fd-label").value.trim(), nutrition: Number(qs("fd-nutrition").value), saturation: Number(qs("fd-saturation").value), effects, always_edible: qs("fd-always").checked, fast: qs("fd-fast").checked, color: qs("fd-color-hex").value });
     qs("addfood-form").reset(); delete qs("fd-id").dataset.touched; closeModal("modal-food");
     toast(out.generated ? `Food added. Files written; the coder registers it (${out.task}) — see Now.` : "Food added to the spec. Re-approve before generating.", "ok");
     await openProject(selected);

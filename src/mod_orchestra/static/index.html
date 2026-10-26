@@ -177,6 +177,10 @@
                   <label>Toughness <input id="mt-tough" type="number" min="0" max="20" step="0.5" value="2"><small>Reduces how much strong hits bypass armor. Most 0 · diamond 2 · netherite 3.</small></label>
                   <label>Knockback resist. <input id="mt-kb" type="number" min="0" max="1" step="0.05" value="0"><small>0–1 per piece; netherite 0.1. Full set at 0.25 ≈ immune to knockback.</small></label>
                 </div>
+                <div class="row">
+                  <label>Colour <div class="colour-row"><input type="color" id="mt-color" value="#c8102e"><input type="text" id="mt-color-hex" value="#c8102e" pattern="#[0-9a-fA-F]{6}"></div><small>Tints the generated tool and armor textures (you can upload your own art later).</small></label>
+                  <label>Highlight <div class="colour-row"><input type="color" id="mt-accent" value="#ff6b7a"><input type="text" id="mt-accent-hex" value="#ff6b7a" pattern="#[0-9a-fA-F]{6}"></div><small>Light edge colour; leave as suggested if unsure.</small></label>
+                </div>
                 <label class="check"><input type="checkbox" id="mt-recipes" checked><span>Generate the standard crafting recipes</span><small>Vanilla patterns: sword = 2 material + stick, pickaxe = 3 material + 2 sticks, helmet = 5 material, …</small></label>
                 <div class="actions"><button class="primary" type="submit">Add set</button></div>
               </form></div></div>
@@ -194,6 +198,7 @@
                   <label>Effect duration <input id="fd-duration" type="number" min="1" max="72000" value="200"><small>In ticks: 20 ticks = 1 second, so 200 = 10 s. Golden apple regeneration lasts 100 (5 s).</small></label>
                   <label>Effect level <input id="fd-amplifier" type="number" min="0" max="9" value="0"><small>0 = level I, 1 = level II… Higher is stronger.</small></label>
                 </div>
+                <label>Colour <div class="colour-row"><input type="color" id="fd-color" value="#d94848"><input type="text" id="fd-color-hex" value="#d94848" pattern="#[0-9a-fA-F]{6}"></div><small>Tint of the generated food icon.</small></label>
                 <div class="row">
                   <label class="check"><input type="checkbox" id="fd-always"><span>Edible even when full</span><small>Can be eaten at full hunger, like the golden apple.</small></label>
                   <label class="check"><input type="checkbox" id="fd-fast"><span>Eats fast</span><small>Half the eating time, like dried kelp.</small></label>
@@ -206,6 +211,10 @@
                   <label>Name <input id="af-label" required placeholder="Moon Shard"></label>
                 </div>
                 <label>Identifier <input id="af-id" required pattern="[a-z][a-z0-9_]{1,49}" placeholder="moon_shard"><small>Becomes <code>yourmod:moon_shard</code> in <code>/give</code> and recipes; cannot change later.</small></label>
+                <div class="row">
+                  <label>Icon shape <select id="af-shape"><option value="">auto (gem for items, cube for blocks)</option><option value="gem">gem</option><option value="ingot">ingot / bar</option><option value="food">round (fruit, orb)</option><option value="block">cube</option></select><small>Placeholder silhouette; upload your own PNG any time.</small></label>
+                  <label>Colour <div class="colour-row"><input type="color" id="af-color" value="#7c9cff"><input type="text" id="af-color-hex" value="#7c9cff" pattern="#[0-9a-fA-F]{6}"></div></label>
+                </div>
                 <div class="actions"><button class="primary" type="submit">Add</button><span class="muted">After generation a coder registers it (one short run); before generation it just joins the spec.</span></div>
               </form></div></div>
 <div id="modal-mob" class="lightbox hidden"><div class="modal"><div class="modal-head"><h3>Add a mob</h3><button type="button" class="secondary mini modal-close">✕</button></div><form id="addmob-form" class="form">

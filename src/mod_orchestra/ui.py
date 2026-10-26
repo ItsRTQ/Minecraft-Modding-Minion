@@ -25,7 +25,7 @@ from .evidence import record_evidence
 from .fabric import validate_generated
 from .redact import redact
 
-MAX_BODY = 16_384
+MAX_BODY = 3_000_000  # texture uploads are base64 PNGs (≤2 MB)
 
 def serve(store: Store, port: int = 8765) -> None:
     if not 1024 <= port <= 65535:
@@ -194,13 +194,17 @@ def serve(store: Store, port: int = 8765) -> None:
                         return delete_project(store, pid, remove_workspace=bool(payload.get("workspace")))
                     if op == "add-feature":
                         from .content import add_feature
-                        return add_feature(store, pid, kind=str(payload.get("kind", "item")), label=str(payload.get("label", "")), identifier=payload.get("identifier") or None)
+                        return add_feature(store, pid, kind=str(payload.get("kind", "item")), label=str(payload.get("label", "")), identifier=payload.get("identifier") or None,
+                                           shape=str(payload.get("shape") or ""), color=str(payload.get("color") or ""))
                     if op == "add-material":
                         from .content import add_material_any
                         return add_material_any(store, pid, **{k: v for k, v in payload.items()})
                     if op == "add-food":
                         from .content import add_food_any
                         return add_food_any(store, pid, **{k: v for k, v in payload.items()})
+                    if op == "set-texture":
+                        from .content import set_texture
+                        return set_texture(store, pid, kind=str(payload.get("kind", "item")), identifier=str(payload.get("identifier", "")), png_base64=str(payload.get("png_base64", "")))
                     if op == "rename-feature":
                         from .content import rename_feature
                         return rename_feature(store, pid, str(payload.get("identifier", "")), str(payload.get("label", "")))
