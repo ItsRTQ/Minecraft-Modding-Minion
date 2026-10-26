@@ -27,6 +27,7 @@
 | One-use, explicitly authorized Gradle build invocation | **Implemented; not exercised against Minecraft here** |
 | Restricted MCP interface (read-only tools plus approved source generation) | **Implemented, protocol smoke-tested** |
 | 12 subagents + 12 skills (one per role in `capabilities.py`), deny rules and a PreToolUse guard | **Included and exercised by a real Claude Code session** |
+| Blockbench/GeckoLib models via the vendored `tools/blockbench-mcp-safe` MCP (zero deps, Node only) authored by the designer worker on `MODEL` tasks | **Built; needs a real designer run + Blockbench check (R6 slice 2)** |
 | Controller-driven dispatch (`craftctl dispatch`): one bounded Claude Code worker per task, schema-validated handoff, runs recorded | **Built and unit-tested with a fake provider; not yet proven against a real `claude -p` run** |
 | GeckoLib mob modeling, Blockbench MCP, fully automatic worlds | **Planned / not integrated** |
 | Real Minecraft GameTest, gameplay and multiplayer proof | **Not integrated** |

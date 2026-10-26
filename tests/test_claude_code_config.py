@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 AGENTS = ROOT / ".claude/agents"
 SKILLS = ROOT / ".claude/skills"
 GUARD = ROOT / ".claude/hooks/guard.py"
-USER_ONLY = ("approve-spec", "request-build", "decide", "build", "evidence", "delete", "release", "new", "requeue", "add-task", "dispatch", "orchestrate", "accept-changes", "break", "server-smoke", "request-smoke", "add-recipe", "remove-recipe", "add-drop", "set-tab", "run-client", "answer", "interpret-suite")
+USER_ONLY = ("approve-spec", "request-build", "decide", "build", "evidence", "delete", "release", "new", "requeue", "add-task", "dispatch", "orchestrate", "accept-changes", "break", "server-smoke", "request-smoke", "add-recipe", "remove-recipe", "add-drop", "add-mob", "remove-mob", "set-tab", "run-client", "answer", "interpret-suite")
 
 
 def frontmatter(path: Path) -> dict:
@@ -59,6 +59,8 @@ class AgentFiles(unittest.TestCase):
         known = {"mcp__minecraft-orchestra__" + t["name"] for t in TOOLS}
         for path in AGENTS.glob("*.md"):
             for tool in [t.strip() for t in frontmatter(path)["tools"].split(",")]:
+                if tool.startswith("mcp__blockbench__"):
+                    continue  # vendored blockbench-mcp-safe server (resources/blockbench-mcp-safe); wildcard allowed
                 if tool.startswith("mcp__"):
                     self.assertIn(tool, known, f"{path.name}: {tool} is not a real MCP tool")
                     for word in ("approve", "decide", "build_project", "evidence", "delete"):

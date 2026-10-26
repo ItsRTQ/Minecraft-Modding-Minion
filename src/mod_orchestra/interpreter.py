@@ -18,10 +18,11 @@ MAX_QUESTIONS = 3
 SPEC_INSTRUCTIONS = f"""
 ## Your job on this task (interpreter)
 Turn the user's idea into a complete, concrete spec for a Fabric 1.21.1 mod using ONLY what the generator
-supports: items, blocks, a creative tab, crafting/smelting recipes, and block drops. Preserve the user's
+supports: items, blocks, a creative tab, crafting/smelting recipes, block drops, and simple mobs (a GeckoLib
+entity with idle + walk animations, basic AI — passive wanders / hostile attacks players —, spawn egg, loot on death). Preserve the user's
 intent and wording; do not add content they did not ask for; do not drop content they did ask for.
-If the idea mentions things the generator cannot build (mobs, biomes, dimensions, animations, armor stats,
-tools with custom durability, GUIs, commands), keep the user's wish in `unknowns` and ask about it only
+If the idea mentions things the generator cannot build (bosses with phases, custom AI, biomes, dimensions,
+armor stats, tools with custom durability, GUIs, commands, sounds), keep the user's wish in `unknowns` and ask about it only
 if it blocks the rest; never fake it as an item.
 
 Ask at most {MAX_QUESTIONS} questions, and only when the answer changes files the user DID ask for: ambiguous
@@ -40,12 +41,15 @@ Put the proposal in the handoff under `spec` with EXACTLY this shape (schema_ver
                "count": 1, "pattern": ["RRR"," S "," S "], "key": {{"R": "identifier", "S": "minecraft:stick"}},
                "ingredients": ["identifier", "minecraft:id", "#minecraft:tag"], "experience": 0.7, "cooking_time": 200}}],
   "drops": [{{"block": "identifier", "item": "identifier or minecraft:id", "count_min": 1, "count_max": 1, "fortune": true, "silk_touch": true}}],
+  "mobs": [{{"identifier": "snake_case", "label": "Display Name", "behavior": "passive|hostile", "health": 10, "speed": 0.25,
+            "width": 0.8, "height": 0.9, "attack_damage": 3, "drops": ["identifier or minecraft:id"], "egg_colors": [9075153, 15128831]}}],
   "assumptions": ["..."]}}
 ```
 Rules the controller enforces (a violation fails your handoff): identifiers unique and snake_case (2-50 chars);
 recipe ingredients/results must be features of this mod, `minecraft:` ids or `#minecraft:` tags; shaped patterns
 1-3 rows of equal width (1-3 chars, space = empty) and every symbol in `key`; cooking recipes have exactly one
-ingredient; one drop rule per block, and the block must be one of the features; the tab icon must be a feature.
+ingredient; one drop rule per block, and the block must be one of the features; the tab icon must be a feature;
+mob identifiers must not collide with items/blocks (their spawn egg is <id>_spawn_egg); mob health 1-1024, speed 0.05-1.5.
 Also put the questions (if any) under `questions`, as a list of plain sentences addressed to the user.
 Use status WAITING_USER (the user must answer or approve); never DONE. Do not create or edit any files.
 """
@@ -59,12 +63,12 @@ def spec_from_proposal(current: dict, proposal: dict) -> Spec:
         "schema_version": SCHEMA_VERSION, "name": current["name"], "mod_id": current["mod_id"], "package": current["package"],
         "idea": current["idea"], "profile": current["profile"],
         "features": proposal.get("features", []), "recipes": proposal.get("recipes", []), "drops": proposal.get("drops", []),
-        "tab": proposal.get("tab"), "tab_icon": proposal.get("tab_icon"),
+        "tab": proposal.get("tab"), "tab_icon": proposal.get("tab_icon"), "mobs": proposal.get("mobs", []),
         "questions": [], "assumptions": [str(a) for a in proposal.get("assumptions", [])][:12],
     }
     spec = read_spec(raw)
-    if not spec.features:
-        raise InputError("spec proposal has no items or blocks")
+    if not spec.features and not spec.mobs:
+        raise InputError("spec proposal has no items, blocks or mobs")
     from .spec import check_java_name_collisions
     check_java_name_collisions(spec.features)
     return spec
@@ -83,7 +87,7 @@ def apply_interpretation(store: Store, pid: str, handoff: dict, run_id: str) -> 
     stored = spec.to_dict() | {"questions": questions}
     store.replace_spec(pid, stored, actor=f"run:{run_id}", reason="interpreter proposal")
     summary = {"features": [f"{f.kind}:{f.identifier}" for f in spec.features], "recipes": [r.id for r in spec.recipes],
-               "drops": [f"{d.block}->{d.item}" for d in spec.drops], "tab": spec.tab, "questions": questions,
+               "drops": [f"{d.block}->{d.item}" for d in spec.drops], "tab": spec.tab, "mobs": [f"{m.identifier} ({m.behavior})" for m in spec.mobs], "questions": questions,
                "assumptions": spec.assumptions}
     store.add_event(pid, "controller", "SPEC_PROPOSED", {"run": run_id, **summary})
     next_steps = ([f'craftctl answer {pid} "<your answer to: {q}>"' for q in questions] or []) + [f"craftctl approve-spec {pid}"]

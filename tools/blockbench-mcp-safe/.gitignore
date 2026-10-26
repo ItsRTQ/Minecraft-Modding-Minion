@@ -1,0 +1,5 @@
+node_modules/
+*.lock
+*.bbmodel.lock/
+.DS_Store
+models/*.bbmodel

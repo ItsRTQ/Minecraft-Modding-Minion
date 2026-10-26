@@ -134,7 +134,9 @@ class ClaudeCodeCommand(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         for rel in ["settings.json", "hooks/guard.py"] + [f"agents/{p.name}" for p in (root / ".claude/agents").glob("*.md")] \
                    + [f"skills/{p.parent.name}/SKILL.md" for p in (root / ".claude/skills").glob("*/SKILL.md")]:
-            self.assertEqual((root / ".claude" / rel).read_bytes(), (RESOURCES / rel).read_bytes(), f"resources out of sync: {rel}")
+            # Compare text, not bytes: core.autocrlf may leave one copy CRLF and the other LF in the working tree.
+            self.assertEqual((root / ".claude" / rel).read_text(encoding="utf-8"), (RESOURCES / rel).read_text(encoding="utf-8"),
+                             f"resources out of sync: {rel}")
 
     def test_command_line_and_materialized_files(self):
         tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)

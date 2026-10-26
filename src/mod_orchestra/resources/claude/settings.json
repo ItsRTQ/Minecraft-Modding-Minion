@@ -82,7 +82,11 @@
       "Bash(craftctl answer*)",
       "PowerShell(craftctl answer*)",
       "Bash(craftctl interpret-suite*)",
-      "PowerShell(craftctl interpret-suite*)"
+      "PowerShell(craftctl interpret-suite*)",
+      "Bash(craftctl add-mob*)",
+      "Bash(craftctl remove-mob*)",
+      "PowerShell(craftctl add-mob*)",
+      "PowerShell(craftctl remove-mob*)"
     ]
   },
   "hooks": {

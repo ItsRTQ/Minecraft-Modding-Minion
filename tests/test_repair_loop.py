@@ -143,6 +143,14 @@ class ServerSmoke(Base):
         jar = self.root / "build/libs/r_mod-1.0.0.jar"; jar.parent.mkdir(parents=True, exist_ok=True); jar.write_bytes(b"j")
         record_evidence(self.store, "r_mod", "BUILD_PASS", actor="user", jar=jar)
 
+    def test_mod_error_filter_ignores_the_data_fixer_notice(self):
+        text = "\n".join(["[main/ERROR] (Minecraft) No data fixer registered for critter",
+                          "[main/ERROR] (Minecraft) No data fixer registered for critter_test_stalker",
+                          "[Server thread/ERROR] (Minecraft) Couldn't parse element minecraft:loot_table/critter:entities/x - Unknown registry key",
+                          "[Server thread/INFO] (Minecraft) critter loaded"])
+        hits = smoke_mod._mod_errors(text, "critter")
+        self.assertEqual(len(hits), 1); self.assertIn("Couldn't parse element", hits[0])
+
     def test_smoke_requires_build_pass_and_approval(self):
         with self.assertRaisesRegex(StateError, "needs a BUILD_PASS"):
             smoke_mod.request_smoke(self.store, "r_mod")

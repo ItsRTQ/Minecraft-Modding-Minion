@@ -17,27 +17,30 @@ from pathlib import Path
 from .state import StateError
 from .config import PROFILE, WRAPPER_DIR, WRAPPER_FILES, GENERATOR_VERSION
 from .spec import Spec, Recipe, Drop, resolve_ingredient, resolve_result
+from .geckolib import (GECKOLIB_VERSION, gradle_dependency_lines, main_registrations, entity_java, renderer_java,
+                       client_init_java, placeholder_geo, placeholder_animation, entity_loot, class_name)
 from .validation import InputError, safe_inside, ensure_new_directory
 
 
-def placeholder_png(name: str, size: int = 16) -> bytes:
-    """Deterministic pixel art placeholder PNG using only Python stdlib."""
+def placeholder_png(name: str, size: int = 16, height: int | None = None) -> bytes:
+    """Deterministic pixel art placeholder PNG using only Python stdlib (size x height, default square)."""
+    width, height = size, height or size
     digest = hashlib.sha256(name.encode()).digest()
     main = (40 + digest[0] % 170, 40 + digest[1] % 170, 40 + digest[2] % 170)
     outline = tuple(max(0, c - 50) for c in main)
     shine = tuple(min(255, c + 50) for c in main)
     rows = []
-    for y in range(size):
+    for y in range(height):
         pixels = []
-        for x in range(size):
-            edge = x in (0, size - 1) or y in (0, size - 1)
+        for x in range(width):
+            edge = x in (0, width - 1) or y in (0, height - 1)
             alternate = ((x // 4) + (y // 4)) % 2 == 0
             color = outline if edge else shine if alternate else main
             pixels.extend([*color, 255])
         rows.append(b"\x00" + bytes(pixels))
     def chunk(kind: bytes, data: bytes) -> bytes:
         return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
-    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b"")
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b"")
 
 
 STAGING_DIRNAME = ".staging"
@@ -150,7 +153,13 @@ archives_base_name={spec.mod_id}
 
 # Dependencies
 fabric_api_version={p['fabric_api']}
+{"geckolib_version=" + GECKOLIB_VERSION if spec.mobs else ""}
 """)
+    gecko_repo, gecko_dep = "", ""
+    if spec.mobs:
+        repo_block, dep_line = gradle_dependency_lines()
+        gecko_repo = "repositories {\n" + repo_block + "\n}\n\n"
+        gecko_dep = dep_line + "\n"
     put("build.gradle", f"""plugins {{
     id '{p['loom_plugin']}' version "${{loom_version}}"
 }}
@@ -165,13 +174,13 @@ loom {{
     }}
 }}
 
-dependencies {{
+{gecko_repo}dependencies {{
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${{project.minecraft_version}}"
     mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${{project.loader_version}}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${{project.fabric_api_version}}"
-}}
+{gecko_dep}}}
 
 processResources {{
     def version = project.version
@@ -241,7 +250,7 @@ Your idea: {spec.idea}
         "import net.minecraft.world.item.Item;",
         "import net.minecraft.world.level.block.Block;",
         "import net.minecraft.world.level.block.state.BlockBehaviour;",
-    ] + ([
+    ] + [f"import {i};" for i in main_registrations(spec)[0]] + ([
         "import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;",
         "import net.minecraft.core.registries.Registries;",
         "import net.minecraft.network.chat.Component;",
@@ -265,22 +274,28 @@ Your idea: {spec.idea}
         else:
             lines.append(f'    public static final Block {varname} = Registry.register(BuiltInRegistries.BLOCK, id("{feature.identifier}"), new Block(BlockBehaviour.Properties.of().strength(3.0F)));')
             lines.append(f'    public static final Item {varname}_ITEM = Registry.register(BuiltInRegistries.ITEM, id("{feature.identifier}"), new BlockItem({varname}, new Item.Properties()));')
+    mob_imports, mob_fields, mob_init = main_registrations(spec)
+    lines += mob_fields
     def item_const(feature):
         return feature.identifier.upper() + ("_ITEM" if feature.kind == "block" else "")
     if spec.tab:
-        icon = next((f for f in spec.features if f.identifier == spec.tab_icon), spec.features[0])
+        icon = next((f for f in spec.features if f.identifier == spec.tab_icon), spec.features[0] if spec.features else None)
+        icon_expr = f"new ItemStack({item_const(icon)})" if icon else f"new ItemStack({spec.mobs[0].identifier.upper()}_SPAWN_EGG)"
         lines += ["",
                   f'    public static final ResourceKey<CreativeModeTab> TAB_KEY = ResourceKey.create(Registries.CREATIVE_MODE_TAB, id("{tab_id(spec)}"));',
                   "    public static final CreativeModeTab TAB = FabricItemGroup.builder()",
-                  f"        .icon(() -> new ItemStack({item_const(icon)}))",
+                  f"        .icon(() -> {icon_expr})",
                   f'        .title(Component.translatable("itemGroup.{spec.mod_id}.{tab_id(spec)}"))',
                   "        .displayItems((params, output) -> {"]
         for feature in spec.features:
             lines.append(f"            output.accept({item_const(feature)});")
+        for m in spec.mobs:
+            lines.append(f"            output.accept({m.identifier.upper()}_SPAWN_EGG);")
         lines += ["        })", "        .build();"]
     lines += ["", "    @Override", "    public void onInitialize() {"]
     if spec.tab:
         lines.append("        Registry.register(BuiltInRegistries.CREATIVE_MODE_TAB, TAB_KEY, TAB);")
+    lines += mob_init
     for feature in spec.features:
         group = "BUILDING_BLOCKS" if feature.kind == "block" else "INGREDIENTS"
         lines.append(f"        ItemGroupEvents.modifyEntriesEvent(CreativeModeTabs.{group}).register(entries -> entries.accept({item_const(feature)}));")
@@ -289,8 +304,9 @@ Your idea: {spec.idea}
     put("src/main/resources/fabric.mod.json", json.dumps({
         "schemaVersion": 1, "id": spec.mod_id, "version": "${version}", "name": spec.name,
         "description": "Generated Fabric starter from a user idea", "environment": "*",
-        "entrypoints": {"main": [spec.package + ".ModMain"]},
-        "depends": {"fabricloader": ">=" + p["fabric_loader"], "minecraft": "~1.21.1", "java": ">=21", "fabric-api": "*"},
+        "entrypoints": {"main": [spec.package + ".ModMain"], **({"client": [spec.package + ".client.ModClient"]} if spec.mobs else {})},
+        "depends": {"fabricloader": ">=" + p["fabric_loader"], "minecraft": "~1.21.1", "java": ">=21", "fabric-api": "*",
+                    **({"geckolib": ">=4.7"} if spec.mobs else {})},
         "license": "ARR",
     }, indent=2) + "\n")
     res = f"src/main/resources/assets/{spec.mod_id}"
@@ -314,6 +330,19 @@ Your idea: {spec.idea}
         put(f"src/main/resources/data/{spec.mod_id}/advancement/recipes/{recipe.id}.json", json.dumps(recipe_advancement_json(spec, recipe), indent=2) + "\n")
     if spec.tab:
         lang[f"itemGroup.{spec.mod_id}.{tab_id(spec)}"] = spec.tab
+    if spec.mobs:
+        put(f"{java_dir}/client/ModClient.java", client_init_java(spec))
+        for m in spec.mobs:
+            put(f"{java_dir}/entity/{class_name(m)}Entity.java", entity_java(spec, m))
+            put(f"{java_dir}/client/{class_name(m)}Renderer.java", renderer_java(spec, m))
+            put(f"{res}/geo/entity/{m.identifier}.geo.json", json.dumps(placeholder_geo(m), indent=2) + "\n")
+            put(f"{res}/animations/entity/{m.identifier}.animation.json", json.dumps(placeholder_animation(m), indent=2) + "\n")
+            put(f"{res}/textures/entity/{m.identifier}.png", placeholder_png(spec.mod_id + "/entity/" + m.identifier, 64, 32))
+            put(f"src/main/resources/data/{spec.mod_id}/loot_table/entities/{m.identifier}.json", json.dumps(entity_loot(spec, m), indent=2) + "\n")
+            # vanilla egg model: two tinted layers coloured from the SpawnEggItem constructor
+            put(f"{res}/models/item/{m.identifier}_spawn_egg.json", json.dumps({"parent": "minecraft:item/template_spawn_egg"}, indent=2) + "\n")
+            lang[f"entity.{spec.mod_id}.{m.identifier}"] = m.label
+            lang[f"item.{spec.mod_id}.{m.identifier}_spawn_egg"] = f"{m.label} Spawn Egg"
     put(f"{res}/lang/en_us.json", json.dumps(lang, indent=2, sort_keys=True) + "\n")
     manifest = {"generator": "mod-orchestra 0.1.0", "generator_version": GENERATOR_VERSION, "status": "GENERATED_UNVERIFIED", "profile": p["id"], "files": written.copy(), "build_verified": False, "runtime_verified": False}
     put(".mod-orchestra/generation-manifest.json", json.dumps(manifest, indent=2, sort_keys=True) + "\n")

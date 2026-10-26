@@ -60,6 +60,9 @@ def build_envelope(store: Store, pid: str, task: dict) -> TaskEnvelope:
     elif task["id"].endswith(":SPEC"):
         from .interpreter import SPEC_INSTRUCTIONS
         extra = SPEC_INSTRUCTIONS
+    elif ":MODEL:" in task["id"]:
+        from .models import MODEL_INSTRUCTIONS
+        extra = MODEL_INSTRUCTIONS.replace("<mob>", task["id"].split(":MODEL:")[1])
     return TaskEnvelope(project_id=pid, task_id=task["id"], role=task["role"], title=task["title"],
                         workspace=Path(proj["root"]), packet=packet, extra_instructions=extra)
 
@@ -88,6 +91,20 @@ def apply_outcome(store: Store, pid: str, task: dict, lease: dict, run: dict, re
             return {"task_state": "FAILED", "error": error, "handoff": h}
         h = h | {"needs_user": interp["needs_user"], "interpretation": interp}
         status = "WAITING_USER"  # the user answers or approves; the controller, not the worker, closes SPEC via approve-spec
+    if ":MODEL:" in task["id"] and status == "DONE":
+        from .models import install_model
+        from .validation import InputError
+        mob_id = task["id"].split(":MODEL:")[1]
+        try:
+            installed = install_model(store, pid, mob_id, run_id=run["id"], actor=f"agent:{task['role']}")
+        except (InputError, StateError, OSError) as exc:
+            error = f"model deliverables rejected: {exc}"
+            store.set_task_state(task["id"], worker, version, "FAILED", error=error[:500])
+            store.finish_run(run["id"], state="FAILED", exit_code=result.exit_code, duration_s=result.duration_s, log_path=log,
+                             session_id=result.session_id, cost_usd=result.cost_usd, turns=result.turns, handoff=h, error=error)
+            return {"task_state": "FAILED", "error": error, "handoff": h}
+        h = h | {"model": installed}
+        h["changed_files"] = sorted(set(h.get("changed_files") or []) | set(installed["installed"]))
     accepted = None
     if status in ("DONE", "WAITING_USER"):
         # A task's edits are the union of what all its runs reported (an earlier run may have written the
