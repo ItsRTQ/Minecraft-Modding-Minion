@@ -360,7 +360,8 @@ async function renderFeatures(p) {
       const pick = (layer) => { upA.dataset.layer = layer; upA.click(); };
       upA.onchange = async () => { const file = upA.files[0]; if (!file) return; const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
         try { const out = await api(`/api/project/${p.id}/set-texture`, { kind: "armor_layer_" + upA.dataset.layer, identifier: f.material, png_base64: b64 }); toast(out.note, "ok"); await openProject(p.id); } catch (err) { toast(err.message, "bad"); } upA.value = ""; };
-      right.append(upA, btn("Armor layer 1 (64×32)", () => pick("1"), "mini secondary"), btn("Armor layer 2 (64×32)", () => pick("2"), "mini secondary")); }
+      right.append(upA, btn("Armor layer 1 (64×32)", () => pick("1"), "mini secondary"), btn("Armor layer 2 (64×32)", () => pick("2"), "mini secondary"));
+      right.append(btn("Retint set", async () => { const color = prompt(`Colour for the ${f.material} tools and worn armor (#RRGGBB), or leave empty to keep:`, ""); if (color === null) return; const out = await api(`/api/project/${p.id}/retint-armor`, { material: f.material, color: color.trim() }); toast(out.note, "ok"); await openProject(p.id); }, "mini secondary")); }
     right.append(btn("Rename", async () => { const label = prompt("Display name for " + f.identifier + ":", f.label); if (!label || label === f.label) return; const out = await api(`/api/project/${p.id}/rename-feature`, { identifier: f.identifier, label }); toast(out.note || "Renamed.", "ok"); await openProject(p.id); }, "mini secondary"));
     if (!generated) right.append(btn("Remove", async () => { if (!confirm(`Remove ${f.identifier} from the spec?`)) return; await api(`/api/project/${p.id}/remove-feature`, { identifier: f.identifier }); toast("Removed.", "ok"); await openProject(p.id); }, "mini secondary"));
     else { const nb = btn("Remove", () => {}, "mini secondary"); nb.disabled = true; nb.title = "Removing content after generation needs a coder task (coming later)"; right.append(nb); }
@@ -415,17 +416,20 @@ qs("sprites-btn").onclick = () => {
   if (!selected) return;
   const list = qs("sprites-list"); list.replaceChildren();
   for (const f of featureCache) { if (f.kind === "armor" && !f.identifier.endsWith("_helmet") && false) continue; const l = el("label"); const c = el("input"); c.type = "checkbox"; c.value = f.identifier; c.checked = true; l.append(c, document.createTextNode(` ${f.label} (${f.kind})`)); list.append(l); }
+  const mats = [...new Set(featureCache.filter(f => f.kind === "armor").map(f => f.material))];
+  if (mats.length) { list.append(el("div", "Worn-armor layers (64×32, what you see on the body):", "muted")); for (const m of mats) { const l = el("label"); const c = el("input"); c.type = "checkbox"; c.value = m; c.dataset.armor = "1"; c.checked = true; l.append(c, document.createTextNode(` ${m} armor set`)); list.append(l); } }
   qs("sprites-notes").value = ""; qs("modal-sprites").classList.remove("hidden");
 };
 qs("sprites-all").onclick = () => { for (const c of qs("sprites-list").querySelectorAll("input")) c.checked = true; };
 qs("sprites-none").onclick = () => { for (const c of qs("sprites-list").querySelectorAll("input")) c.checked = false; };
 qs("sprites-go").onclick = async () => {
-  const identifiers = [...qs("sprites-list").querySelectorAll("input:checked")].map(c => c.value);
-  if (!identifiers.length) return toast("Pick at least one item", "bad");
+  const identifiers = [...qs("sprites-list").querySelectorAll("input:checked:not([data-armor])")].map(c => c.value);
+  const armor = [...qs("sprites-list").querySelectorAll("input:checked[data-armor]")].map(c => c.value);
+  if (!identifiers.length && !armor.length) return toast("Pick at least one item or armor set", "bad");
   try {
-    const out = await api(`/api/project/${selected}/sprites`, { identifiers, notes: qs("sprites-notes").value });
+    const out = await api(`/api/project/${selected}/sprites`, { identifiers, notes: qs("sprites-notes").value, armor });
     closeModal("modal-sprites");
-    if (confirm(`Task ${out.task} created for ${identifiers.length} sprite(s). Start the designer now?`)) { await api(`/api/project/${selected}/dispatch`, { task: out.task }); toast("Designer painting… the contact sheet appears in Items when done.", "ok"); }
+    if (confirm(`Task ${out.task} created for ${identifiers.length} sprite(s)${armor.length ? " + " + armor.length + " armor set(s)" : ""}. Start the designer now?`)) { await api(`/api/project/${selected}/dispatch`, { task: out.task }); toast("Designer painting… the contact sheet appears in Items when done.", "ok"); }
     await openProject(selected);
   } catch (err) { toast(err.message, "bad"); }
 };

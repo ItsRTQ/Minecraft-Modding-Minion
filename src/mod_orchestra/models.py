@@ -252,7 +252,19 @@ Report every PNG path in `changed_files`. Do not touch `src/` or `assets/`; the 
 """
 
 
-def request_sprites(store: Store, pid: str, identifiers: list[str], notes: str = "") -> dict:
+ARMOR_LAYER_GUIDE = """
+Worn-armor layers (64x32 RGBA, classic player-model layout, transparent where there is no armor):
+- layer 1 = helmet + chestplate + boots; layer 2 = leggings.
+- Head box (helmet): x 0–31, y 0–15 (6 faces of an 8x8 cube: top at (8,0), front at (8,8), right (0,8), left (16,8), back (24,8), bottom (16,0)).
+- Body (chestplate / leggings upper): x 16–39, y 16–31 (front 20–27, back 32–39, sides 16–19 and 28–31; top 20–27 y 16–19).
+- Arm (chestplate sleeves): x 40–55, y 16–31 (front 44–47). Leg (leggings / boots): x 0–15, y 16–31 (front 4–7).
+- Boots: only the lower ~5 rows of the leg box (y 27–31). Leggings: body lower rows (y 20–31) + the leg box.
+Write `models/sprites/<material>_layer_1.png` and `models/sprites/<material>_layer_2.png`. Keep the armor's
+colour family consistent with the item icons; add trim lines and a slightly darker underside.
+"""
+
+
+def request_sprites(store: Store, pid: str, identifiers: list[str], notes: str = "", armor_materials: list[str] | None = None) -> dict:
     proj = store.project(pid)
     if proj["status"] not in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
         raise StateError("Generate the project first")
@@ -268,18 +280,25 @@ def request_sprites(store: Store, pid: str, identifiers: list[str], notes: str =
     unknown = [i for i in identifiers if i not in catalogue]
     if unknown:
         raise InputError(f"Unknown identifiers: {unknown}")
-    if not identifiers:
-        raise InputError("Pick at least one item")
+    armor_materials = [a for a in (armor_materials or []) if a]
+    mats = {m.identifier: m for m in spec.materials}
+    bad = [a for a in armor_materials if a not in mats or not mats[a].armor]
+    if bad:
+        raise InputError(f"Not materials with armor: {bad}")
+    if not identifiers and not armor_materials:
+        raise InputError("Pick at least one item or armor set")
     n = sum(1 for t in store.tasks(pid) if ":SPRITES:" in t["id"]) + 1
     task_id = f"{pid}:SPRITES:{n}"
     lines = ["Sprites to paint (identifier → what it is):"] + [f"- {i}: {catalogue[i]['label']} ({catalogue[i]['kind']}{', ' + catalogue[i]['hint'] if catalogue[i]['hint'] else ''})" for i in identifiers]
+    if armor_materials:
+        lines += ["", "Worn-armor layers to paint for material(s): " + ", ".join(f"{a} (pieces: {', '.join(mats[a].armor)})" for a in armor_materials), ARMOR_LAYER_GUIDE]
     if notes.strip():
         lines += ["", "Style notes from the user:", notes.strip()[:800]]
-    store.add_task(pid, task_id, "designer", f"Paint {len(identifiers)} item sprite(s)")
+    store.add_task(pid, task_id, "designer", f"Paint {len(identifiers)} item sprite(s)" + (f" + armor layers for {', '.join(armor_materials)}" if armor_materials else ""))
     with store.tx() as con:
         con.execute("INSERT OR IGNORE INTO task_instructions(task_id, text) VALUES(?,?)", (task_id, "\n".join(lines)))
-    store.add_event(pid, "user", "SPRITES_REQUESTED", {"task": task_id, "items": identifiers, "notes": notes[:300]})
-    return {"task": task_id, "items": identifiers, "next": {"action": "dispatch", "payload": {"task": task_id}}}
+    store.add_event(pid, "user", "SPRITES_REQUESTED", {"task": task_id, "items": identifiers, "armor": armor_materials, "notes": notes[:300]})
+    return {"task": task_id, "items": identifiers, "armor": armor_materials, "next": {"action": "dispatch", "payload": {"task": task_id}}}
 
 
 def _png_info(raw: bytes) -> tuple[int, int, bool]:
@@ -305,10 +324,26 @@ def _png_info(raw: bytes) -> tuple[int, int, bool]:
     return w, h, len(alphas) > 1, len(colours)
 
 
-def install_sprites(store: Store, pid: str, task_id: str, identifiers: list[str], *, run_id: str, actor: str) -> dict:
+def install_sprites(store: Store, pid: str, task_id: str, identifiers: list[str], *, run_id: str, actor: str, armor_materials: list[str] | None = None) -> dict:
     proj = store.project(pid); ws = Path(proj["root"]); spec = read_spec(proj["spec"])
     blocks = {f.identifier for f in spec.features if f.kind == "block"}
     installed, rejected = [], {}
+    for mat in (armor_materials or []):
+        for n in (1, 2):
+            src = ws / "models" / "sprites" / f"{mat}_layer_{n}.png"
+            key = f"{mat}_layer_{n}"
+            if not src.is_file():
+                rejected[key] = "missing"; continue
+            try:
+                w, h, alpha_var, ncol = _png_info(src.read_bytes())
+            except InputError as exc:
+                rejected[key] = str(exc); continue
+            if (w, h) != (64, 32):
+                rejected[key] = f"{w}x{h}, need 64x32"; continue
+            if not alpha_var:
+                rejected[key] = "fully opaque: armor layers need transparent areas"; continue
+            rel = f"src/main/resources/assets/{pid}/textures/models/armor/{key}.png"
+            (ws / rel).parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(src, ws / rel); installed.append(rel)
     for ident in identifiers:
         src = ws / "models" / "sprites" / f"{ident}.png"
         if not src.is_file():

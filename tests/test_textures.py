@@ -103,3 +103,25 @@ class Sprites(Generated):
         self.assertEqual(latest_contact_sheet(self.store, "t_mod"), sp_out["contact_sheet"])
         from mod_orchestra.fabric import validate_generated
         self.assertEqual(validate_generated(ws)["status"], "PASS")
+
+
+class ArmorLayers(Generated):
+    def test_retint_and_designer_layers(self):
+        from mod_orchestra.content import retint_armor
+        from mod_orchestra.models import request_sprites, install_sprites
+        ws = Path(self.store.project("t_mod")["root"]); armor = ws / "src/main/resources/assets/t_mod/textures/models/armor"
+        before = (armor / "gemsteel_layer_1.png").read_bytes()
+        out = retint_armor(self.store, "t_mod", "gemsteel", color="#2244ff")
+        self.assertIn("src/main/resources/assets/t_mod/textures/models/armor/gemsteel_layer_1.png", out["files"])
+        self.assertNotEqual(before, (armor / "gemsteel_layer_1.png").read_bytes())
+        self.assertEqual(self.store.project("t_mod")["spec"]["materials"][0]["color"], "#2244ff")
+        with self.assertRaisesRegex(InputError, "Unknown material"):
+            retint_armor(self.store, "t_mod", "mithril")
+        out = request_sprites(self.store, "t_mod", [], armor_materials=["gemsteel"])
+        self.assertIn("Worn-armor layers", self.store.task_instructions(out["task"]))
+        sp = ws / "models" / "sprites"; sp.mkdir(parents=True, exist_ok=True)
+        (sp / "gemsteel_layer_1.png").write_bytes(armor_layer_png(1, (9, 9, 9), (8, 8, 8), ("helmet",)))
+        (sp / "gemsteel_layer_2.png").write_bytes(tinted_item_png("block", (1, 1, 1), (2, 2, 2)))  # wrong size
+        res = install_sprites(self.store, "t_mod", out["task"], [], run_id="r1", actor="agent:designer", armor_materials=["gemsteel"])
+        self.assertEqual(res["installed"], ["src/main/resources/assets/t_mod/textures/models/armor/gemsteel_layer_1.png"])
+        self.assertIn("16x16, need 64x32", res["rejected"]["gemsteel_layer_2"])

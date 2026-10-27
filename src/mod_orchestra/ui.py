@@ -207,7 +207,10 @@ def serve(store: Store, port: int = 8765) -> None:
                         return add_food_any(store, pid, **{k: v for k, v in payload.items()})
                     if op == "sprites":
                         from .models import request_sprites
-                        return request_sprites(store, pid, list(payload.get("identifiers") or []), str(payload.get("notes") or ""))
+                        return request_sprites(store, pid, list(payload.get("identifiers") or []), str(payload.get("notes") or ""), list(payload.get("armor") or []))
+                    if op == "retint-armor":
+                        from .content import retint_armor
+                        return retint_armor(store, pid, str(payload.get("material", "")), str(payload.get("color") or ""), str(payload.get("accent") or ""))
                     if op == "set-texture":
                         from .content import set_texture
                         return set_texture(store, pid, kind=str(payload.get("kind", "item")), identifier=str(payload.get("identifier", "")), png_base64=str(payload.get("png_base64", "")))

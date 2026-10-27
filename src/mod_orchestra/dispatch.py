@@ -125,8 +125,9 @@ def apply_outcome(store: Store, pid: str, task: dict, lease: dict, run: dict, re
         from .validation import InputError
         ev = next((e for e in store.events(pid, 500) if e["kind"] == "SPRITES_REQUESTED" and e["payload"].get("task") == task["id"]), None)
         ids = (ev or {}).get("payload", {}).get("items", [])
+        armor = (ev or {}).get("payload", {}).get("armor", [])
         try:
-            sp = install_sprites(store, pid, task["id"], ids, run_id=run["id"], actor=f"agent:{task['role']}")
+            sp = install_sprites(store, pid, task["id"], ids, run_id=run["id"], actor=f"agent:{task['role']}", armor_materials=armor)
         except (InputError, StateError, OSError) as exc:
             error = f"sprite deliverables rejected: {exc}"
             store.set_task_state(task["id"], worker, version, "FAILED", error=error[:500])

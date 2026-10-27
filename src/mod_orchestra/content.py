@@ -319,3 +319,39 @@ def set_texture(store: Store, pid: str, *, kind: str, identifier: str, png_base6
     _source_changed(store, pid); _reopen_build(store, pid)
     store.add_event(pid, "user", "TEXTURE_UPLOADED", {"kind": kind, "identifier": identifier, "file": rel, "size": [w, h]})
     return {"file": rel, "size": [w, h], "accepted": accepted["accepted"], "note": "Texture installed; rebuild to see it in-game."}
+
+
+def retint_armor(store: Store, pid: str, material: str, color: str = "", accent: str = "") -> dict:
+    """Rewrite a material's tool/armor icon textures and both worn-armor layers with the tinted silhouettes
+    (deterministic; for projects generated before tinting or when the colour changes)."""
+    proj = store.project(pid)
+    if proj["status"] not in GENERATED_STATUSES:
+        raise StateError("Generate the project first")
+    spec = read_spec(proj["spec"])
+    m = next((x for x in spec.materials if x.identifier == material), None)
+    if m is None:
+        raise InputError(f"Unknown material {material!r}")
+    for c in (color, accent):
+        if c and not re.fullmatch(r"#[0-9a-fA-F]{6}", c):
+            raise InputError("colours must be #RRGGBB")
+    if color or accent:
+        new_m = replace(m, color=color or m.color, accent=accent or m.accent)
+        _save_spec(store, pid, replace(spec, materials=[new_m if x.identifier == material else x for x in spec.materials]), f"retint {material}")
+        m = new_m
+    base, acc = material_colors(pid + "/" + m.identifier, m.color or None, m.accent or None)
+    ws = Path(proj["root"]); assets = ws / "src/main/resources/assets" / pid
+    written = []
+    for kind in m.tools:
+        rel = assets / "textures/item" / f"{m.identifier}_{kind}.png"; rel.write_bytes(tinted_item_png(kind, base, acc)); written.append(rel)
+    for kind in m.armor:
+        rel = assets / "textures/item" / f"{m.identifier}_{kind}.png"; rel.write_bytes(tinted_item_png("ingot" if kind in ("chestplate", "leggings") else "gem", base, acc)); written.append(rel)
+    if m.armor:
+        for n in (1, 2):
+            rel = assets / "textures/models/armor" / f"{m.identifier}_layer_{n}.png"; rel.parent.mkdir(parents=True, exist_ok=True)
+            rel.write_bytes(armor_layer_png(n, base, acc, tuple(m.armor))); written.append(rel)
+    rels = [str(w.relative_to(ws)).replace("\\", "/") for w in written]
+    accepted = accept_changes(ws, run_id=f"retint:{material}", actor="user", changed=rels)
+    from .dispatch import _source_changed, _reopen_build
+    _source_changed(store, pid); _reopen_build(store, pid)
+    store.add_event(pid, "user", "ARMOR_RETINTED", {"material": material, "files": rels})
+    return {"material": material, "files": rels, "accepted": accepted["accepted"], "note": "Icons and worn-armor layers rewritten; rebuild to apply."}
