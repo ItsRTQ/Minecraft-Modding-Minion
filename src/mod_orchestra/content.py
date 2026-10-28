@@ -13,7 +13,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from .fabric import accept_changes, loot_table_json, placeholder_png, feature_texture
-from .textures import tinted_item_png, armor_layer_png, material_colors
+from .textures import tinted_item_png, armor_layer_png, material_colors, palette_from_png
 from .spec import Feature, check_java_name_collisions, read_spec, validate_spec_content
 from .state import Store, StateError
 from .validation import InputError, normalize_id
@@ -321,7 +321,7 @@ def set_texture(store: Store, pid: str, *, kind: str, identifier: str, png_base6
     return {"file": rel, "size": [w, h], "accepted": accepted["accepted"], "note": "Texture installed; rebuild to see it in-game."}
 
 
-def retint_armor(store: Store, pid: str, material: str, color: str = "", accent: str = "") -> dict:
+def retint_armor(store: Store, pid: str, material: str, color: str = "", accent: str = "", match_icon: bool = False) -> dict:
     """Rewrite a material's tool/armor icon textures and both worn-armor layers with the tinted silhouettes
     (deterministic; for projects generated before tinting or when the colour changes)."""
     proj = store.project(pid)
@@ -340,6 +340,14 @@ def retint_armor(store: Store, pid: str, material: str, color: str = "", accent:
         m = new_m
     base, acc = material_colors(pid + "/" + m.identifier, m.color or None, m.accent or None)
     ws = Path(proj["root"]); assets = ws / "src/main/resources/assets" / pid
+    source_icon = None
+    if match_icon:
+        for kind in ("chestplate", "helmet", "leggings", "boots"):
+            icon = assets / "textures/item" / f"{m.identifier}_{kind}.png"
+            if icon.is_file():
+                pal = palette_from_png(icon.read_bytes())
+                if pal:
+                    base, acc = pal; source_icon = f"{m.identifier}_{kind}.png"; break
     written = []
     # Only the worn-armor layers: inventory icons may be designer- or user-made and are never overwritten here.
     if m.armor:
@@ -350,8 +358,9 @@ def retint_armor(store: Store, pid: str, material: str, color: str = "", accent:
     accepted = accept_changes(ws, run_id=f"retint:{material}", actor="user", changed=rels)
     from .dispatch import _source_changed, _reopen_build
     _source_changed(store, pid); _reopen_build(store, pid)
-    store.add_event(pid, "user", "ARMOR_RETINTED", {"material": material, "files": rels})
-    return {"material": material, "files": rels, "accepted": accepted["accepted"], "note": "Worn-armor layers rewritten (icons untouched); rebuild to apply."}
+    store.add_event(pid, "user", "ARMOR_RETINTED", {"material": material, "files": rels, "from_icon": source_icon})
+    return {"material": material, "files": rels, "accepted": accepted["accepted"], "from_icon": source_icon,
+            "note": (f"Worn-armor layers painted with the palette of {source_icon}" if source_icon else "Worn-armor layers rewritten") + " (icons untouched); rebuild to apply."}
 
 
 def restore_designer_sprites(store: Store, pid: str) -> dict:

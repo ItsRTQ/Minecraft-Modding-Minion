@@ -213,7 +213,7 @@ def serve(store: Store, port: int = 8765) -> None:
                         return restore_designer_sprites(store, pid)
                     if op == "retint-armor":
                         from .content import retint_armor
-                        return retint_armor(store, pid, str(payload.get("material", "")), str(payload.get("color") or ""), str(payload.get("accent") or ""))
+                        return retint_armor(store, pid, str(payload.get("material", "")), str(payload.get("color") or ""), str(payload.get("accent") or ""), match_icon=bool(payload.get("match_icon")))
                     if op == "set-texture":
                         from .content import set_texture
                         return set_texture(store, pid, kind=str(payload.get("kind", "item")), identifier=str(payload.get("identifier", "")), png_base64=str(payload.get("png_base64", "")))

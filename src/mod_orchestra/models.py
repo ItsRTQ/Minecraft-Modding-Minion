@@ -264,8 +264,11 @@ Worn-armor layers (64x32 RGBA, classic player-model layout, transparent where th
 - Body (chestplate / leggings upper): x 16–39, y 16–31 (front 20–27, back 32–39, sides 16–19 and 28–31; top 20–27 y 16–19).
 - Arm (chestplate sleeves): x 40–55, y 16–31 (front 44–47). Leg (leggings / boots): x 0–15, y 16–31 (front 4–7).
 - Boots: only the lower ~5 rows of the leg box (y 27–31). Leggings: body lower rows (y 20–31) + the leg box.
-Write `models/sprites/<material>_layer_1.png` and `models/sprites/<material>_layer_2.png`. Keep the armor's
-colour family consistent with the item icons; add trim lines and a slightly darker underside.
+Write `models/sprites/<material>_layer_1.png` and `models/sprites/<material>_layer_2.png`.
+FIRST read the existing inventory icons of the set (src/main/resources/assets/<mod>/textures/item/<material>_helmet.png,
+_chestplate.png, _leggings.png, _boots.png — decode the PNGs in your script and print their colour counts): the worn
+armor must use the SAME palette and the same visual motifs (plates, rivets, trim lines, gem inlays) so the equipped
+armor looks like the icon's material. Add a slightly darker underside and outline every face edge.
 """
 
 

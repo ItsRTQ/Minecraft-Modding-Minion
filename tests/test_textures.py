@@ -132,3 +132,18 @@ class ArmorLayers(Generated):
         out = restore_designer_sprites(self.store, "t_mod")
         self.assertIn("src/main/resources/assets/t_mod/textures/item/gem.png", out["installed"])
         self.assertIn("src/main/resources/assets/t_mod/textures/models/armor/gemsteel_layer_1.png", out["installed"])
+
+
+class MatchIcon(Generated):
+    def test_palette_from_png_and_retint_match_icon(self):
+        from mod_orchestra.textures import palette_from_png
+        from mod_orchestra.content import retint_armor
+        ws = Path(self.store.project("t_mod")["root"]); icon = ws / "src/main/resources/assets/t_mod/textures/item/gemsteel_chestplate.png"
+        icon.write_bytes(tinted_item_png("ingot", (40, 160, 60), (150, 240, 160)))  # "designer" green icon
+        pal = palette_from_png(icon.read_bytes())
+        self.assertIsNotNone(pal); base, acc = pal
+        self.assertGreater(base[1], base[0]); self.assertGreater(sum(acc), sum(base))
+        out = retint_armor(self.store, "t_mod", "gemsteel", match_icon=True)
+        self.assertEqual(out["from_icon"], "gemsteel_chestplate.png")
+        layer = (ws / "src/main/resources/assets/t_mod/textures/models/armor/gemsteel_layer_1.png").read_bytes()
+        self.assertEqual(layer, armor_layer_png(1, base, acc, ("helmet", "leggings")))

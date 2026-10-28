@@ -163,3 +163,48 @@ def armor_layer_png(layer: int, base, accent, pieces: tuple) -> bytes:
             fill_cube(BODY_NET, rows=(6, 11))
             fill_cube(LEG_NET, rows=(0, 9))
     return png_from_pixels(64, 32, px)
+
+
+def palette_from_png(raw: bytes) -> tuple[tuple[int, int, int], tuple[int, int, int]] | None:
+    """(base, accent) taken from an RGBA PNG: the most common mid-tone opaque colour and the lightest frequent one.
+    Lets worn armor match a designer- or user-painted icon. stdlib only."""
+    import struct as _s, zlib as _z
+    from collections import Counter
+    if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None
+    w, h, depth, ctype = _s.unpack(">IIBB", raw[16:26])
+    if depth != 8 or ctype not in (2, 6):
+        return None
+    pos, idat = 8, b""
+    while pos < len(raw):
+        ln = _s.unpack(">I", raw[pos:pos + 4])[0]; kind = raw[pos + 4:pos + 8]
+        if kind == b"IDAT": idat += raw[pos + 8:pos + 8 + ln]
+        pos += 12 + ln
+    px = _z.decompress(idat); bpp = 4 if ctype == 6 else 3; stride = w * bpp + 1
+    counts: Counter = Counter()
+    prev = bytearray(w * bpp)
+    for y in range(h):
+        f = px[y * stride]; row = bytearray(px[y * stride + 1:(y + 1) * stride])
+        for i in range(len(row)):   # PNG unfilter (None/Sub/Up/Average/Paeth)
+            a = row[i - bpp] if i >= bpp else 0; b = prev[i]; c = prev[i - bpp] if i >= bpp else 0
+            if f == 1: row[i] = (row[i] + a) & 255
+            elif f == 2: row[i] = (row[i] + b) & 255
+            elif f == 3: row[i] = (row[i] + ((a + b) >> 1)) & 255
+            elif f == 4:
+                pa, pb, pc = abs(b - c), abs(a - c), abs(a + b - 2 * c)
+                row[i] = (row[i] + (a if pa <= pb and pa <= pc else b if pb <= pc else c)) & 255
+        prev = row
+        for x in range(w):
+            p = row[x * bpp:(x + 1) * bpp]
+            if bpp == 4 and p[3] < 128:
+                continue
+            counts[(p[0], p[1], p[2])] += 1
+    if not counts:
+        return None
+    lum = lambda c: 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]
+    common = [c for c, _ in counts.most_common(8)]
+    mids = sorted(common, key=lambda c: abs(lum(c) - 128))
+    base = mids[0]
+    lights = [c for c in common if lum(c) > lum(base) + 25]
+    accent = max(lights, key=lum) if lights else _lighten(base, 0.35)
+    return base, accent
