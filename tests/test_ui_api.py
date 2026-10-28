@@ -256,6 +256,7 @@ class FrontendConsistency(unittest.TestCase):
         used = set(re.findall(r'qs\("([a-zA-Z0-9_-]+)"\)', js))
         missing = sorted(u for u in used if u not in ids)
         self.assertEqual(missing, [], f"app.js references ids absent from index.html: {missing}")
-        for handler in ("sprites-btn", "sprites-go", "addmob-form", "addmat-form", "addfood-form", "addfeature-form", "p-delete", "del-go", "theme-save", "pol-all"):
+        for handler in ("sprites-btn", "sprites-go", "addmob-form", "addmat-form", "addfood-form", "p-delete", "del-go", "theme-save", "pol-all"):
             self.assertRegex(js, re.escape(f'qs("{handler}")') + r"\.(onclick|onsubmit)", f"{handler} has no handler")
+        self.assertIn('const addForm = qs("addfeature-form");', js); self.assertIn("addForm.onsubmit", js)
         self.assertIn("let featureCache", js)
