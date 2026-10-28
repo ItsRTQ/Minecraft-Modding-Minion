@@ -226,3 +226,20 @@ class ReplanKeepsUserTasks(unittest.TestCase):
             ids = {t["id"]: t for t in store.tasks("k_mod")}
             self.assertIn("k_mod:EXTRA", ids); self.assertEqual(ids["k_mod:SCAFFOLD"]["role"], "controller"); self.assertEqual(ids["k_mod:CONTENT:01"]["role"], "controller")
             self.assertEqual(ids["k_mod:EXTRA"]["state"], "READY", "edge from the (DONE) SPEC task survived")
+
+
+class ExpiredApprovals(unittest.TestCase):
+    def test_guidance_ignores_expired_pending_approval(self):
+        tmp = tempfile.TemporaryDirectory(); self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name); store = Store(base / "state.sqlite")
+        with patch.object(workflow, "PROJECTS", base / "projects"):
+            (base / "projects").mkdir()
+            workflow.new_project(store, name="E", mod_id="e_mod", package="com.x.e", idea="items: gem")
+            workflow.plan_project(store, "e_mod"); workflow.approve_spec(store, "e_mod"); workflow.generate_project(store, "e_mod")
+            from mod_orchestra import build as build_mod
+            from mod_orchestra.guidance import guidance
+            a = build_mod.request_build(store, "e_mod")
+            self.assertEqual(guidance(store, "e_mod")["steps"][0]["action"], "decide")
+            with store.tx() as con:
+                con.execute("UPDATE approvals SET expires_at=? WHERE id=?", (time.time() - 1, a["id"]))
+            self.assertEqual(guidance(store, "e_mod")["steps"][0]["action"], "request-build", "expired approvals must not be offered")

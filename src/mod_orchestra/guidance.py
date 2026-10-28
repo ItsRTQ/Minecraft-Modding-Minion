@@ -5,6 +5,7 @@ carries an `action` the UI can run directly (POST /api/project/<id>/<action>) or
 for the terminal, and a `who` (user | agent | controller).
 """
 from __future__ import annotations
+import time
 from pathlib import Path
 from .evidence import levels_for_current_source
 from .state import Store, StateError
@@ -44,8 +45,10 @@ def guidance(store: Store, pid: str) -> dict:
     questions = spec.get("questions") or []
     runs = store.runs(pid)
     running = [r for r in runs if r["state"] == "RUNNING"]
-    pending = [a for a in store.approvals(pid) if a["state"] == "PENDING"]
-    granted = [a for a in store.approvals(pid) if a["state"] == "GRANTED"]
+    now = time.time()
+    live = [a for a in store.approvals(pid) if a["expires_at"] > now]   # expired approvals are dead ends; never offer them
+    pending = [a for a in live if a["state"] == "PENDING"]
+    granted = [a for a in live if a["state"] == "GRANTED"]
     waiting = [t for t in tasks if t["state"] in ("WAITING_USER", "BLOCKED", "FAILED")]
     ready = [t for t in tasks if t["state"] == "READY"]
     steps: list[dict] = []
