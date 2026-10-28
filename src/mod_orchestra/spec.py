@@ -152,6 +152,7 @@ class Spec:
     mobs: list[Mob] = field(default_factory=list)
     materials: list[Material] = field(default_factory=list)
     foods: list[Food] = field(default_factory=list)
+    theme: str = ""               # visual brief every designer task receives: era, palette, motifs, mood
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -439,6 +440,7 @@ def read_spec(raw: dict) -> Spec:
         tab=raw.get("tab"), tab_icon=raw.get("tab_icon"),
         materials=[Material(**{**m, "tools": tuple(m.get("tools", ())), "armor": tuple(m.get("armor", ())), "armor_defense": tuple(m.get("armor_defense", (2, 6, 5, 2)))}) for m in raw.get("materials", [])],
         foods=[Food(**{**f, "effects": tuple(f.get("effects", ()))}) for f in raw.get("foods", [])],
+        theme=str(raw.get("theme") or "")[:600],
         mobs=[Mob(**{**m, "drops": tuple(coerce_mob_drop(d) for d in m.get("drops", ())),
                       "egg_colors": tuple(m.get("egg_colors") or default_egg_colors(m.get("identifier", ""), m.get("behavior", "passive")))})
               for m in raw.get("mobs", [])],

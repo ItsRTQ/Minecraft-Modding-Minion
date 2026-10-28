@@ -35,6 +35,13 @@ def _safe_dirname(name: str) -> str:
     return re.sub(r'[<>:"/\\|?*]', "-", name)
 
 
+def theme_block(store: Store, pid: str) -> str:
+    theme = (store.project(pid)["spec"].get("theme") or "").strip()
+    if not theme:
+        return "\n## Visual theme\nNo theme set for this mod yet: pick a coherent palette and motif family from the mod's idea and state it in `assumptions`.\n"
+    return f"\n## Visual theme of this mod (follow it in every colour and motif)\n{theme}\n"
+
+
 def model_task_id(pid: str, mob_id: str) -> str:
     return f"{pid}:MODEL:{mob_id}"
 
@@ -379,3 +386,79 @@ def install_sprites(store: Store, pid: str, task_id: str, identifiers: list[str]
     _source_changed(store, pid); _reopen_build(store, pid)
     store.add_event(pid, "controller", "SPRITES_INSTALLED", {"task": task_id, "run": run_id, "installed": installed, "rejected": rejected})
     return {"installed": installed, "rejected": rejected, "accepted": accepted["accepted"], "contact_sheet": f".mod-orchestra/previews/{_safe_dirname(run_id)}/sprites_contact_sheet.png" if sheet.is_file() else None}
+
+
+# ---------------------------------------------------------------------------------------------
+# ARMOR task: the designer paints the two worn-armor layers for a material and MUST look at them
+# worn, using the shipped player template (resources/blockbench/player_armor.bbmodel) + bbmodel_render.
+# ---------------------------------------------------------------------------------------------
+TEMPLATE_DIR = Path(__file__).resolve().parent / "resources" / "blockbench"
+
+ARMOR_INSTRUCTIONS = """
+## Your job on this task (designer — worn armor for material `<material>`)
+Paint the two armor layer textures (64x32 RGBA) so the set looks good WORN, in the mod's theme and matching
+the material's inventory icons (read `src/main/resources/assets/<mod>/textures/item/<material>_*.png` first
+and reuse their palette and motifs).
+Files to write, exact names, in `models/`:
+- `models/sprites/<material>_layer_1.png` — helmet + chestplate (body and both arms) + boots (lower rows of the leg box)
+- `models/sprites/<material>_layer_2.png` — leggings (lower body rows + leg boxes)
+Layout (classic 64x32 player-model nets; everything else transparent):
+- head cube net at (0,0): top (8,0), bottom (16,0), right (0,8), front (8,8), left (16,8), back (24,8); each 8x8. Leave an
+  opening on the front face (eyes/mouth area, about cols 1–6, rows 3–7) unless the helmet is a full-face design.
+- body net at (16,16): top (20,16) 8x4, bottom (28,16) 8x4, right (16,20) 4x12, front (20,20) 8x12, left (28,20) 4x12, back (32,20) 8x12.
+- arm net at (40,16): top (44,16) 4x4, bottom (48,16) 4x4, right (40,20) 4x12, front (44,20) 4x12, left (48,20) 4x12, back (52,20) 4x12.
+- leg net at (0,16): top (4,16) 4x4, bottom (8,16) 4x4, right (0,20) 4x12, front (4,20) 4x12, left (8,20) 4x12, back (12,20) 4x12.
+Craft: 1px darker outline on every face edge, lighter top faces, mid sides, darker bottoms; add plates, rivets, trim,
+straps or gems as the theme suggests; keep 4–8 colours per material. Write the PNGs with a stdlib Python script
+(`models/sprites/paint_armor.py`, rerunnable).
+LOOK AT IT WORN before finishing (mandatory): `models/<material>_armor.bbmodel` is a player template already
+placed in `models/`. For each layer: `bbmodel_geckolib_set_texture {file: "<material>_armor.bbmodel",
+png_file: "sprites/<material>_layer_1.png", expected_revision: ...}` then `bbmodel_render {file, output_file:
+"<material>_armor_layer1.png", overwrite: true}` (and the same with layer 2 → `<material>_armor_layer2.png`).
+Inspect the renders; if a region is misplaced, the face is covered, or it reads as a flat blob, fix the PNG and
+render again. Report the two layer PNGs and the two renders in `changed_files`. Never touch `src/` or `assets/`.
+"""
+
+
+def request_armor_design(store: Store, pid: str, material: str, notes: str = "") -> dict:
+    proj = store.project(pid)
+    if proj["status"] not in ("SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"):
+        raise StateError("Generate the project first")
+    spec = read_spec(proj["spec"])
+    m = next((x for x in spec.materials if x.identifier == material), None)
+    if m is None or not m.armor:
+        raise InputError(f"{material!r} is not a material with armor pieces")
+    ws = Path(proj["root"])
+    (ws / MODEL_DIR / "sprites").mkdir(parents=True, exist_ok=True)
+    target = ws / MODEL_DIR / f"{material}_armor.bbmodel"
+    if not target.is_file():
+        shutil.copyfile(TEMPLATE_DIR / "player_armor.bbmodel", target)
+    n = sum(1 for t in store.tasks(pid) if f":ARMOR:{material}" in t["id"]) + 1
+    task_id = f"{pid}:ARMOR:{material}" + (f":{n}" if n > 1 else "")
+    lines = [f"Material: {material} ({m.label}); pieces: {', '.join(m.armor)}; material colour hint: {m.color or 'derive from icons'}"]
+    prior = [e["payload"].get("notes", "") for e in store.events(pid, 300) if e["kind"] == "ARMOR_REQUESTED" and e["payload"].get("material") == material and e["payload"].get("notes")]
+    if notes.strip():
+        lines += ["", "User notes for this round:", notes.strip()[:800]]
+    if prior:
+        lines += ["", "Earlier user notes on this armor (apply them too):"] + [f"- {p}" for p in prior[-5:]]
+    store.add_task(pid, task_id, "designer", f"Design worn armor textures for {m.label}")
+    with store.tx() as con:
+        con.execute("INSERT OR IGNORE INTO task_instructions(task_id, text) VALUES(?,?)", (task_id, "\n".join(lines)))
+    store.add_event(pid, "user", "ARMOR_REQUESTED", {"task": task_id, "material": material, "notes": notes[:300]})
+    return {"task": task_id, "material": material, "next": {"action": "dispatch", "payload": {"task": task_id}}}
+
+
+def install_armor_design(store: Store, pid: str, task_id: str, material: str, *, run_id: str, actor: str) -> dict:
+    ws = Path(store.project(pid)["root"])
+    renders = sorted((ws / MODEL_DIR).glob(f"{material}_armor_layer*.png"))
+    if not renders:
+        raise InputError("no worn-armor render found (models/<material>_armor_layer1.png); the designer must look at it worn")
+    out = install_sprites(store, pid, task_id, [], run_id=run_id, actor=actor, armor_materials=[material])
+    if not out["installed"]:
+        raise InputError("no armor layer passed validation: " + "; ".join(f"{k}: {v}" for k, v in out["rejected"].items()))
+    history = ws / ".mod-orchestra" / "previews" / _safe_dirname(run_id); history.mkdir(parents=True, exist_ok=True)
+    for r in renders:
+        shutil.copyfile(r, history / r.name)
+    out["previews"] = [f".mod-orchestra/previews/{_safe_dirname(run_id)}/{r.name}" for r in renders]
+    store.add_event(pid, "controller", "ARMOR_INSTALLED", {"task": task_id, "run": run_id, "material": material, "installed": out["installed"], "rejected": out["rejected"]})
+    return out

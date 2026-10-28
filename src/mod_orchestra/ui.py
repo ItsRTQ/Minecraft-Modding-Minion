@@ -205,6 +205,12 @@ def serve(store: Store, port: int = 8765) -> None:
                     if op == "add-food":
                         from .content import add_food_any
                         return add_food_any(store, pid, **{k: v for k, v in payload.items()})
+                    if op == "armor-design":
+                        from .models import request_armor_design
+                        return request_armor_design(store, pid, str(payload.get("material", "")), str(payload.get("notes") or ""))
+                    if op == "theme":
+                        from .specedit import set_theme
+                        return set_theme(store, pid, str(payload.get("theme") or ""))
                     if op == "sprites":
                         from .models import request_sprites
                         return request_sprites(store, pid, list(payload.get("identifiers") or []), str(payload.get("notes") or ""), list(payload.get("armor") or []))

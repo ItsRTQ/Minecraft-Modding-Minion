@@ -116,6 +116,9 @@ def guidance(store: Store, pid: str) -> dict:
         elif ":ADD_MOB:" in t["id"]:
             steps.insert(0, {"label": f"Dispatch the coder to register the new mob ({t['id'].split(':ADD_MOB:')[1]})", "who": "agent", "action": "dispatch",
                              "payload": {"task": t["id"]}, "command": None, "detail": "The mob's own files are already written; the coder only wires ModMain/ModClient and compiles."})
+        elif ":ARMOR:" in t["id"]:
+            steps.insert(0, {"label": f"Dispatch the designer to paint worn armor ({t['id'].split(':ARMOR:')[1]})", "who": "agent", "action": "dispatch",
+                             "payload": {"task": t["id"]}, "command": None, "detail": "Paints both armor layers in the mod's theme, renders them worn on the player template, installs. ~$1."})
         elif ":SPRITES:" in t["id"]:
             steps.insert(0, {"label": f"Dispatch the designer to paint sprites ({t['id']})", "who": "agent", "action": "dispatch",
                              "payload": {"task": t["id"]}, "command": None, "detail": "Paints 16×16 icons by script and a contact sheet; the controller validates and installs. ~$0.5–1."})

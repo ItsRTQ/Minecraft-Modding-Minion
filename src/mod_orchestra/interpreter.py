@@ -50,6 +50,7 @@ Put the proposal in the handoff under `spec` with EXACTLY this shape (schema_ver
                  "toughness": 2.0, "knockback_resistance": 0.0, "recipes": true}}],
   "foods": [{{"identifier": "ruby_apple", "label": "Ruby Apple", "nutrition": 6, "saturation": 1.2,
              "effects": [{{"effect": "minecraft:regeneration", "duration": 100, "amplifier": 0, "chance": 1.0}}], "always_edible": false, "fast": false}}],
+  "theme": "2-4 sentences: visual brief for all art in this mod — era/culture, palette (3-5 colours with hex), materials, motifs, mood (e.g. 'Egyptian royal: gold #e3b341 with lapis #2b4fa3 bands, falcon and sun motifs, polished stone; heavy, ceremonial')",
   "assumptions": ["..."]}}
 ```
 Material reference numbers: iron = durability 250 / speed 6 / bonus 2 / level iron / ench 14 / defense 2,6,5,2 / armor dur 15;
@@ -78,7 +79,7 @@ def spec_from_proposal(current: dict, proposal: dict) -> Spec:
         "idea": current["idea"], "profile": current["profile"],
         "features": proposal.get("features", []), "recipes": proposal.get("recipes", []), "drops": proposal.get("drops", []),
         "tab": proposal.get("tab"), "tab_icon": proposal.get("tab_icon"), "mobs": proposal.get("mobs", []),
-        "materials": proposal.get("materials", []), "foods": proposal.get("foods", []),
+        "materials": proposal.get("materials", []), "foods": proposal.get("foods", []), "theme": proposal.get("theme", ""),
         "questions": [], "assumptions": [str(a) for a in proposal.get("assumptions", [])][:12],
     }
     spec = read_spec(raw)

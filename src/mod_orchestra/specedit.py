@@ -88,3 +88,16 @@ def add_food(store: Store, pid: str, *, identifier: str, label: str, nutrition: 
 def remove_food(store: Store, pid: str, identifier: str) -> dict:
     spec = _load(store, pid)
     return _save(store, pid, replace(spec, foods=[f for f in spec.foods if f.identifier != identifier]), f"remove food {identifier}")
+
+
+def set_theme(store: Store, pid: str, theme: str) -> dict:
+    """Visual brief for every designer task. Allowed at any time (it only changes future art, never files)."""
+    theme = theme.strip()[:600]
+    proj = store.project(pid)
+    spec = read_spec(proj["spec"])
+    new = replace(spec, theme=theme)
+    import json as _json
+    with store.tx() as con:
+        con.execute("UPDATE projects SET spec_json=? WHERE id=?", (_json.dumps(new.to_dict(), sort_keys=True), pid))
+        store.event(con, pid, "user", "THEME_SET", {"theme": theme[:200]})
+    return {"project": pid, "theme": theme}

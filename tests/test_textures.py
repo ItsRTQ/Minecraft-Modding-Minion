@@ -147,3 +147,42 @@ class MatchIcon(Generated):
         self.assertEqual(out["from_icon"], "gemsteel_chestplate.png")
         layer = (ws / "src/main/resources/assets/t_mod/textures/models/armor/gemsteel_layer_1.png").read_bytes()
         self.assertEqual(layer, armor_layer_png(1, base, acc, ("helmet", "leggings")))
+
+
+class ArmorDesign(Generated):
+    def test_theme_request_render_gate_and_install(self):
+        from mod_orchestra.specedit import set_theme
+        from mod_orchestra.models import request_armor_design, install_armor_design, theme_block, TEMPLATE_DIR
+        from mod_orchestra.dispatch import dispatch
+        from mod_orchestra.provider import FakeProvider
+        import json
+        self.assertTrue((TEMPLATE_DIR / "player_armor.bbmodel").is_file())
+        set_theme(self.store, "t_mod", "Egyptian royal: gold #e3b341 with lapis #2b4fa3")
+        self.assertIn("gold #e3b341", theme_block(self.store, "t_mod"))
+        with self.assertRaisesRegex(InputError, "not a material with armor"):
+            request_armor_design(self.store, "t_mod", "nope")
+        out = request_armor_design(self.store, "t_mod", "gemsteel", notes="pharaoh style")
+        self.assertEqual(out["task"], "t_mod:ARMOR:gemsteel")
+        ws = Path(self.store.project("t_mod")["root"])
+        self.assertTrue((ws / "models" / "gemsteel_armor.bbmodel").is_file(), "template copied for the designer")
+        self.assertIn("pharaoh style", self.store.task_instructions("t_mod:ARMOR:gemsteel"))
+        fake = FakeProvider("```handoff\n" + json.dumps({"task": "t_mod:ARMOR:gemsteel", "status": "DONE", "scope": "s", "changed_files": [], "checks_run": [], "evidence": {"level": "STATIC", "pointer": "m"}, "risks": [], "unknowns": [], "needs_user": [], "next_agent": "none"}) + "\n```")
+        # no render -> rejected
+        sp = ws / "models" / "sprites"; sp.mkdir(parents=True, exist_ok=True)
+        (sp / "gemsteel_layer_1.png").write_bytes(armor_layer_png(1, (9, 9, 9), (8, 8, 8), ("helmet",)))
+        (sp / "gemsteel_layer_2.png").write_bytes(armor_layer_png(2, (9, 9, 9), (8, 8, 8), ("leggings",)))
+        res = dispatch(self.store, "t_mod", task_id="t_mod:ARMOR:gemsteel", provider=fake)
+        self.assertEqual(res["task_state"], "FAILED"); self.assertIn("look at it worn", res["error"])
+        self.assertIn("gold #e3b341", fake.envelopes[0].extra_instructions)
+        # with render -> installed + previews
+        (ws / "models" / "gemsteel_armor_layer1.png").write_bytes(tinted_item_png("gem", (1, 1, 1), (2, 2, 2)))
+        self.store.requeue("t_mod:ARMOR:gemsteel", "retry")
+        res = dispatch(self.store, "t_mod", task_id="t_mod:ARMOR:gemsteel", provider=fake)
+        self.assertEqual(res["task_state"], "DONE", res.get("error"))
+        self.assertEqual(len(res["handoff"]["armor"]["installed"]), 2); self.assertEqual(len(res["handoff"]["armor"]["previews"]), 1)
+        from mod_orchestra.content import list_features
+        helmet = next(f for f in list_features(self.store, "t_mod") if f["identifier"] == "gemsteel_helmet")
+        self.assertEqual(len(helmet["armor_previews"]), 1)
+        # second round keeps earlier notes
+        out2 = request_armor_design(self.store, "t_mod", "gemsteel", notes="more gold")
+        self.assertEqual(out2["task"], "t_mod:ARMOR:gemsteel:2"); self.assertIn("pharaoh style", self.store.task_instructions(out2["task"]))

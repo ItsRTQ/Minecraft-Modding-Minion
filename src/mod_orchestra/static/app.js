@@ -192,7 +192,9 @@ function actionButton(p, s) {
 
 // ---------- spec ----------
 function renderSpec(p) {
-  const s = p.spec; qs("spec-state").textContent = `Spec ${p.spec_state} · schema ${s.schema_version}`;
+  const s = p.spec;
+  qs("theme-text").value = s.theme || "";
+  qs("theme-save").onclick = async () => { try { await api(`/api/project/${p.id}/theme`, { theme: qs("theme-text").value }); toast("Theme saved; designer runs from now on follow it.", "ok"); } catch (e) { toast(e.message, "bad"); } }; qs("spec-state").textContent = `Spec ${p.spec_state} · schema ${s.schema_version}`;
   const body = qs("spec-body"); body.replaceChildren();
   const grid = el("div", null, "spec-grid");
   const box = (title, items) => { const b = el("div", null, "spec-box"); b.append(el("h4", title)); const ul = el("ul"); if (!items.length) ul.append(el("li", "none", "dim")); for (const i of items) ul.append(el("li", i)); b.append(ul); return b; };
@@ -363,6 +365,8 @@ async function renderFeatures(p) {
       upA.onchange = async () => { const file = upA.files[0]; if (!file) return; const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
         try { const out = await api(`/api/project/${p.id}/set-texture`, { kind: "armor_layer_" + upA.dataset.layer, identifier: f.material, png_base64: b64 }); toast(out.note, "ok"); await openProject(p.id); } catch (err) { toast(err.message, "bad"); } upA.value = ""; };
       right.append(upA, btn("Armor layer 1 (64×32)", () => pick("1"), "mini secondary"), btn("Armor layer 2 (64×32)", () => pick("2"), "mini secondary"));
+      if (f.armor_previews && f.armor_previews.length) { const pv = el("div", null, "previews"); pv.style.margin = "6px 0 0"; for (const rel of f.armor_previews) { const box = el("div", null, "preview"); const img = el("img"); img.src = fileUrl(p.id, rel); img.alt = rel; img.style.width = "120px"; img.style.height = "120px"; box.append(img, el("small", rel.split("/").pop())); box.onclick = () => openLightbox(img.src, rel); pv.append(box); } mid.append(pv); }
+      right.append(btn("Design worn armor", async () => { const notes = prompt(`Notes for the designer about the ${f.material} worn armor (style, motifs, colours), or leave empty:`, ""); if (notes === null) return; const out = await api(`/api/project/${p.id}/armor-design`, { material: f.material, notes }); if (confirm(`Task ${out.task} created. Start the designer now? (~$1, 2–4 min)`)) { await api(`/api/project/${p.id}/dispatch`, { task: out.task }); toast("Designer painting the worn armor; renders appear here when done.", "ok"); } await openProject(p.id); }, "mini primary"));
       right.append(btn("Retint worn armor", async () => {
         const choice = prompt(`Worn armor for "${f.material}":\n• leave EMPTY = match the icon's colours automatically\n• or type a colour like #2a9d8f`, "");
         if (choice === null) return;
