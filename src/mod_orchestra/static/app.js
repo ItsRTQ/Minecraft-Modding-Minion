@@ -346,37 +346,43 @@ async function renderFeatures(p) {
   if (bar && !bar.querySelector("#restore-sprites-btn")) { const rb = btn("Restore designer icons", async () => { const out = await api(`/api/project/${p.id}/restore-sprites`, {}); toast(`Restored ${out.installed.length} file(s)${Object.keys(out.rejected || {}).length ? "; rejected: " + Object.keys(out.rejected).join(", ") : ""}. Rebuild to apply.`, "ok"); await openProject(p.id); }, "secondary"); rb.id = "restore-sprites-btn"; bar.append(rb); }
   try { const sheet = await api(`/api/project/${p.id}/contact-sheet`); const box = qs("sheet-box"); if (sheet.path) { box.classList.remove("hidden"); qs("sheet-img").src = fileUrl(p.id, sheet.path); qs("sheet-preview").onclick = () => openLightbox(qs("sheet-img").src, "sprites contact sheet"); } else box.classList.add("hidden"); } catch {}
   const generated = ["SOURCE_GENERATED_UNVERIFIED", "BUILD_PASSED_GAME_UNTESTED", "BUILD_FAILED", "GAME_VERIFIED"].includes(p.status);
-  if (!feats.length) list.append(el("p", "No items or blocks yet.", "muted"));
-  for (const f of feats) {
+  const uploadInput = (onFile) => { const up = el("input"); up.type = "file"; up.accept = "image/png"; up.style.display = "none"; up.onchange = async () => { const file = up.files[0]; if (!file) return; const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); }); try { await onFile(b64); } catch (err) { toast(err.message, "bad"); } up.value = ""; }; return up; };
+  const featureRow = (f) => {
     const row = el("div", null, "feature"); const img = el("img"); img.alt = "";
     if (f.texture) img.src = fileUrl(p.id, f.texture); else img.style.visibility = "hidden";
     const mid = el("div"); const nm = el("div", null, "fname"); nm.append(document.createTextNode(f.label), el("span", f.kind, "fk")); mid.append(nm, el("div", `${p.id}:${f.identifier}`, "fid"));
     const bits = []; if (f.recipes?.length) bits.push("recipes: " + f.recipes.join(", ")); if (f.drop) bits.push(`drops ${f.drop.item} ${f.drop.count_min}-${f.drop.count_max}`);
-    if (f.material) bits.push("material: " + f.material); if (f.food) bits.push(`nutrition ${f.food.nutrition} · saturation ${f.food.saturation}` + (f.food.effects?.length ? " · " + f.food.effects.map(e => e.effect.replace("minecraft:", "")).join(", ") : ""));
+    if (f.food) bits.push(`nutrition ${f.food.nutrition} · saturation ${f.food.saturation}` + (f.food.effects?.length ? " · " + f.food.effects.map(e => e.effect.replace("minecraft:", "")).join(", ") : ""));
     if (bits.length) mid.append(el("small", bits.join(" · ")));
     const right = el("div", null, "actions"); right.style.marginTop = "0";
-    const up = el("input"); up.type = "file"; up.accept = "image/png"; up.style.display = "none";
-    up.onchange = async () => { const file = up.files[0]; if (!file) return; const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
-      const kind = f.kind === "block" ? "block" : "item";
-      try { const out = await api(`/api/project/${p.id}/set-texture`, { kind, identifier: f.identifier, png_base64: b64 }); toast(out.note, "ok"); await openProject(p.id); } catch (err) { toast(err.message, "bad"); } up.value = ""; };
-    right.append(up, btn("Upload texture", () => up.click(), "mini secondary"));
-    if (f.armor_layers && f.identifier.endsWith("_helmet")) { const upA = el("input"); upA.type = "file"; upA.accept = "image/png"; upA.style.display = "none"; upA.dataset.layer = "1";
-      const pick = (layer) => { upA.dataset.layer = layer; upA.click(); };
-      upA.onchange = async () => { const file = upA.files[0]; if (!file) return; const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
-        try { const out = await api(`/api/project/${p.id}/set-texture`, { kind: "armor_layer_" + upA.dataset.layer, identifier: f.material, png_base64: b64 }); toast(out.note, "ok"); await openProject(p.id); } catch (err) { toast(err.message, "bad"); } upA.value = ""; };
-      right.append(upA, btn("Armor layer 1 (64×32)", () => pick("1"), "mini secondary"), btn("Armor layer 2 (64×32)", () => pick("2"), "mini secondary"));
-      if (f.armor_previews && f.armor_previews.length) { const pv = el("div", null, "previews"); pv.style.margin = "6px 0 0"; for (const rel of f.armor_previews) { const box = el("div", null, "preview"); const img = el("img"); img.src = fileUrl(p.id, rel); img.alt = rel; img.style.width = "120px"; img.style.height = "120px"; box.append(img, el("small", rel.split("/").pop())); box.onclick = () => openLightbox(img.src, rel); pv.append(box); } mid.append(pv); }
-      right.append(btn("Design worn armor", async () => { const notes = prompt(`Notes for the designer about the ${f.material} worn armor (style, motifs, colours), or leave empty:`, ""); if (notes === null) return; const out = await api(`/api/project/${p.id}/armor-design`, { material: f.material, notes }); if (confirm(`Task ${out.task} created. Start the designer now? (~$1, 2–4 min)`)) { await api(`/api/project/${p.id}/dispatch`, { task: out.task }); toast("Designer painting the worn armor; renders appear here when done.", "ok"); } await openProject(p.id); }, "mini primary"));
-      right.append(btn("Retint worn armor", async () => {
-        const choice = prompt(`Worn armor for "${f.material}":\n• leave EMPTY = match the icon's colours automatically\n• or type a colour like #2a9d8f`, "");
-        if (choice === null) return;
-        const payload = choice.trim() ? { material: f.material, color: choice.trim() } : { material: f.material, match_icon: true };
-        const out = await api(`/api/project/${p.id}/retint-armor`, payload); toast(out.note, "ok"); await openProject(p.id); }, "mini secondary")); }
+    const up = uploadInput(async (b64) => { const out = await api(`/api/project/${p.id}/set-texture`, { kind: f.kind === "block" ? "block" : "item", identifier: f.identifier, png_base64: b64 }); toast(out.note, "ok"); await openProject(p.id); });
+    right.append(up, btn("Upload icon", () => up.click(), "mini secondary"));
     right.append(btn("Rename", async () => { const label = prompt("Display name for " + f.identifier + ":", f.label); if (!label || label === f.label) return; const out = await api(`/api/project/${p.id}/rename-feature`, { identifier: f.identifier, label }); toast(out.note || "Renamed.", "ok"); await openProject(p.id); }, "mini secondary"));
-    if (!generated) right.append(btn("Remove", async () => { if (!confirm(`Remove ${f.identifier} from the spec?`)) return; await api(`/api/project/${p.id}/remove-feature`, { identifier: f.identifier }); toast("Removed.", "ok"); await openProject(p.id); }, "mini secondary"));
-    else { const nb = btn("Remove", () => {}, "mini secondary"); nb.disabled = true; nb.title = "Removing content after generation needs a coder task (coming later)"; right.append(nb); }
-    row.append(img, mid, right); list.append(row);
+    if (!f.material) { if (!generated) right.append(btn("Remove", async () => { if (!confirm(`Remove ${f.identifier} from the spec?`)) return; await api(`/api/project/${p.id}/remove-feature`, { identifier: f.identifier }); toast("Removed.", "ok"); await openProject(p.id); }, "mini secondary")); else { const nb = btn("Remove", () => {}, "mini secondary"); nb.disabled = true; nb.title = "Removing content after generation needs a coder task (coming later)"; right.append(nb); } }
+    row.append(img, mid, right); return row;
+  };
+  // Material sets: one card per material with the set-level actions once, pieces inside.
+  const materials = [...new Set(feats.filter(f => f.material).map(f => f.material))];
+  for (const mat of materials) {
+    const pieces = feats.filter(f => f.material === mat); const hasArmor = pieces.some(f => f.kind === "armor");
+    const card = el("div", null, "mob"); const head = el("div", null, "mob-head"); head.append(el("h4", `${mat} set · ${pieces.length} piece(s)`));
+    const acts = el("div", null, "actions"); acts.style.marginTop = "0";
+    if (hasArmor) {
+      const helmet = pieces.find(f => f.armor_previews) || pieces.find(f => f.kind === "armor");
+      acts.append(btn("Design worn armor", async () => { const notes = prompt(`Notes for the designer about the ${mat} worn armor (style, motifs, colours), or leave empty:`, ""); if (notes === null) return; const out = await api(`/api/project/${p.id}/armor-design`, { material: mat, notes }); if (confirm(`Task ${out.task} created. Start the designer now? (~$1, 2–4 min)`)) { await api(`/api/project/${p.id}/dispatch`, { task: out.task }); toast("Designer painting the worn armor; renders appear here when done.", "ok"); } await openProject(p.id); }, "mini primary"));
+      acts.append(btn("Retint worn armor", async () => { const choice = prompt(`Worn armor for "${mat}":\n• leave EMPTY = match the icon's colours automatically\n• or type a colour like #2a9d8f`, ""); if (choice === null) return; const payload = choice.trim() ? { material: mat, color: choice.trim() } : { material: mat, match_icon: true }; const out = await api(`/api/project/${p.id}/retint-armor`, payload); toast(out.note, "ok"); await openProject(p.id); }, "mini secondary"));
+      for (const layer of ["1", "2"]) { const upA = uploadInput(async (b64) => { const out = await api(`/api/project/${p.id}/set-texture`, { kind: "armor_layer_" + layer, identifier: mat, png_base64: b64 }); toast(out.note, "ok"); await openProject(p.id); }); acts.append(upA, btn(`Upload layer ${layer} (64×32)`, () => upA.click(), "mini secondary")); }
+      head.append(acts); card.append(head);
+      const previews = (pieces.find(f => f.armor_previews)?.armor_previews) || [];
+      if (previews.length) { const pv = el("div", null, "previews"); for (const rel of previews) { const box = el("div", null, "preview"); const img = el("img"); img.src = fileUrl(p.id, rel); img.alt = rel; img.style.width = "140px"; img.style.height = "140px"; box.append(img, el("small", rel.split("/").pop())); box.onclick = () => openLightbox(img.src, rel); pv.append(box); } card.append(pv); }
+      else card.append(el("div", "Worn armor: tinted placeholder. Use Design worn armor (designer, renders it worn) or upload your own layers.", "placeholder-note"));
+    } else { head.append(acts); card.append(head); }
+    for (const f of pieces) card.append(featureRow(f));
+    list.append(card);
   }
+  const plain = feats.filter(f => !f.material);
+  if (!plain.length && !materials.length) list.append(el("p", "No items or blocks yet.", "muted"));
+  for (const f of plain) list.append(featureRow(f));
   const addForm = qs("addfeature-form");
   addForm.onsubmit = async (e) => {
     e.preventDefault();
@@ -388,61 +394,6 @@ async function renderFeatures(p) {
     } catch (err) { toast(err.message, "bad"); }
   };
 }
-for (const [c, h] of [["mt-color", "mt-color-hex"], ["mt-accent", "mt-accent-hex"], ["fd-color", "fd-color-hex"], ["af-color", "af-color-hex"]]) { qs(c).oninput = () => { qs(h).value = qs(c).value; }; qs(h).oninput = () => { if (/^#[0-9a-fA-F]{6}$/.test(qs(h).value)) qs(c).value = qs(h).value; }; }
-qs("mt-color").addEventListener("input", () => { const hex = qs("mt-color").value; const n = parseInt(hex.slice(1), 16); const l = [16, 8, 0].map(s => Math.min(255, ((n >> s) & 255) + Math.round((255 - ((n >> s) & 255)) * 0.35))); const acc = "#" + l.map(x => x.toString(16).padStart(2, "0")).join(""); qs("mt-accent").value = acc; qs("mt-accent-hex").value = acc; });
-const MAT_PRESETS = { iron: [250, 6, 2, "iron", 14, "2 6 5 2", 15, 0, 0], diamond: [1561, 8, 3, "diamond", 10, "3 8 6 3", 33, 2, 0], netherite: [2031, 9, 4, "netherite", 15, "3 8 6 3", 37, 3, 0.1] };
-qs("mt-preset").onchange = () => { const v = MAT_PRESETS[qs("mt-preset").value]; if (!v) return; [qs("mt-durability").value, qs("mt-speed").value, qs("mt-attack").value, qs("mt-level").value, qs("mt-ench").value, qs("mt-defense").value, qs("mt-adur").value, qs("mt-tough").value, qs("mt-kb").value] = v; };
-for (const id of ["mt-durability", "mt-speed", "mt-attack", "mt-level", "mt-ench", "mt-defense", "mt-adur", "mt-tough", "mt-kb"]) qs(id).oninput = () => { qs("mt-preset").value = "custom"; };
-qs("mt-label").oninput = () => { if (!qs("mt-id").dataset.touched) qs("mt-id").value = qs("mt-label").value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40); };
-qs("mt-id").oninput = () => { qs("mt-id").dataset.touched = "1"; };
-qs("addmat-form").onsubmit = async (e) => {
-  e.preventDefault(); if (!selected) return;
-  const checked = (box) => [...qs(box).querySelectorAll("input:checked")].map(i => i.value);
-  const defense = qs("mt-defense").value.trim().split(/\s+/).map(Number);
-  try {
-    const out = await api(`/api/project/${selected}/add-material`, { identifier: qs("mt-id").value.trim(), label: qs("mt-label").value.trim(), ingredient: qs("mt-ingredient").value.trim(),
-      tools: checked("mt-tools"), armor: checked("mt-armor"), durability: Number(qs("mt-durability").value), mining_speed: Number(qs("mt-speed").value), attack_damage_bonus: Number(qs("mt-attack").value),
-      mining_level: qs("mt-level").value, enchantability: Number(qs("mt-ench").value), armor_defense: defense, armor_durability: Number(qs("mt-adur").value), toughness: Number(qs("mt-tough").value),
-      knockback_resistance: Number(qs("mt-kb").value), recipes: qs("mt-recipes").checked, color: qs("mt-color-hex").value, accent: qs("mt-accent-hex").value });
-    qs("addmat-form").reset(); delete qs("mt-id").dataset.touched; qs("mt-preset").onchange(); closeModal("modal-mat");
-    toast(out.generated ? `Set added. Files written; the coder registers it (${out.task}) — see Now.` : `Set added to the spec (${(out.items || []).length} items). Re-approve before generating.`, "ok");
-    await openProject(selected);
-  } catch (err) { toast(err.message, "bad"); }
-};
-qs("fd-label").oninput = () => { if (!qs("fd-id").dataset.touched) qs("fd-id").value = qs("fd-label").value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50); };
-qs("fd-id").oninput = () => { qs("fd-id").dataset.touched = "1"; };
-qs("addfood-form").onsubmit = async (e) => {
-  e.preventDefault(); if (!selected) return;
-  const effects = qs("fd-effect").value ? [{ effect: qs("fd-effect").value, duration: Number(qs("fd-duration").value), amplifier: Number(qs("fd-amplifier").value), chance: 1.0 }] : [];
-  try {
-    const out = await api(`/api/project/${selected}/add-food`, { identifier: qs("fd-id").value.trim(), label: qs("fd-label").value.trim(), nutrition: Number(qs("fd-nutrition").value), saturation: Number(qs("fd-saturation").value), effects, always_edible: qs("fd-always").checked, fast: qs("fd-fast").checked, color: qs("fd-color-hex").value });
-    qs("addfood-form").reset(); delete qs("fd-id").dataset.touched; closeModal("modal-food");
-    toast(out.generated ? `Food added. Files written; the coder registers it (${out.task}) — see Now.` : "Food added to the spec. Re-approve before generating.", "ok");
-    await openProject(selected);
-  } catch (err) { toast(err.message, "bad"); }
-};
-let featureCache = [];
-qs("sprites-btn").onclick = () => {
-  if (!selected) return;
-  const list = qs("sprites-list"); list.replaceChildren();
-  for (const f of featureCache) { if (f.kind === "armor" && !f.identifier.endsWith("_helmet") && false) continue; const l = el("label"); const c = el("input"); c.type = "checkbox"; c.value = f.identifier; c.checked = true; l.append(c, document.createTextNode(` ${f.label} (${f.kind})`)); list.append(l); }
-  const mats = [...new Set(featureCache.filter(f => f.kind === "armor").map(f => f.material))];
-  if (mats.length) { list.append(el("div", "Worn-armor layers (64×32, what you see on the body):", "muted")); for (const m of mats) { const l = el("label"); const c = el("input"); c.type = "checkbox"; c.value = m; c.dataset.armor = "1"; c.checked = true; l.append(c, document.createTextNode(` ${m} armor set`)); list.append(l); } }
-  qs("sprites-notes").value = ""; qs("modal-sprites").classList.remove("hidden");
-};
-qs("sprites-all").onclick = () => { for (const c of qs("sprites-list").querySelectorAll("input")) c.checked = true; };
-qs("sprites-none").onclick = () => { for (const c of qs("sprites-list").querySelectorAll("input")) c.checked = false; };
-qs("sprites-go").onclick = async () => {
-  const identifiers = [...qs("sprites-list").querySelectorAll("input:checked:not([data-armor])")].map(c => c.value);
-  const armor = [...qs("sprites-list").querySelectorAll("input:checked[data-armor]")].map(c => c.value);
-  if (!identifiers.length && !armor.length) return toast("Pick at least one item or armor set", "bad");
-  try {
-    const out = await api(`/api/project/${selected}/sprites`, { identifiers, notes: qs("sprites-notes").value, armor });
-    closeModal("modal-sprites");
-    if (confirm(`Task ${out.task} created for ${identifiers.length} sprite(s)${armor.length ? " + " + armor.length + " armor set(s)" : ""}. Start the designer now?`)) { await api(`/api/project/${selected}/dispatch`, { task: out.task }); toast("Designer painting… the contact sheet appears in Items when done.", "ok"); }
-    await openProject(selected);
-  } catch (err) { toast(err.message, "bad"); }
-};
 qs("af-label").oninput = () => { if (!qs("af-id").dataset.touched) qs("af-id").value = qs("af-label").value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50); };
 qs("af-id").oninput = () => { qs("af-id").dataset.touched = "1"; };
 
