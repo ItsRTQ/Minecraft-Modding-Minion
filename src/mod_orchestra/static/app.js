@@ -363,8 +363,11 @@ async function renderFeatures(p) {
       upA.onchange = async () => { const file = upA.files[0]; if (!file) return; const b64 = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result.split(",")[1]); r.onerror = rej; r.readAsDataURL(file); });
         try { const out = await api(`/api/project/${p.id}/set-texture`, { kind: "armor_layer_" + upA.dataset.layer, identifier: f.material, png_base64: b64 }); toast(out.note, "ok"); await openProject(p.id); } catch (err) { toast(err.message, "bad"); } upA.value = ""; };
       right.append(upA, btn("Armor layer 1 (64×32)", () => pick("1"), "mini secondary"), btn("Armor layer 2 (64×32)", () => pick("2"), "mini secondary"));
-      right.append(btn("Worn armor: match icon colours", async () => { const out = await api(`/api/project/${p.id}/retint-armor`, { material: f.material, match_icon: true }); toast(out.note, "ok"); await openProject(p.id); }, "mini secondary"));
-      right.append(btn("Worn armor: pick colour", async () => { const color = prompt(`Colour for the ${f.material} worn armor (#RRGGBB):`, ""); if (!color) return; const out = await api(`/api/project/${p.id}/retint-armor`, { material: f.material, color: color.trim() }); toast(out.note, "ok"); await openProject(p.id); }, "mini secondary")); }
+      right.append(btn("Retint worn armor", async () => {
+        const choice = prompt(`Worn armor for "${f.material}":\n• leave EMPTY = match the icon's colours automatically\n• or type a colour like #2a9d8f`, "");
+        if (choice === null) return;
+        const payload = choice.trim() ? { material: f.material, color: choice.trim() } : { material: f.material, match_icon: true };
+        const out = await api(`/api/project/${p.id}/retint-armor`, payload); toast(out.note, "ok"); await openProject(p.id); }, "mini secondary")); }
     right.append(btn("Rename", async () => { const label = prompt("Display name for " + f.identifier + ":", f.label); if (!label || label === f.label) return; const out = await api(`/api/project/${p.id}/rename-feature`, { identifier: f.identifier, label }); toast(out.note || "Renamed.", "ok"); await openProject(p.id); }, "mini secondary"));
     if (!generated) right.append(btn("Remove", async () => { if (!confirm(`Remove ${f.identifier} from the spec?`)) return; await api(`/api/project/${p.id}/remove-feature`, { identifier: f.identifier }); toast("Removed.", "ok"); await openProject(p.id); }, "mini secondary"));
     else { const nb = btn("Remove", () => {}, "mini secondary"); nb.disabled = true; nb.title = "Removing content after generation needs a coder task (coming later)"; right.append(nb); }
