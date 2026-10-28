@@ -30,6 +30,11 @@ def blockbench_server_config(workspace: Path) -> dict:
     return {"command": "node", "args": [str(SAFE_SERVER), "--root", str(root), "--allow-write"]}
 
 
+def _safe_dirname(name: str) -> str:
+    """Windows forbids : * ? " < > | and friends in directory names."""
+    return re.sub(r'[<>:"/\\|?*]', "-", name)
+
+
 def model_task_id(pid: str, mob_id: str) -> str:
     return f"{pid}:MODEL:{mob_id}"
 
@@ -111,7 +116,7 @@ def install_model(store: Store, pid: str, mob_id: str, *, run_id: str, actor: st
         shutil.copyfile(ws / info["files"][key], dst)
     changed = [str(t.relative_to(ws)).replace("\\", "/") for t in targets.values()]
     # Keep this run's previews + texture so the UI can show versions after feedback rounds.
-    history = ws / ".mod-orchestra" / "previews" / run_id
+    history = ws / ".mod-orchestra" / "previews" / _safe_dirname(run_id)
     history.mkdir(parents=True, exist_ok=True)
     for png in sorted((ws / MODEL_DIR).glob(f"{mob_id}_*.png")) + [ws / info["files"]["png"]]:
         shutil.copyfile(png, history / png.name)
@@ -364,10 +369,10 @@ def install_sprites(store: Store, pid: str, task_id: str, identifiers: list[str]
         raise InputError("no sprite passed validation: " + "; ".join(f"{k}: {v}" for k, v in rejected.items()))
     accepted = accept_changes(ws, run_id=run_id, actor=actor, changed=installed)
     sheet = ws / "models" / "sprites" / "contact_sheet.png"
-    history = ws / ".mod-orchestra" / "previews" / run_id; history.mkdir(parents=True, exist_ok=True)
+    history = ws / ".mod-orchestra" / "previews" / _safe_dirname(run_id); history.mkdir(parents=True, exist_ok=True)
     if sheet.is_file():
         shutil.copyfile(sheet, history / "sprites_contact_sheet.png")
     from .dispatch import _source_changed, _reopen_build
     _source_changed(store, pid); _reopen_build(store, pid)
     store.add_event(pid, "controller", "SPRITES_INSTALLED", {"task": task_id, "run": run_id, "installed": installed, "rejected": rejected})
-    return {"installed": installed, "rejected": rejected, "accepted": accepted["accepted"], "contact_sheet": f".mod-orchestra/previews/{run_id}/sprites_contact_sheet.png" if sheet.is_file() else None}
+    return {"installed": installed, "rejected": rejected, "accepted": accepted["accepted"], "contact_sheet": f".mod-orchestra/previews/{_safe_dirname(run_id)}/sprites_contact_sheet.png" if sheet.is_file() else None}

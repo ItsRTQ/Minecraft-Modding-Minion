@@ -366,4 +366,4 @@ def restore_designer_sprites(store: Store, pid: str) -> dict:
     mats = sorted({m.identifier for m in spec.materials if m.armor and (folder / f"{m.identifier}_layer_1.png").is_file()})
     if not ids and not mats:
         raise StateError("models/sprites/ has no sprites matching this mod's content")
-    return install_sprites(store, pid, "restore", ids, run_id=f"restore:{int(__import__('time').time())}", actor="user", armor_materials=mats)
+    return install_sprites(store, pid, "restore", ids, run_id=f"restore-{int(__import__('time').time())}", actor="user", armor_materials=mats)
