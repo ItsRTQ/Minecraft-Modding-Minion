@@ -408,8 +408,11 @@ Layout (classic 64x32 player-model nets; everything else transparent):
 - body net at (16,16): top (20,16) 8x4, bottom (28,16) 8x4, right (16,20) 4x12, front (20,20) 8x12, left (28,20) 4x12, back (32,20) 8x12.
 - arm net at (40,16): top (44,16) 4x4, bottom (48,16) 4x4, right (40,20) 4x12, front (44,20) 4x12, left (48,20) 4x12, back (52,20) 4x12.
 - leg net at (0,16): top (4,16) 4x4, bottom (8,16) 4x4, right (0,20) 4x12, front (4,20) 4x12, left (8,20) 4x12, back (12,20) 4x12.
-Craft: 1px darker outline on every face edge, lighter top faces, mid sides, darker bottoms; add plates, rivets, trim,
-straps or gems as the theme suggests; keep 4–8 colours per material. Write the PNGs with a stdlib Python script
+Craft (edges matter most, owner feedback): NO hard dark outlines. Edges are a soft 1px gradient step, 15–20% darker
+than the fill (never black or near-black), and adjacent faces of the same piece share their edge colour so the
+piece reads as one surface, not a grid of boxes. Shade by light: top faces lighter, sides mid, bottoms darker,
+with a 2-step gradient toward the edges. Reserve strong lines for deliberate seams, straps or trim. Add plates,
+rivets, gems or motifs as the theme suggests; keep 4–8 colours per material. Write the PNGs with a stdlib Python script
 (`models/sprites/paint_armor.py`, rerunnable).
 LOOK AT IT WORN before finishing (mandatory): `models/<material>_armor.bbmodel` is a player template already
 placed in `models/`. For each layer: `bbmodel_geckolib_set_texture {file: "<material>_armor.bbmodel",

@@ -37,3 +37,4 @@ layout; inflate 1). Do not edit its geometry. Paint `models/sprites/<material>_l
 `bbmodel_geckolib_set_texture {file: "<material>_armor.bbmodel", png_file: "sprites/<material>_layer_1.png"}` and
 `bbmodel_render {file, output_file: "<material>_armor_layer1.png", overwrite: true}`; repeat for layer 2. The render
 shows front/right/back/iso: if the face is covered, a region is shifted, or it reads flat, fix the PNG and render again.
+Edges: soft gradient steps 15–20% darker than the fill, never black outlines; adjacent faces of one piece share edge colour.

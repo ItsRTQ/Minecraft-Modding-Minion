@@ -284,6 +284,14 @@ Owner session on the UI (host run 10, 2026-10-26): drops edited through the pick
 | K7 | Med | plan | Replanning on approval dropped user-added tasks. Replan now touches only planner-owned tasks. | FIXED |
 | K8 | Low | ui | Worker log could not be closed; no live output while running. Toggle + stream-json live summary. | FIXED |
 
+## Host run 12 — 2026-10-28 · RTQ · Windows · art pipeline on `ovis_moon` (`claude-feature/v1-tool-sets`)
+
+- Sprites task: 11/11 icons painted and installed (browser cache hid them at first → cache-busted URLs).
+- Retint (first version) overwrote designer icons and painted the worn armor as a solid box → retint now touches layers only; layers painted as shaded cube nets with an open visor; `Restore designer icons`; WinError 267 on `:` in preview dir names fixed.
+- ARMOR designer task with the player template + mandatory worn render: run `DONE` ($1.69, 3 min 22). **Owner: "way better"**; feedback: outlines too dark/bold → brief changed to soft gradient edges, no black outlines, shared edge colour between adjacent faces.
+- Expired build approval left the Now panel stuck → expired approvals are never offered; UI marks them EXPIRED.
+- Items grouped by material set (set-level actions once; a helmet-only set has the same actions).
+
 ## Not yet tested
 
 - MCP server **as connected by Claude Code** (only the hand-driven stdio run in Round 3; needs a restart after A1).
