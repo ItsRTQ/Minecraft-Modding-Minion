@@ -111,34 +111,55 @@ def tinted_item_png(mask_name: str, base, accent) -> bytes:
 
 
 # ---- armor layers (64x32, classic player-model layout) ----
-# regions: (x, y, w, h) boxes of the layer texture; helmet = head box, chestplate = body + both arms,
-# leggings (layer 2) = body lower + legs, boots (layer 1) = leg boxes lower part.
-HEAD = [(0, 0, 32, 16)]
-BODY = [(16, 16, 24, 16)]
-ARM = [(40, 16, 16, 16)]
-LEG = [(0, 16, 16, 16)]
+# Each body part is a cube net: top, bottom, right, front, left, back faces. Faces are shaded separately so the
+# worn armor reads as a shape, and the helmet leaves the face open like vanilla helmets do.
+def _cube_net(x, y, w, h, d):
+    """Face boxes (x0, y0, width, height) of a cube net whose top-left is (x, y): size w×h×d."""
+    return {"top": (x + d, y, w, d), "bottom": (x + d + w, y, w, d), "right": (x, y + d, d, h), "front": (x + d, y + d, w, h),
+            "left": (x + d + w, y + d, d, h), "back": (x + 2 * d + w, y + d, w, h)}
+
+
+HEAD_NET = _cube_net(0, 0, 8, 8, 8)
+BODY_NET = _cube_net(16, 16, 8, 12, 4)
+ARM_NET = _cube_net(40, 16, 4, 12, 4)
+LEG_NET = _cube_net(0, 16, 4, 12, 4)
+FACE_SHADE = {"top": "4", "front": "3", "left": "3", "right": "3", "back": "3", "bottom": "2"}
 
 
 def armor_layer_png(layer: int, base, accent, pieces: tuple) -> bytes:
     pal = shade_palette(base, accent)
     px = [[(0, 0, 0, 0)] * 64 for _ in range(32)]
-    def fill(box, shade="3", trim=True):
+
+    def fill_face(box, shade, rows=None, cols=None, cutout=None):
         x0, y0, w, h = box
         for y in range(y0, y0 + h):
+            if rows and not (rows[0] <= y - y0 <= rows[1]):
+                continue
             for x in range(x0, x0 + w):
+                if cols and not (cols[0] <= x - x0 <= cols[1]):
+                    continue
+                if cutout and cutout[0] <= x - x0 <= cutout[1] and cutout[2] <= y - y0 <= cutout[3]:
+                    continue
                 sh = shade
-                if trim and (y == y0 or y == y0 + h - 1 or x == x0 or x == x0 + w - 1): sh = "2"
-                elif y == y0 + 1 or x == x0 + 1: sh = "4"
+                if y == y0 or x == x0 or y == y0 + h - 1 or x == x0 + w - 1:
+                    sh = "1" if sh != "4" else "2"   # outline on every face edge
                 px[y][x] = pal[sh]
+
+    def fill_cube(net, rows=None, cutout_front=None):
+        for face, box in net.items():
+            fill_face(box, FACE_SHADE[face], rows=rows if face not in ("top", "bottom") else None, cutout=cutout_front if face == "front" else None)
+
     if layer == 1:
         if "helmet" in pieces:
-            for b in HEAD: fill(b)
+            fill_cube(HEAD_NET, cutout_front=(1, 6, 3, 7))         # open visor: eyes and mouth stay visible
         if "chestplate" in pieces:
-            for b in BODY + ARM: fill(b)
+            fill_cube(BODY_NET); fill_cube(ARM_NET)
+            fx, fy, fw, fh = BODY_NET["front"]
+            for x in range(fx + 1, fx + fw - 1): px[fy + 6][x] = pal["4"]   # belt / trim line
         if "boots" in pieces:
-            x0, y0, w, h = LEG[0]; fill((x0, y0 + h - 5, w, 5))
+            fill_cube(LEG_NET, rows=(8, 11))
     else:
         if "leggings" in pieces:
-            x0, y0, w, h = BODY[0]; fill((x0, y0 + 4, w, h - 4))
-            for b in LEG: fill(b)
+            fill_cube(BODY_NET, rows=(6, 11))
+            fill_cube(LEG_NET, rows=(0, 9))
     return png_from_pixels(64, 32, px)

@@ -111,9 +111,11 @@ class ArmorLayers(Generated):
         from mod_orchestra.models import request_sprites, install_sprites
         ws = Path(self.store.project("t_mod")["root"]); armor = ws / "src/main/resources/assets/t_mod/textures/models/armor"
         before = (armor / "gemsteel_layer_1.png").read_bytes()
+        icon_before = (ws / "src/main/resources/assets/t_mod/textures/item/gemsteel_sword.png").read_bytes()
         out = retint_armor(self.store, "t_mod", "gemsteel", color="#2244ff")
-        self.assertIn("src/main/resources/assets/t_mod/textures/models/armor/gemsteel_layer_1.png", out["files"])
+        self.assertEqual(out["files"], ["src/main/resources/assets/t_mod/textures/models/armor/gemsteel_layer_1.png", "src/main/resources/assets/t_mod/textures/models/armor/gemsteel_layer_2.png"])
         self.assertNotEqual(before, (armor / "gemsteel_layer_1.png").read_bytes())
+        self.assertEqual(icon_before, (ws / "src/main/resources/assets/t_mod/textures/item/gemsteel_sword.png").read_bytes(), "icons are never touched by retint")
         self.assertEqual(self.store.project("t_mod")["spec"]["materials"][0]["color"], "#2244ff")
         with self.assertRaisesRegex(InputError, "Unknown material"):
             retint_armor(self.store, "t_mod", "mithril")
@@ -125,3 +127,8 @@ class ArmorLayers(Generated):
         res = install_sprites(self.store, "t_mod", out["task"], [], run_id="r1", actor="agent:designer", armor_materials=["gemsteel"])
         self.assertEqual(res["installed"], ["src/main/resources/assets/t_mod/textures/models/armor/gemsteel_layer_1.png"])
         self.assertIn("16x16, need 64x32", res["rejected"]["gemsteel_layer_2"])
+        from mod_orchestra.content import restore_designer_sprites
+        (sp / "gem.png").write_bytes(tinted_item_png("gem", (200, 0, 0), (255, 100, 100)))
+        out = restore_designer_sprites(self.store, "t_mod")
+        self.assertIn("src/main/resources/assets/t_mod/textures/item/gem.png", out["installed"])
+        self.assertIn("src/main/resources/assets/t_mod/textures/models/armor/gemsteel_layer_1.png", out["installed"])

@@ -341,10 +341,7 @@ def retint_armor(store: Store, pid: str, material: str, color: str = "", accent:
     base, acc = material_colors(pid + "/" + m.identifier, m.color or None, m.accent or None)
     ws = Path(proj["root"]); assets = ws / "src/main/resources/assets" / pid
     written = []
-    for kind in m.tools:
-        rel = assets / "textures/item" / f"{m.identifier}_{kind}.png"; rel.write_bytes(tinted_item_png(kind, base, acc)); written.append(rel)
-    for kind in m.armor:
-        rel = assets / "textures/item" / f"{m.identifier}_{kind}.png"; rel.write_bytes(tinted_item_png("ingot" if kind in ("chestplate", "leggings") else "gem", base, acc)); written.append(rel)
+    # Only the worn-armor layers: inventory icons may be designer- or user-made and are never overwritten here.
     if m.armor:
         for n in (1, 2):
             rel = assets / "textures/models/armor" / f"{m.identifier}_layer_{n}.png"; rel.parent.mkdir(parents=True, exist_ok=True)
@@ -354,4 +351,19 @@ def retint_armor(store: Store, pid: str, material: str, color: str = "", accent:
     from .dispatch import _source_changed, _reopen_build
     _source_changed(store, pid); _reopen_build(store, pid)
     store.add_event(pid, "user", "ARMOR_RETINTED", {"material": material, "files": rels})
-    return {"material": material, "files": rels, "accepted": accepted["accepted"], "note": "Icons and worn-armor layers rewritten; rebuild to apply."}
+    return {"material": material, "files": rels, "accepted": accepted["accepted"], "note": "Worn-armor layers rewritten (icons untouched); rebuild to apply."}
+
+
+def restore_designer_sprites(store: Store, pid: str) -> dict:
+    """Reinstall every sprite the designer left in models/sprites/ (icons and armor layers) over the current textures."""
+    from .models import install_sprites
+    proj = store.project(pid); ws = Path(proj["root"]); spec = read_spec(proj["spec"])
+    folder = ws / "models" / "sprites"
+    if not folder.is_dir():
+        raise StateError("No designer sprites in models/sprites/")
+    known = spec.local_ids()
+    ids = sorted(p.stem for p in folder.glob("*.png") if p.stem in known)
+    mats = sorted({m.identifier for m in spec.materials if m.armor and (folder / f"{m.identifier}_layer_1.png").is_file()})
+    if not ids and not mats:
+        raise StateError("models/sprites/ has no sprites matching this mod's content")
+    return install_sprites(store, pid, "restore", ids, run_id=f"restore:{int(__import__('time').time())}", actor="user", armor_materials=mats)

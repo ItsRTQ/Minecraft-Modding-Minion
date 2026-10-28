@@ -208,6 +208,9 @@ def serve(store: Store, port: int = 8765) -> None:
                     if op == "sprites":
                         from .models import request_sprites
                         return request_sprites(store, pid, list(payload.get("identifiers") or []), str(payload.get("notes") or ""), list(payload.get("armor") or []))
+                    if op == "restore-sprites":
+                        from .content import restore_designer_sprites
+                        return restore_designer_sprites(store, pid)
                     if op == "retint-armor":
                         from .content import retint_armor
                         return retint_armor(store, pid, str(payload.get("material", "")), str(payload.get("color") or ""), str(payload.get("accent") or ""))
