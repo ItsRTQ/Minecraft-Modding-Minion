@@ -102,7 +102,9 @@ async function openProject(id) {
   qs("p-id").textContent = p.id + " · " + p.spec.package; qs("p-name").textContent = p.name;
   const st = qs("p-status"); st.textContent = p.status.replace(/_/g, " "); st.className = "pill " + (p.status === "GAME_VERIFIED" ? "ok" : p.status === "BUILD_FAILED" ? "bad" : p.status.startsWith("BUILD_PASSED") ? "info" : "warn");
   qs("p-cost").textContent = p.guidance.runs ? `${p.guidance.runs} agent run${p.guidance.runs === 1 ? "" : "s"} · ${fmtMoney(p.guidance.cost_usd)} spent` : "no agent runs yet";
-  renderStepper(p.guidance); renderNow(p); renderSpec(p); renderGallery(p); renderFeatures(p); renderRuns(p); renderEvents(p); renderVerify(p); renderTasks(p);
+  for (const [name, fn] of [["stepper", renderStepper], ["now", renderNow], ["spec", renderSpec], ["mobs", renderGallery], ["items", renderFeatures], ["runs", renderRuns], ["events", renderEvents], ["verification", renderVerify], ["tasks", renderTasks]]) {
+    try { const r = fn(name === "stepper" ? p.guidance : p); if (r && r.catch) r.catch(e => toast(`${name}: ${e.message}`, "bad")); } catch (e) { toast(`${name} failed to render: ${e.message} (try a hard reload: Ctrl+F5)`, "bad"); }
+  }
   if (p.dispatching) pollUntilIdle(id);
 }
 
@@ -193,8 +195,8 @@ function actionButton(p, s) {
 // ---------- spec ----------
 function renderSpec(p) {
   const s = p.spec;
-  qs("theme-text").value = s.theme || "";
-  qs("theme-save").onclick = async () => { try { await api(`/api/project/${p.id}/theme`, { theme: qs("theme-text").value }); toast("Theme saved; designer runs from now on follow it.", "ok"); } catch (e) { toast(e.message, "bad"); } }; qs("spec-state").textContent = `Spec ${p.spec_state} · schema ${s.schema_version}`;
+  if (qs("theme-text")) qs("theme-text").value = s.theme || "";
+  if (qs("theme-save")) qs("theme-save").onclick = async () => { try { await api(`/api/project/${p.id}/theme`, { theme: qs("theme-text").value }); toast("Theme saved; designer runs from now on follow it.", "ok"); } catch (e) { toast(e.message, "bad"); } }; qs("spec-state").textContent = `Spec ${p.spec_state} · schema ${s.schema_version}`;
   const body = qs("spec-body"); body.replaceChildren();
   const grid = el("div", null, "spec-grid");
   const box = (title, items) => { const b = el("div", null, "spec-box"); b.append(el("h4", title)); const ul = el("ul"); if (!items.length) ul.append(el("li", "none", "dim")); for (const i of items) ul.append(el("li", i)); b.append(ul); return b; };

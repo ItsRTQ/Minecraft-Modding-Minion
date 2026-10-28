@@ -262,6 +262,7 @@ def serve(store: Store, port: int = 8765) -> None:
                 raw = files("mod_orchestra").joinpath("static", resource).read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8" if path == "/" else "text/javascript; charset=utf-8" if path.endswith(".js") else "text/css; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")  # index.html, app.js and style.css must always move together
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.send_header("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'")
