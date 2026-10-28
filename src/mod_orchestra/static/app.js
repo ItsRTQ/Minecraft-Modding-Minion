@@ -396,6 +396,28 @@ async function renderFeatures(p) {
     } catch (err) { toast(err.message, "bad"); }
   };
 }
+let featureCache = [];
+qs("sprites-btn").onclick = () => {
+  if (!selected) return;
+  const list = qs("sprites-list"); list.replaceChildren();
+  for (const f of featureCache) { const l = el("label"); const c = el("input"); c.type = "checkbox"; c.value = f.identifier; c.checked = true; l.append(c, document.createTextNode(` ${f.label} (${f.kind})`)); list.append(l); }
+  const mats = [...new Set(featureCache.filter(f => f.kind === "armor").map(f => f.material))];
+  if (mats.length) { list.append(el("div", "Worn-armor layers (64×32, what you see on the body):", "muted")); for (const m of mats) { const l = el("label"); const c = el("input"); c.type = "checkbox"; c.value = m; c.dataset.armor = "1"; c.checked = true; l.append(c, document.createTextNode(` ${m} armor set`)); list.append(l); } }
+  qs("sprites-notes").value = ""; qs("modal-sprites").classList.remove("hidden");
+};
+qs("sprites-all").onclick = () => { for (const c of qs("sprites-list").querySelectorAll("input")) c.checked = true; };
+qs("sprites-none").onclick = () => { for (const c of qs("sprites-list").querySelectorAll("input")) c.checked = false; };
+qs("sprites-go").onclick = async () => {
+  const identifiers = [...qs("sprites-list").querySelectorAll("input:checked:not([data-armor])")].map(c => c.value);
+  const armor = [...qs("sprites-list").querySelectorAll("input:checked[data-armor]")].map(c => c.value);
+  if (!identifiers.length && !armor.length) return toast("Pick at least one item or armor set", "bad");
+  try {
+    const out = await api(`/api/project/${selected}/sprites`, { identifiers, notes: qs("sprites-notes").value, armor });
+    closeModal("modal-sprites");
+    if (confirm(`Task ${out.task} created for ${identifiers.length} sprite(s)${armor.length ? " + " + armor.length + " armor set(s)" : ""}. Start the designer now?`)) { await api(`/api/project/${selected}/dispatch`, { task: out.task }); toast("Designer painting… the contact sheet appears in Items when done.", "ok"); }
+    await openProject(selected);
+  } catch (err) { toast(err.message, "bad"); }
+};
 qs("af-label").oninput = () => { if (!qs("af-id").dataset.touched) qs("af-id").value = qs("af-label").value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 50); };
 qs("af-id").oninput = () => { qs("af-id").dataset.touched = "1"; };
 
