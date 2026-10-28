@@ -243,3 +243,19 @@ class ExpiredApprovals(unittest.TestCase):
             with store.tx() as con:
                 con.execute("UPDATE approvals SET expires_at=? WHERE id=?", (time.time() - 1, a["id"]))
             self.assertEqual(guidance(store, "e_mod")["steps"][0]["action"], "request-build", "expired approvals must not be offered")
+
+
+class FrontendConsistency(unittest.TestCase):
+    """The static files must move together: every element id app.js reads with qs("…") must exist in index.html,
+    and every handler the HTML expects must be wired (regression: an Items rewrite dropped the sprites modal code)."""
+    def test_every_qs_id_exists_in_html_and_key_handlers_are_wired(self):
+        import re
+        static = Path(__file__).resolve().parents[1] / "src" / "mod_orchestra" / "static"
+        html = (static / "index.html").read_text(encoding="utf8"); js = (static / "app.js").read_text(encoding="utf8")
+        ids = set(re.findall(r'id="([^"]+)"', html))
+        used = set(re.findall(r'qs\("([a-zA-Z0-9_-]+)"\)', js))
+        missing = sorted(u for u in used if u not in ids)
+        self.assertEqual(missing, [], f"app.js references ids absent from index.html: {missing}")
+        for handler in ("sprites-btn", "sprites-go", "addmob-form", "addmat-form", "addfood-form", "addfeature-form", "p-delete", "del-go", "theme-save", "pol-all"):
+            self.assertRegex(js, re.escape(f'qs("{handler}")') + r"\.(onclick|onsubmit)", f"{handler} has no handler")
+        self.assertIn("let featureCache", js)
